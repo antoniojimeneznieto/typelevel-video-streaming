@@ -8,20 +8,22 @@ services:
       HOST: 0.0.0.0
       PORT: "8080"
     ports:
-      - "${STATUS_SERVICE_PORT:-18080}:8080"
+      - "${STATUS_SERVICE_PORT:-8080}:8080"
     restart: unless-stopped
 
   user-service:
     image: typelevel-video-streaming/user-service:local
     pull_policy: never
     environment:
+      HOST: 0.0.0.0
+      PORT: "8081"
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: typelevel-video-streaming
-      KEYCLOAK_ISSUER_URL: http://localhost:${KEYCLOAK_PORT:-18090}
+      KEYCLOAK_ISSUER_URL: http://localhost:${KEYCLOAK_PORT:-8082}
     ports:
-      - "${USER_SERVICE_PORT:-18081}:8080"
+      - "${USER_SERVICE_PORT:-8081}:8081"
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,7 +45,7 @@ services:
       timeout: 5s
       retries: 10
     ports:
-      - "${POSTGRES_PORT:-15432}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     restart: unless-stopped
 
   keycloak:
@@ -62,7 +64,7 @@ services:
       - ./infrastructure/keycloak/import:/opt/keycloak/data/import:ro
       - ./infrastructure/keycloak/themes:/opt/keycloak/themes:ro
     ports:
-      - "${KEYCLOAK_PORT:-18090}:8080"
+      - "${KEYCLOAK_PORT:-8082}:8080"
     depends_on:
       postgres:
         condition: service_healthy

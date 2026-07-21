@@ -38,12 +38,12 @@ One repository, two Scala runtimes — a JVM backend and a Scala.js frontend sha
 ./scripts/dev.sh
 ```
 
-Open <http://localhost:4500/>.
+Open <http://localhost:3000/>.
 
 Press `Ctrl+C` to stop all processes and Docker Compose services.
 
 Ports can be overridden:
 
 ```bash
-FRONTEND_PORT=3001 STATUS_SERVICE_PORT=18082 USER_SERVICE_PORT=18083 ./scripts/dev.sh
+FRONTEND_PORT=3001 STATUS_SERVICE_PORT=8090 USER_SERVICE_PORT=8091 ./scripts/dev.sh
 ```

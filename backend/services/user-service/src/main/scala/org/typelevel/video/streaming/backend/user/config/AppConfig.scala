@@ -18,8 +18,8 @@ final case class AppConfig(
 
 object AppConfig:
 
-  private val defaultServerPort: Port = port"8080"
-  private val defaultDbPort: Int = 15432
+  private val defaultServerPort: Port = port"8081"
+  private val defaultDbPort: Int = 5432
   private val databaseName: String = "userservice"
   private val audience: String = "user-service"
 

@@ -33,9 +33,9 @@ dev_port() {
   printf '%d\n' "$((10#$dev_value))"
 }
 
-dev_frontend_port=$(dev_port FRONTEND_PORT "${FRONTEND_PORT-4500}")
-dev_status_service_port=$(dev_port STATUS_SERVICE_PORT "${STATUS_SERVICE_PORT-18080}")
-dev_user_service_port=$(dev_port USER_SERVICE_PORT "${USER_SERVICE_PORT-18081}")
+dev_frontend_port=$(dev_port FRONTEND_PORT "${FRONTEND_PORT-3000}")
+dev_status_service_port=$(dev_port STATUS_SERVICE_PORT "${STATUS_SERVICE_PORT-8080}")
+dev_user_service_port=$(dev_port USER_SERVICE_PORT "${USER_SERVICE_PORT-8081}")
 
 dev_sbt_pid=
 dev_http_pid=

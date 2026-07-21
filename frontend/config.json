@@ -1,8 +1,8 @@
 {
     "keycloak": {
-        "baseUrl": "http://localhost:18090",
+        "baseUrl": "http://localhost:8082",
         "realm": "typelevel-video-streaming",
         "clientId": "tvs-web"
     },
-    "userServiceBaseUrl": "http://localhost:18081"
+    "userServiceBaseUrl": "http://localhost:8081"
 }

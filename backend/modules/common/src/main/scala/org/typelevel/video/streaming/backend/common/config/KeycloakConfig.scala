@@ -8,7 +8,7 @@ final case class KeycloakConfig(url: String, realm: String, issuerUrl: String, a
 
 object KeycloakConfig:
 
-  private val defaultUrl = "http://localhost:18090"
+  private val defaultUrl = "http://localhost:8082"
   private val defaultRealm = "typelevel-video-streaming"
 
   def fromEnv(defaultAudience: String): ConfigValue[Effect, KeycloakConfig] =

@@ -119,7 +119,7 @@ lazy val userService = project
     serviceSettings(
       serviceName = "user-service",
       mainClassName = "org.typelevel.video.streaming.backend.user.Main",
-      exposedPort = 8080
+      exposedPort = 8081
     )
   )
   .settings(
