@@ -1,0 +1,14 @@
+.bsp/
+.bloop/
+.metals/
+project/metals.sbt
+.vscode/
+.idea/
+target/
+project/target/
+project/project/
+backend/target/
+frontend/target/
+*.class
+*.log
+.DS_Store
