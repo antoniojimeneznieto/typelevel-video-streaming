@@ -65,9 +65,12 @@ object TokenVerifier:
         roles = realmRoles(jwt)
       )
 
-    private def realmRoles(jwt: DecodedJWT): Set[Role] =
-      Option(jwt.getClaim("realm_access").asMap().asScala)
-        .map(m => m.get("roles").asInstanceOf[List[String]])
-        .getOrElse(Nil)
-        .flatMap(Role.fromString)
-        .toSet
+  private def realmRoles(jwt: DecodedJWT): Set[Role] =
+    Option(jwt.getClaim("realm_access").asMap())
+      .flatMap(values => Option(values.get("roles")))
+      .collect { case roles: java.util.Collection[?] =>
+        roles.asScala.collect { case role: String => role }.toList
+      }
+      .getOrElse(Nil)
+      .flatMap(Role.fromString)
+      .toSet
