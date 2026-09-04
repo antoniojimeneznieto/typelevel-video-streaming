@@ -8,7 +8,7 @@ import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.interfaces.DecodedJWT
 import org.typelevel.video.streaming.backend.common.config.KeycloakConfig
 
-import java.net.URL
+import java.net.URI
 import java.security.interfaces.RSAPublicKey
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
@@ -25,7 +25,7 @@ object TokenVerifier {
     val issuer  = s"${config.issuerUrl}/realms/${config.realm}"
     val jwksUrl = s"${config.url}/realms/${config.realm}/protocol/openid-connect/certs"
 
-    val jwkProvider = new JwkProviderBuilder(new URL(jwksUrl))
+    val jwkProvider = new JwkProviderBuilder(new URI(jwksUrl).toURL)
       .cached(10L, 24L, TimeUnit.HOURS)       // Cache 10 entries per 24h
       .rateLimited(10L, 1L, TimeUnit.MINUTES) // 10 fetches/min rate limit
       .build()

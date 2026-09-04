@@ -4,10 +4,17 @@ import cats.effect.Resource
 import cats.effect.{IO, IOApp}
 import cats.syntax.all.*
 import org.flywaydb.core.Flyway
-import org.http4s.HttpApp
 import org.http4s.ember.server.EmberServerBuilder
+import org.http4s.otel4s.middleware.metrics.OtelMetrics
+import org.http4s.otel4s.middleware.trace.redact.{PathRedactor, QueryRedactor}
+import org.http4s.otel4s.middleware.trace.server.{
+  PathAndQueryRedactor,
+  ServerMiddleware,
+  ServerSpanDataProvider,
+}
 import org.http4s.server.Server
-import org.http4s.server.middleware.CORS
+import org.http4s.server.middleware.{CORS, Metrics}
+import org.http4s.HttpRoutes
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.typelevel.otel4s.metrics.{Meter, MeterProvider}
@@ -81,16 +88,17 @@ object Main extends IOApp.Simple {
       handler: AccountServiceImpl,
       verifier: TokenVerifier,
       callerContext: CallerContext,
-  ): Resource[IO, Server] =
+  )(using TracerProvider[IO], MeterProvider[IO]): Resource[IO, Server] =
     SimpleRestJsonBuilder
       .routes(handler)
       .resource
-      .flatMap { apiRoutes =>
-        val authed           = AuthMiddleware(verifier, callerContext).apply(apiRoutes)
-        val docs             = smithy4s.http4s.swagger.docs[IO](AccountService)
-        val app: HttpApp[IO] =
-          CORS.policy.withAllowOriginAll.apply((docs <+> authed).orNotFound)
+      .evalMap { apiRoutes =>
+        val authed = AuthMiddleware(verifier, callerContext).apply(apiRoutes)
+        val docs   = smithy4s.http4s.swagger.docs[IO](AccountService)
 
+        createHttpApp(docs <+> authed)
+      }
+      .flatMap { app =>
         EmberServerBuilder
           .default[IO]
           .withHost(config.server.host)
@@ -98,5 +106,20 @@ object Main extends IOApp.Simple {
           .withHttpApp(app)
           .build
       }
+
+  private def createHttpApp(routes: HttpRoutes[IO])(using TracerProvider[IO], MeterProvider[IO]) = {
+    val redactor: PathAndQueryRedactor = new PathRedactor.NeverRedact with QueryRedactor.NeverRedact
+
+    for {
+      middleware <- ServerMiddleware
+                      .builder[IO](
+                        ServerSpanDataProvider.openTelemetry(redactor).optIntoClientPort,
+                      )
+                      .build
+      metricsOps <- OtelMetrics.serverMetricsOps[IO]()
+    } yield CORS.policy.withAllowOriginAll(
+      middleware.wrapHttpRoutes(Metrics(metricsOps)(routes)).orNotFound,
+    )
+  }
 
 }

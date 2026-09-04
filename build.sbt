@@ -6,6 +6,7 @@ val CatsEffectVersion = "3.7.0"
 val Fs2Version = "3.13.0"
 val Http4sStableVersion = "0.23.34"
 val Http4sDomVersion = "0.2.12"
+val Http4sOtel4sVersion = "0.18.0"
 val CalicoVersion = "0.2.3"
 val Ip4sVersion = "3.8.0"
 val ScalaJsDomVersion = "2.8.1"
@@ -88,6 +89,7 @@ lazy val common = project
       "org.typelevel" %% "otel4s-oteljava" % Otel4sVersion,
       "com.comcast" %% "ip4s-core" % Ip4sVersion,
       "org.http4s" %% "http4s-core" % Http4sStableVersion,
+      "org.http4s" %% "http4s-otel4s-middleware-metrics" % Http4sOtel4sVersion,
       "org.typelevel" %% "log4cats-core" % Log4catsVersion,
       "is.cir" %% "ciris" % CirisVersion,
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
@@ -116,6 +118,7 @@ lazy val statusService = project
       "co.fs2" %% "fs2-core" % Fs2Version,
       "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
       "org.http4s" %% "http4s-ember-server" % Http4sStableVersion,
+      "org.http4s" %% "http4s-otel4s-middleware-trace-server" % Http4sOtel4sVersion,
       "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
     ),
@@ -138,6 +141,8 @@ lazy val userService = project
       "org.typelevel" %% "cats-effect" % CatsEffectVersion,
       "org.http4s" %% "http4s-ember-server" % Http4sStableVersion,
       "org.http4s" %% "http4s-ember-client" % Http4sStableVersion,
+      "org.http4s" %% "http4s-otel4s-middleware-trace-server" % Http4sOtel4sVersion,
+      "org.http4s" %% "http4s-otel4s-middleware-trace-client" % Http4sOtel4sVersion,
       "org.typelevel" %% "log4cats-slf4j" % Log4catsVersion,
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % Smithy4sVersion,

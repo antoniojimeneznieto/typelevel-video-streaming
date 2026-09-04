@@ -47,7 +47,7 @@ private[auth] object Pkce {
   private def randomVerifier: IO[String] =
     IO {
       val bytes = new Uint8Array(32)
-      WebCrypto.getRandomValues(bytes)
+      val _ = WebCrypto.getRandomValues(bytes)
       base64Url(bytes)
     }
 
