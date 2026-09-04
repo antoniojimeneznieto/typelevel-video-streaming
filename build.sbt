@@ -13,24 +13,34 @@ val CirceVersion = "0.14.16"
 val WeaverVersion = "0.13.0"
 val LogbackVersion = "1.5.35"
 val Log4catsVersion = "2.8.0"
-val SkunkVersion = "1.0.0"
+val SkunkVersion = "2.0.0-RC2"
 val Smithy4sVersion = "0.19.8"
-val Fs2KafkaVersion = "4.0.0"
+val Fs2KafkaVersion = "4.1.0-RC1"
+val Fs2KafkaOtel4sVersion = "0.2.0-RC1"
 val JavaJwtVersion = "4.5.0"
 val JwksRsaVersion = "0.22.1"
 val CirisVersion = "3.9.0"
 val FlywayVersion = "12.9.0"
 val PostgresJdbcVersion = "42.7.11"
+val Otel4sVersion = "1.1.0"
 
 ThisBuild / organization := "org.typelevel.video.streaming"
 ThisBuild / scalaVersion := ScalaLtsVersion
 ThisBuild / version := "0.1.0-SNAPSHOT"
-ThisBuild / tlJdkRelease := Some(17)
+//ThisBuild / tlJdkRelease := Some(17)
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 
 addCommandAlias("fix", "; scalafixAll; scalafmtAll; scalafmtSbt")
 addCommandAlias("lint", "; scalafixAll --check; scalafmtCheckAll; scalafmtSbtCheck")
+
+def noPublishSettings =
+  Def.settings(
+    publish := {},
+    publishLocal := {},
+    publishArtifact := false,
+    publish / skip := true
+  )
 
 def serviceSettings(serviceName: String, mainClassName: String, exposedPort: Int) =
   Seq(
@@ -52,7 +62,7 @@ def serviceSettings(serviceName: String, mainClassName: String, exposedPort: Int
 lazy val root = project
   .in(file("."))
   .aggregate(backend, frontend)
-  .enablePlugins(NoPublishPlugin)
+  .settings(noPublishSettings)
   .settings(
     name := "typelevel-video-streaming",
     publish / skip := true
@@ -61,7 +71,7 @@ lazy val root = project
 lazy val backend = project
   .in(file("backend"))
   .aggregate(common, statusService, userService)
-  .enablePlugins(NoPublishPlugin)
+  .settings(noPublishSettings)
   .settings(
     name := "backend",
     publish / skip := true
@@ -69,12 +79,13 @@ lazy val backend = project
 
 lazy val common = project
   .in(file("backend/modules/common"))
-  .enablePlugins(NoPublishPlugin)
+  .settings(noPublishSettings)
   .settings(
     name := "common",
     Compile / exportJars := true,
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "org.typelevel" %% "otel4s-oteljava" % Otel4sVersion,
       "com.comcast" %% "ip4s-core" % Ip4sVersion,
       "org.http4s" %% "http4s-core" % Http4sStableVersion,
       "org.typelevel" %% "log4cats-core" % Log4catsVersion,
@@ -85,13 +96,13 @@ lazy val common = project
       "org.typelevel" %% "log4cats-noop" % Log4catsVersion % Test,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
     ),
-    testFrameworks += new TestFramework("weaver.framework.CatsEffect")
   )
 
 lazy val statusService = project
   .in(file("backend/services/status-service"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin, NoPublishPlugin)
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
   .dependsOn(common)
+  .settings(noPublishSettings)
   .settings(
     serviceSettings(
       serviceName = "status-service",
@@ -108,13 +119,13 @@ lazy val statusService = project
       "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
     ),
-    testFrameworks += new TestFramework("weaver.framework.CatsEffect")
   )
 
 lazy val userService = project
   .in(file("backend/services/user-service"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin, NoPublishPlugin, Smithy4sCodegenPlugin)
+  .enablePlugins(JavaAppPackaging, DockerPlugin, Smithy4sCodegenPlugin)
   .dependsOn(common)
+  .settings(noPublishSettings)
   .settings(
     serviceSettings(
       serviceName = "user-service",
@@ -132,18 +143,19 @@ lazy val userService = project
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % Smithy4sVersion,
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s-swagger" % Smithy4sVersion,
       "org.typelevel" %% "fs2-kafka" % Fs2KafkaVersion,
+      "io.github.irevive" %% "fs2-kafka-otel4s-trace" % Fs2KafkaOtel4sVersion,
       "org.flywaydb" % "flyway-core" % FlywayVersion,
       "org.flywaydb" % "flyway-database-postgresql" % FlywayVersion,
       "org.postgresql" % "postgresql" % PostgresJdbcVersion % Runtime,
       "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
     ),
-    testFrameworks += new TestFramework("weaver.framework.CatsEffect")
   )
 
 lazy val frontend = project
   .in(file("frontend"))
-  .enablePlugins(ScalaJSPlugin, NoPublishPlugin)
+  .enablePlugins(ScalaJSPlugin)
+  .settings(noPublishSettings)
   .settings(
     name := "frontend",
     scalaJSUseMainModuleInitializer := true,
@@ -154,11 +166,11 @@ lazy val frontend = project
     Compile / fullLinkJS / scalaJSLinkerOutputDirectory :=
       baseDirectory.value / "target" / "site",
     libraryDependencies ++= Seq(
-      "com.armanbilge" %%% "calico" % CalicoVersion,
-      "org.typelevel" %%% "cats-effect" % CatsEffectVersion,
-      "co.fs2" %%% "fs2-core" % Fs2Version,
-      "org.http4s" %%% "http4s-dom" % Http4sDomVersion,
-      "io.circe" %%% "circe-parser" % CirceVersion,
-      "org.scala-js" %%% "scalajs-dom" % ScalaJsDomVersion
+      "com.armanbilge" %% "calico" % CalicoVersion,
+      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "co.fs2" %% "fs2-core" % Fs2Version,
+      "org.http4s" %% "http4s-dom" % Http4sDomVersion,
+      "io.circe" %% "circe-parser" % CirceVersion,
+      "org.scala-js" %% "scalajs-dom" % ScalaJsDomVersion
     )
   )
