@@ -78,3 +78,11 @@ services:
       - "${MAILPIT_SMTP_PORT:-1025}:1025"
       - "${MAILPIT_UI_PORT:-8025}:8025"
     restart: unless-stopped
+
+  lgtm:
+    image: grafana/otel-lgtm:0.32.1
+    ports:
+      - "${LGTM_OTLP_UI_PORT:-3000}:3000"
+      - "${LGTM_OTLP_GRPC_PORT:-4317}:4317"
+      - "${LGTM_OTLP_HTTP_PORT:-4318}:4318"
+    restart: unless-stopped
