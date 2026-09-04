@@ -1,17 +1,17 @@
 package org.typelevel.video.streaming.backend.user.repository
 
-import java.time.ZoneOffset
-import java.util.UUID
-
+import UserProfileRepository.*
 import cats.effect.IO
 import org.typelevel.video.streaming.backend.user.Profile
 import skunk.*
 import skunk.codec.all.*
 import skunk.implicits.*
 import smithy4s.time.Timestamp
-import UserProfileRepository.*
 
-final class UserProfileRepository:
+import java.time.ZoneOffset
+import java.util.UUID
+
+final class UserProfileRepository {
 
   def findById(session: Session[IO], id: UUID): IO[Option[Profile]] =
     session.prepare(findByIdQ).flatMap(_.option(id))
@@ -23,11 +23,13 @@ final class UserProfileRepository:
       session: Session[IO],
       keycloakId: String,
       username: String,
-      email: Option[String]
+      email: Option[String],
   ): IO[Profile] =
     session.prepare(insertQ).flatMap(_.unique((keycloakId, username, email)))
 
-object UserProfileRepository:
+}
+
+object UserProfileRepository {
 
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Codecs
@@ -35,7 +37,7 @@ object UserProfileRepository:
 
   private val timestamp: Codec[Timestamp] =
     timestamptz.imap(odt => Timestamp.fromInstant(odt.toInstant))(t =>
-      t.toInstant.atOffset(ZoneOffset.UTC)
+      t.toInstant.atOffset(ZoneOffset.UTC),
     )
 
   private val profile: Decoder[Profile] =
@@ -66,3 +68,5 @@ object UserProfileRepository:
       ON CONFLICT (keycloak_id) DO UPDATE SET username = user_profile.username, email = user_profile.email
       RETURNING id, username, created_at, email
     """.query(profile)
+
+}

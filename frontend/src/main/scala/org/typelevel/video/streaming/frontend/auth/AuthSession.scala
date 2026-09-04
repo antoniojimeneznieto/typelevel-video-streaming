@@ -1,38 +1,39 @@
 package org.typelevel.video.streaming.frontend.auth
 
+import io.circe.parser.decode
+import io.circe.{Decoder, Encoder}
+
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 import scala.util.Try
-
-import io.circe.parser.decode
-import io.circe.{Decoder, Encoder}
 
 final case class AuthSession(
     accessToken: String,
     refreshToken: Option[String],
     idToken: Option[String],
-    expiresAtMillis: Double
+    expiresAtMillis: Double,
 ) derives Decoder,
-      Encoder:
+      Encoder {
   def isFresh(nowMillis: Double): Boolean =
     expiresAtMillis > nowMillis + 15000
+}
 
 final case class UserIdentity(
     name: String,
     initials: String,
-    pictureUrl: Option[String]
+    pictureUrl: Option[String],
 )
 
-object UserIdentity:
+object UserIdentity {
 
   val fallback: UserIdentity =
     UserIdentity(
       name = "Video Streaming account",
       initials = "VS",
-      pictureUrl = None
+      pictureUrl = None,
     )
 
-  def fromSession(session: AuthSession): UserIdentity =
+  def fromSession(session: AuthSession): UserIdentity = {
     val parsedClaims =
       session.idToken.flatMap(parseJwtPayload).orElse(parseJwtPayload(session.accessToken))
 
@@ -45,10 +46,11 @@ object UserIdentity:
         UserIdentity(
           name = name,
           initials = initialsFor(name),
-          pictureUrl = nonEmpty(claims.picture)
+          pictureUrl = nonEmpty(claims.picture),
         )
       }
       .getOrElse(fallback)
+  }
 
   private def parseJwtPayload(token: String): Option[JwtClaims] =
     token.split("\\.").lift(1).flatMap { payload =>
@@ -57,15 +59,17 @@ object UserIdentity:
       }
     }
 
-  private def decodeBase64Url(value: String): String =
+  private def decodeBase64Url(value: String): String = {
     val bytes = Base64.getUrlDecoder.decode(paddedBase64(value))
     new String(bytes, StandardCharsets.UTF_8)
+  }
 
-  private def paddedBase64(value: String): String =
+  private def paddedBase64(value: String): String = {
     val padding = (4 - value.length % 4) % 4
     value + ("=" * padding)
+  }
 
-  private def initialsFor(name: String): String =
+  private def initialsFor(name: String): String = {
     val words =
       name
         .split("[\\s@._-]+")
@@ -80,12 +84,13 @@ object UserIdentity:
       .take(2)
 
     if initials.nonEmpty then initials else fallback.initials
+  }
 
-  private final case class JwtClaims(
+  final private case class JwtClaims(
       name: Option[String],
       preferred_username: Option[String],
       email: Option[String],
-      picture: Option[String]
+      picture: Option[String],
   ) derives Decoder
 
   private def firstNonEmpty(values: Option[String]*): Option[String] =
@@ -94,13 +99,18 @@ object UserIdentity:
   private def nonEmpty(value: Option[String]): Option[String] =
     value.map(_.trim).filter(_.nonEmpty)
 
-enum AuthStatus:
+}
+
+enum AuthStatus {
   case Checking
   case SignedOut
   case SignedIn(session: AuthSession)
   case Failed(message: String)
 
   def sessionOption: Option[AuthSession] =
-    this match
+    this match {
       case SignedIn(session) => Some(session)
       case _                 => None
+    }
+
+}

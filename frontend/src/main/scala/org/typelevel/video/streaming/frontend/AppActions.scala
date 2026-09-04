@@ -10,5 +10,5 @@ final case class AppActions(
     goSettings: IO[Unit],
     configureTotp: IO[Unit],
     refreshProfile: IO[Unit],
-    clearNotice: IO[Unit]
+    clearNotice: IO[Unit],
 )

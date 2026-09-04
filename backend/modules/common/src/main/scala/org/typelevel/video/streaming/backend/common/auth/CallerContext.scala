@@ -1,11 +1,11 @@
 package org.typelevel.video.streaming.backend.common.auth
 
-import scala.util.control.NoStackTrace
-
 import cats.effect.{IO, IOLocal}
 import cats.syntax.all.*
 
-final class CallerContext private (local: IOLocal[Option[Caller]]):
+import scala.util.control.NoStackTrace
+
+final class CallerContext private (local: IOLocal[Option[Caller]]) {
 
   def current: IO[Option[Caller]] = local.get
 
@@ -14,7 +14,9 @@ final class CallerContext private (local: IOLocal[Option[Caller]]):
 
   private[auth] def set(caller: Caller): IO[Unit] = local.set(Some(caller))
 
-object CallerContext:
+}
+
+object CallerContext {
 
   case object NoCallerInScope
       extends RuntimeException("No authenticated caller in scope")
@@ -22,3 +24,5 @@ object CallerContext:
 
   def make: IO[CallerContext] =
     IOLocal(Option.empty[Caller]).map(new CallerContext(_))
+
+}

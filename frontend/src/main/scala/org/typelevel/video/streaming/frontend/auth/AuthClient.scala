@@ -1,7 +1,5 @@
 package org.typelevel.video.streaming.frontend.auth
 
-import scala.concurrent.duration.*
-
 import cats.effect.IO
 import io.circe.Decoder
 import io.circe.parser.decode
@@ -11,7 +9,9 @@ import org.http4s.{Method, Request, Uri, UrlForm}
 import org.scalajs.dom
 import org.typelevel.video.streaming.frontend.config.KeycloakConfig
 
-final class AuthClient(config: KeycloakConfig, client: Client[IO]):
+import scala.concurrent.duration.*
+
+final class AuthClient(config: KeycloakConfig, client: Client[IO]) {
 
   import AuthClient.*
 
@@ -19,7 +19,7 @@ final class AuthClient(config: KeycloakConfig, client: Client[IO]):
     Uri.unsafeFromString(config.tokenEndpoint)
 
   def completeLoginOrRestore: IO[AuthStatus] =
-    queryParam("code") match
+    queryParam("code") match {
       case Some(code) =>
         val requestedState = queryParam("state")
         loadPkce.flatMap {
@@ -29,16 +29,17 @@ final class AuthClient(config: KeycloakConfig, client: Client[IO]):
                 cleanCallbackUrl(pkce.returnTo) *>
                 IO.pure(AuthStatus.SignedIn(session))
             }
-          case _ =>
+          case _                                                 =>
             clearPkce.as(
-              AuthStatus.Failed("The sign-in response did not match this browser session.")
+              AuthStatus.Failed("The sign-in response did not match this browser session."),
             )
         }
-      case None =>
+      case None       =>
         currentSession.map {
           case Some(session) => AuthStatus.SignedIn(session)
           case None          => AuthStatus.SignedOut
         }
+    }
 
   def login(returnTo: String): IO[Unit] =
     startAuthorization(returnTo, requiredAction = None)
@@ -47,23 +48,24 @@ final class AuthClient(config: KeycloakConfig, client: Client[IO]):
     startAuthorization(returnTo, requiredAction = Some("CONFIGURE_TOTP"))
 
   private def startAuthorization(returnTo: String, requiredAction: Option[String]): IO[Unit] =
-    for
-      now <- nowMillis
+    for {
+      now  <- nowMillis
       pkce <- Pkce.create(returnTo, now)
-      _ <- storePkce(pkce.storedState)
-      _ <- IO(
-        dom.window.location.assign(
-          authorizeUrl(pkce.state, pkce.codeChallenge, requiredAction)
-        )
-      )
-    yield ()
+      _    <- storePkce(pkce.storedState)
+      _    <- IO(
+                dom.window.location.assign(
+                  authorizeUrl(pkce.state, pkce.codeChallenge, requiredAction),
+                ),
+              )
+    } yield ()
 
   def logout: IO[Unit] =
     loadSession.flatMap { session =>
       clearSession *>
-        (session.flatMap(_.idToken) match
+        (session.flatMap(_.idToken) match {
           case Some(idToken) => IO(dom.window.location.assign(logoutUrl(idToken)))
-          case None          => IO.unit)
+          case None          => IO.unit
+        })
     }
 
   def currentSession: IO[Option[AuthSession]] =
@@ -78,81 +80,83 @@ final class AuthClient(config: KeycloakConfig, client: Client[IO]):
   def refreshSession: IO[Option[AuthSession]] =
     loadSession.flatMap {
       case Some(session) =>
-        session.refreshToken match
+        session.refreshToken match {
           case Some(refreshToken) =>
             refresh(refreshToken).flatTap(storeSession).attempt.flatMap {
               case Right(refreshed) => IO.pure(Some(refreshed))
               case Left(_)          => clearSession.as(None)
             }
-          case None => clearSession.as(None)
-      case None => IO.pure(None)
+          case None               => clearSession.as(None)
+        }
+      case None          => IO.pure(None)
     }
 
   private def authorizeUrl(
       state: String,
       codeChallenge: String,
-      requiredAction: Option[String]
-  ): String =
+      requiredAction: Option[String],
+  ): String = {
     val params =
       List(
-        "client_id" -> config.clientId,
-        "redirect_uri" -> config.redirectUri,
-        "response_type" -> "code",
-        "scope" -> "openid profile email",
-        "state" -> state,
+        "client_id"             -> config.clientId,
+        "redirect_uri"          -> config.redirectUri,
+        "response_type"         -> "code",
+        "scope"                 -> "openid profile email",
+        "state"                 -> state,
         "code_challenge_method" -> "S256",
-        "code_challenge" -> codeChallenge
+        "code_challenge"        -> codeChallenge,
       ) ++ requiredAction.map(action => "kc_action" -> action).toList
 
     withQueryParams(
       config.authorizationEndpoint,
-      params
+      params,
     )
+  }
 
   private def logoutUrl(idToken: String): String =
     withQueryParams(
       config.logoutEndpoint,
       List(
-        "id_token_hint" -> idToken,
-        "post_logout_redirect_uri" -> config.redirectUri
-      )
+        "id_token_hint"            -> idToken,
+        "post_logout_redirect_uri" -> config.redirectUri,
+      ),
     )
 
   private def exchangeCode(code: String, verifier: String): IO[AuthSession] =
     tokenRequest(
       UrlForm(
-        "grant_type" -> "authorization_code",
-        "client_id" -> config.clientId,
-        "redirect_uri" -> config.redirectUri,
-        "code" -> code,
-        "code_verifier" -> verifier
-      )
+        "grant_type"    -> "authorization_code",
+        "client_id"     -> config.clientId,
+        "redirect_uri"  -> config.redirectUri,
+        "code"          -> code,
+        "code_verifier" -> verifier,
+      ),
     )
 
   private def refresh(refreshToken: String): IO[AuthSession] =
     tokenRequest(
       UrlForm(
-        "grant_type" -> "refresh_token",
-        "client_id" -> config.clientId,
-        "refresh_token" -> refreshToken
-      )
+        "grant_type"    -> "refresh_token",
+        "client_id"     -> config.clientId,
+        "refresh_token" -> refreshToken,
+      ),
     )
 
-  private def tokenRequest(form: UrlForm): IO[AuthSession] =
+  private def tokenRequest(form: UrlForm): IO[AuthSession] = {
     val request = Request[IO](Method.POST, tokenUri).withEntity(form)
 
     client.run(request).use { response =>
       response.as[String].flatMap { text =>
-        if response.status.code >= 200 && response.status.code < 300 then
-          nowMillis.flatMap { now =>
-            IO.fromEither(decode[TokenResponse](text).map(_.toSession(now)))
-          }
+        if response.status.code >= 200 && response.status.code < 300 then nowMillis.flatMap { now =>
+          IO.fromEither(decode[TokenResponse](text).map(_.toSession(now)))
+        }
         else
           IO.raiseError(
-            new RuntimeException(s"Keycloak token request failed (${response.status.code}): $text")
+            new RuntimeException(s"Keycloak token request failed (${response.status.code}): $text"),
           )
       }
     }
+  }
 
   private def cleanCallbackUrl(returnTo: String): IO[Unit] =
     IO(dom.window.history.replaceState(null, "", s"${config.redirectUri}$returnTo"))
@@ -160,26 +164,30 @@ final class AuthClient(config: KeycloakConfig, client: Client[IO]):
   private def queryParam(name: String): Option[String] =
     Option(new dom.URLSearchParams(dom.window.location.search).get(name)).filter(_.nonEmpty)
 
-object AuthClient:
+}
+
+object AuthClient {
 
   private val sessionKey = "tl-video-streaming.auth.session"
-  private val pkceKey = "tl-video-streaming.auth.pkce"
+  private val pkceKey    = "tl-video-streaming.auth.pkce"
   private val pkceMaxAge = 1.hour
 
-  private final case class TokenResponse(
+  final private case class TokenResponse(
       access_token: String,
       refresh_token: Option[String],
       id_token: Option[String],
-      expires_in: Option[Double]
-  ) derives Decoder:
+      expires_in: Option[Double],
+  ) derives Decoder {
 
     def toSession(nowMillis: Double): AuthSession =
       AuthSession(
         accessToken = access_token,
         refreshToken = refresh_token,
         idToken = id_token,
-        expiresAtMillis = nowMillis + expires_in.getOrElse(300d) * 1000
+        expiresAtMillis = nowMillis + expires_in.getOrElse(300d) * 1000,
       )
+
+  }
 
   private def nowMillis: IO[Double] =
     IO.realTime.map(_.toMillis.toDouble)
@@ -225,3 +233,5 @@ object AuthClient:
       dom.window.sessionStorage.removeItem(pkceKey)
       dom.window.localStorage.removeItem(pkceKey)
     }
+
+}

@@ -8,26 +8,26 @@ import org.typelevel.video.streaming.frontend.AppActions
 import org.typelevel.video.streaming.frontend.auth.{AuthSession, AuthStatus, UserIdentity}
 import org.typelevel.video.streaming.frontend.routing.Route
 
-object AppLayout:
+object AppLayout {
 
   def view(
       auth: Signal[IO, AuthStatus],
       notice: Signal[IO, Option[String]],
       actions: AppActions,
-      page: Signal[IO, Resource[IO, fs2.dom.HtmlElement[IO]]]
+      page: Signal[IO, Resource[IO, fs2.dom.HtmlElement[IO]]],
   ) =
     div(
       cls := "app-shell",
       headerTag(
-        cls := "app-header",
+        cls       := "app-header",
         a(
-          cls := "app-brand",
-          href := "#/",
+          cls   := "app-brand",
+          href  := "#/",
           onClick(actions.goHome),
           img(src := "logo.svg", alt := "Typelevel"),
-          span("Video Streaming")
+          span("Video Streaming"),
         ),
-        div(cls := "session-actions", auth.map(sessionActions(_, actions)))
+        div(cls := "session-actions", auth.map(sessionActions(_, actions))),
       ),
       notice.map {
         case Some(message) =>
@@ -35,57 +35,60 @@ object AppLayout:
             cls := "notice",
             span(message),
             button(
-              cls := "icon-button",
+              cls        := "icon-button",
               aria.label := "Dismiss message",
               onClick(actions.clearNotice),
-              "×"
-            )
+              "×",
+            ),
           )
-        case None =>
+        case None          =>
           div(cls := "notice empty")
       },
-      mainTag(cls := "app-main", page)
+      mainTag(cls := "app-main", page),
     )
 
   private def sessionActions(status: AuthStatus, actions: AppActions) =
-    status match
-      case AuthStatus.Checking =>
+    status match {
+      case AuthStatus.Checking          =>
         div(cls := "session-state", "Checking session")
-      case AuthStatus.SignedOut =>
+      case AuthStatus.SignedOut         =>
         button(cls := "secondary", onClick(actions.login(Route.Home)), "Sign in")
       case AuthStatus.SignedIn(session) =>
         profileMenu(session, actions)
-      case AuthStatus.Failed(message) =>
+      case AuthStatus.Failed(message)   =>
         div(
           cls := "session-cluster",
-          span(cls := "session-error", message),
-          button(cls := "secondary", onClick(actions.login(Route.Home)), "Try again")
+          span(cls   := "session-error", message),
+          button(cls := "secondary", onClick(actions.login(Route.Home)), "Try again"),
         )
+    }
 
-  private def profileMenu(session: AuthSession, actions: AppActions) =
+  private def profileMenu(session: AuthSession, actions: AppActions) = {
     val identity = UserIdentity.fromSession(session)
 
     detailsTag(
       cls := "profile-menu",
       summaryTag(
-        cls := "profile-trigger",
+        cls        := "profile-trigger",
         aria.label := s"Open account menu for ${identity.name}",
-        identity.pictureUrl match
+        identity.pictureUrl match {
           case Some(url) =>
             img(cls := "profile-avatar-image", src := url, alt := identity.name)
-          case None =>
+          case None      =>
             span(cls := "profile-avatar", aria.hidden := true, identity.initials)
+        },
       ),
       div(
-        cls := "profile-menu-panel",
+        cls        := "profile-menu-panel",
         button(
-          cls := "profile-menu-item",
+          cls      := "profile-menu-item",
           onClick(closeProfileMenus *> actions.goSettings),
-          "Account settings"
+          "Account settings",
         ),
-        button(cls := "profile-menu-item", onClick(closeProfileMenus *> actions.logout), "Sign out")
-      )
+        button(cls := "profile-menu-item", onClick(closeProfileMenus *> actions.logout), "Sign out"),
+      ),
     )
+  }
 
   private def closeProfileMenus: IO[Unit] =
     IO {
@@ -94,3 +97,5 @@ object AppLayout:
         menus.item(index).removeAttribute("open")
       }
     }
+
+}

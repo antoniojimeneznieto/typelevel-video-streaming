@@ -6,7 +6,7 @@ import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.server.middleware.CORS
 import org.typelevel.video.streaming.backend.common.config.ServerConfig
 
-object Main extends IOApp.Simple:
+object Main extends IOApp.Simple {
 
   private val httpApp =
     CORS.policy.withAllowOriginAll
@@ -22,3 +22,5 @@ object Main extends IOApp.Simple:
         .build
         .useForever
     }
+
+}

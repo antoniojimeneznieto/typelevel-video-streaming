@@ -9,10 +9,10 @@ final case class PostgresConfig(
     user: String,
     database: String,
     password: String,
-    maxConnections: Int
+    maxConnections: Int,
 )
 
-object PostgresConfig:
+object PostgresConfig {
 
   def fromEnv(database: String, port: Int): ConfigValue[Effect, PostgresConfig] =
     (
@@ -21,5 +21,7 @@ object PostgresConfig:
       env("POSTGRES_USER").as[String].default(database),
       env("POSTGRES_DB").as[String].default(database),
       env("POSTGRES_PASSWORD").as[String].default(database),
-      env("POSTGRES_MAX_CONNECTIONS").as[Int].default(10)
+      env("POSTGRES_MAX_CONNECTIONS").as[Int].default(10),
     ).parMapN(PostgresConfig.apply)
+
+}

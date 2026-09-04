@@ -8,18 +8,19 @@ import org.scalajs.dom
 
 final case class AppConfig(
     keycloak: KeycloakConfig,
-    userServiceBaseUrl: String
+    userServiceBaseUrl: String,
 )
 
-object AppConfig:
+object AppConfig {
 
-  def load: IO[AppConfig] =
+  def load: IO[AppConfig] = {
     val origin = dom.window.location.origin
-    val path = dom.window.location.pathname
+    val path   = dom.window.location.pathname
 
     fetchConfigText.flatMap { text =>
       IO.fromEither(parseConfig(text, redirectUri = s"$origin$path"))
     }
+  }
 
   private def fetchConfigText: IO[String] =
     FetchClientBuilder[IO]
@@ -30,25 +31,30 @@ object AppConfig:
   private def parseConfig(text: String, redirectUri: String): Either[Throwable, AppConfig] =
     decode[ConfigFile](text).map(_.toAppConfig(redirectUri))
 
-  private final case class ConfigFile(
+  final private case class ConfigFile(
       keycloak: ConfigFile.Keycloak,
-      userServiceBaseUrl: String
-  ) derives Decoder:
+      userServiceBaseUrl: String,
+  ) derives Decoder {
     def toAppConfig(redirectUri: String): AppConfig =
       AppConfig(
         keycloak = KeycloakConfig(
           baseUrl = keycloak.baseUrl,
           realm = keycloak.realm,
           clientId = keycloak.clientId,
-          redirectUri = redirectUri
+          redirectUri = redirectUri,
         ),
-        userServiceBaseUrl = userServiceBaseUrl
+        userServiceBaseUrl = userServiceBaseUrl,
       )
+  }
 
-  private object ConfigFile:
+  private object ConfigFile {
 
     final case class Keycloak(
         baseUrl: String,
         realm: String,
-        clientId: String
+        clientId: String,
     ) derives Decoder
+
+  }
+
+}

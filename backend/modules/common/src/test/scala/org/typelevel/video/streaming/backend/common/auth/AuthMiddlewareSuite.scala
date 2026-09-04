@@ -9,7 +9,7 @@ import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.noop.NoOpLogger
 import weaver.SimpleIOSuite
 
-object AuthMiddlewareSuite extends SimpleIOSuite:
+object AuthMiddlewareSuite extends SimpleIOSuite {
 
   private given Logger[IO] = NoOpLogger[IO]
 
@@ -19,12 +19,13 @@ object AuthMiddlewareSuite extends SimpleIOSuite:
       email = Some("ada@example.com"),
       preferredUsername = "ada",
       emailVerified = true,
-      roles = Set(Role.User)
+      roles = Set(Role.User),
     )
 
   private def verifierReturning(result: Either[AuthError, Caller]): TokenVerifier =
-    new TokenVerifier:
+    new TokenVerifier {
       def verify(token: String): IO[Either[AuthError, Caller]] = IO.pure(result)
+    }
 
   private def echoSubject(context: CallerContext): HttpRoutes[IO] =
     HttpRoutes[IO] { _ =>
@@ -65,3 +66,5 @@ object AuthMiddlewareSuite extends SimpleIOSuite:
       expect(response.status == Status.Unauthorized)
     }
   }
+
+}

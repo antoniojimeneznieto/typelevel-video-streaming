@@ -10,9 +10,9 @@ import skunk.Session
 final class AccountServiceImpl(
     pool: Resource[IO, Session[IO]],
     repository: UserProfileRepository,
-    callerContext: CallerContext
+    callerContext: CallerContext,
 ) extends AuthedSession(pool, callerContext)
-    with AccountService[IO]:
+    with AccountService[IO] {
 
   def getProfile(): IO[Profile] =
     authed { (caller, session) =>
@@ -23,7 +23,9 @@ final class AccountServiceImpl(
             session,
             caller.subject,
             caller.preferredUsername,
-            caller.email
+            caller.email,
           )
       }
     }
+
+}

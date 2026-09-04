@@ -14,30 +14,32 @@ import org.typelevel.video.streaming.frontend.pages.{HomePage, SettingsPage}
 import org.typelevel.video.streaming.frontend.routing.Route
 import org.typelevel.video.streaming.frontend.ui.AppLayout
 
-object Main extends IOWebApp:
+object Main extends IOWebApp {
 
   override def render =
-    for
-      config <- Resource.eval(AppConfig.load)
+    for {
+      config     <- Resource.eval(AppConfig.load)
       httpClient <- FetchClientBuilder[IO].resource
-      authClient = AuthClient(config.keycloak, httpClient)
-      userApi = UserApi(config.userServiceBaseUrl, httpClient)
-      route <- Resource.eval(SignallingRef[IO].of(Route.current))
-      auth <- Resource.eval(SignallingRef[IO].of(AuthStatus.Checking))
-      profile <- Resource.eval(SignallingRef[IO].of(ProfileState.Idle))
-      notice <- Resource.eval(SignallingRef[IO].of(Option.empty[String]))
-      actions = buildActions(authClient, userApi, route, auth, profile, notice)
-      _ <- Resource.eval(restoreSession(authClient, auth, notice))
-      _ <- hashRouteSync(route, profile, actions)
-      _ <- Resource.eval(syncRoute(route, profile, actions))
-      page = route.map {
-        case Route.Home =>
-          HomePage.view(auth).map(element => element: fs2.dom.HtmlElement[IO])
-        case Route.Settings =>
-          SettingsPage.view(auth, profile, actions).map(element => element: fs2.dom.HtmlElement[IO])
-      }
-      app <- AppLayout.view(auth, notice, actions, page)
-    yield app
+      authClient  = AuthClient(config.keycloak, httpClient)
+      userApi     = UserApi(config.userServiceBaseUrl, httpClient)
+      route      <- Resource.eval(SignallingRef[IO].of(Route.current))
+      auth       <- Resource.eval(SignallingRef[IO].of(AuthStatus.Checking))
+      profile    <- Resource.eval(SignallingRef[IO].of(ProfileState.Idle))
+      notice     <- Resource.eval(SignallingRef[IO].of(Option.empty[String]))
+      actions     = buildActions(authClient, userApi, route, auth, profile, notice)
+      _          <- Resource.eval(restoreSession(authClient, auth, notice))
+      _          <- hashRouteSync(route, profile, actions)
+      _          <- Resource.eval(syncRoute(route, profile, actions))
+      page        = route.map {
+                      case Route.Home     =>
+                        HomePage.view(auth).map(element => element: fs2.dom.HtmlElement[IO])
+                      case Route.Settings =>
+                        SettingsPage
+                          .view(auth, profile, actions)
+                          .map(element => element: fs2.dom.HtmlElement[IO])
+                    }
+      app        <- AppLayout.view(auth, notice, actions, page)
+    } yield app
 
   private def buildActions(
       authClient: AuthClient,
@@ -45,8 +47,8 @@ object Main extends IOWebApp:
       route: SignallingRef[IO, Route],
       auth: SignallingRef[IO, AuthStatus],
       profile: SignallingRef[IO, ProfileState],
-      notice: SignallingRef[IO, Option[String]]
-  ): AppActions =
+      notice: SignallingRef[IO, Option[String]],
+  ): AppActions = {
 
     def freshSession =
       authClient.currentSession.flatMap {
@@ -77,10 +79,10 @@ object Main extends IOWebApp:
               case Right(value) =>
                 profile.set(ProfileState.Loaded(value)) *>
                   notice.set(None)
-              case Left(error) =>
+              case Left(error)  =>
                 profile.set(ProfileState.Failed(error.getMessage))
             }
-        case None =>
+        case None          =>
           profile.set(ProfileState.Failed("Sign in before loading your profile."))
       }
 
@@ -93,21 +95,23 @@ object Main extends IOWebApp:
       goSettings = Route.navigate(Route.Settings) *> route.set(Route.Settings),
       configureTotp = authClient.configureTotp(Route.Settings.hash),
       refreshProfile = loadProfile,
-      clearNotice = notice.set(None)
+      clearNotice = notice.set(None),
     )
+  }
 
   private def restoreSession(
       authClient: AuthClient,
       auth: SignallingRef[IO, AuthStatus],
-      notice: SignallingRef[IO, Option[String]]
+      notice: SignallingRef[IO, Option[String]],
   ): IO[Unit] =
     authClient.completeLoginOrRestore.attempt.flatMap {
       case Right(status) =>
         auth.set(status) *>
-          (status match
+          (status match {
             case AuthStatus.Failed(message) => notice.set(Some(message))
-            case _                          => notice.set(None))
-      case Left(error) =>
+            case _                          => notice.set(None)
+          })
+      case Left(error)   =>
         auth.set(AuthStatus.Failed(error.getMessage)) *>
           notice.set(Some(error.getMessage))
     }
@@ -115,7 +119,7 @@ object Main extends IOWebApp:
   private def hashRouteSync(
       route: SignallingRef[IO, Route],
       profile: SignallingRef[IO, ProfileState],
-      actions: AppActions
+      actions: AppActions,
   ): Resource[IO, Unit] =
     Resource.make {
       IO {
@@ -129,12 +133,14 @@ object Main extends IOWebApp:
   private def syncRoute(
       route: SignallingRef[IO, Route],
       profile: SignallingRef[IO, ProfileState],
-      actions: AppActions
+      actions: AppActions,
   ): IO[Unit] =
-    for
+    for {
       next <- IO(Route.current)
-      _ <- route.set(next)
-      _ <-
+      _    <- route.set(next)
+      _    <-
         if next == Route.Settings then actions.refreshProfile
         else profile.set(ProfileState.Idle)
-    yield ()
+    } yield ()
+
+}

@@ -1,15 +1,15 @@
 package org.typelevel.video.streaming.backend.status
 
-import scala.concurrent.duration.*
-
 import cats.effect.IO
 import fs2.{Stream, text}
-import org.http4s.dsl.Http4sDsl
 import org.http4s.HttpRoutes
+import org.http4s.dsl.Http4sDsl
 
-object Routes:
+import scala.concurrent.duration.*
 
-  def apply: HttpRoutes[IO] =
+object Routes {
+
+  def apply: HttpRoutes[IO] = {
     val dsl = new Http4sDsl[IO] {}
     import dsl.*
 
@@ -26,3 +26,6 @@ object Routes:
 
         Ok(ticks)
     }
+  }
+
+}
