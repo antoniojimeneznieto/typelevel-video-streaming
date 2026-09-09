@@ -17,9 +17,9 @@ import org.http4s.server.middleware.{CORS, Metrics}
 import org.http4s.HttpRoutes
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import org.typelevel.otel4s.metrics.{Meter, MeterProvider}
+import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.oteljava.OtelJava
-import org.typelevel.otel4s.trace.{Tracer, TracerProvider}
+import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.common.auth.{
   AuthMiddleware,
   CallerContext,
@@ -58,8 +58,6 @@ object Main extends IOApp.Simple {
       config: PostgresConfig,
   )(using MeterProvider[IO], TracerProvider[IO]): Resource[IO, Resource[IO, Session[IO]]] =
     for {
-      given Meter[IO]  <- MeterProvider[IO].get("skunk").toResource
-      given Tracer[IO] <- TracerProvider[IO].get("skunk").toResource
       pool             <- Session
                             .Builder[IO]
                             .withHost(config.host)
