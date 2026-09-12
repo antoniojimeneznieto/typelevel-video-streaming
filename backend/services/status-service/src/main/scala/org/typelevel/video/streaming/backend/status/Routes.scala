@@ -1,31 +1,12 @@
 package org.typelevel.video.streaming.backend.status
 
 import cats.effect.IO
-import fs2.{Stream, text}
+import org.http4s.dsl.io.*
 import org.http4s.HttpRoutes
-import org.http4s.dsl.Http4sDsl
 
-import scala.concurrent.duration.*
+object Routes:
 
-object Routes {
-
-  def apply: HttpRoutes[IO] = {
-    val dsl = new Http4sDsl[IO] {}
-    import dsl.*
-
-    HttpRoutes.of[IO] {
-      case GET -> Root / "api" / "health" =>
-        Ok("ok")
-
-      case GET -> Root / "api" / "stream" =>
-        val ticks =
-          Stream
-            .awakeEvery[IO](1.second)
-            .map(elapsed => s"tick ${elapsed.toSeconds}\n")
-            .through(text.utf8.encode)
-
-        Ok(ticks)
+  val health: HttpRoutes[IO] =
+    HttpRoutes.of[IO] { case GET -> Root / "health" =>
+      Ok("ok")
     }
-  }
-
-}

@@ -1,49 +1,50 @@
-# Typelevel video streaming platform
+# Typelevel Video Streaming
 
-One repository, two Scala runtimes — a JVM backend and a Scala.js frontend sharing the same build.
+A demo video streaming platform for the Scala Days 2026 interactive lab:
+**A Distributed System On Fire: Diagnosing Failures with otel4s**.
 
 ## Stack
 
-**Backend** (JVM)
-- [Cats Effect](https://typelevel.org/cats-effect/) — async runtime
-- [FS2](https://fs2.io/) — streaming
-- [http4s](https://http4s.org/) + Ember — HTTP server
-- [Skunk](https://tpolecat.github.io/skunk/) — PostgreSQL client
-- [Smithy4s](https://disneystreaming.github.io/smithy4s/) — API code generation
-- [fs2-kafka](https://fd4s.github.io/fs2-kafka/) — Kafka client
-- [Log4Cats](https://typelevel.org/log4cats/) + Logback — logging
-
-**Frontend** (Scala.js)
-- [Calico](https://www.armanbilge.com/calico/) — reactive UI
-- [http4s-dom](https://http4s.org/v0.23/docs/dom.html) — browser HTTP client via Fetch
-- [FS2](https://fs2.io/) — streaming
-
-**Dev script** (`scripts/dev.sh`)
-- Written in Bash
-- Builds the backend Docker images, starts services via Docker Compose, watches frontend sources, and serves the app with Python's built-in HTTP server
+- Backend: [Cats Effect](https://typelevel.org/cats-effect/), [FS2](https://fs2.io/),
+  [http4s](https://http4s.org/), [Skunk](https://tpolecat.github.io/skunk/),
+  and [Smithy4s](https://disneystreaming.github.io/smithy4s/).
+- Frontend: [Calico](https://www.armanbilge.com/calico/) on Scala.js.
+- Telemetry: [otel4s](https://typelevel.org/otel4s/) with Grafana's OpenTelemetry LGTM stack.
 
 ## Requirements
 
-| Tool | Version |
-|---|---|
-| Bash | 4.3+ |
-| Java | 17+ |
-| sbt | 1.12+ |
-| Docker | with Compose plugin |
-| Python | 3 |
+- Java 17+ (JDK)
+- sbt
+- Docker with Compose v2, running
 
-## Local development
+### Install missing tools
+
+On macOS or Ubuntu/Debian Linux (including WSL):
 
 ```bash
-./scripts/dev.sh
+bash scripts/setup.sh
 ```
 
-Open <http://localhost:3000/>.
+## Run locally
 
-Press `Ctrl+C` to stop all processes and Docker Compose services.
-
-Ports can be overridden:
+From the repository root:
 
 ```bash
-FRONTEND_PORT=3001 STATUS_SERVICE_PORT=8090 USER_SERVICE_PORT=8091 ./scripts/dev.sh
+./scripts/start.sh
 ```
+
+The script builds the images, initializes the databases, uploads the bundled demo videos to MinIO,
+and starts the frontend, backend services, and infrastructure. The first run can take several minutes.
+
+Open [http://localhost:3000](http://localhost:3000).
+
+Grafana is available at [http://localhost:3001](http://localhost:3001) (login: `admin` / `admin`).
+The four backend services export HTTP traces and metrics to the bundled collector over the Docker network.
+
+The stack runs in the background. To stop it:
+
+```bash
+docker compose down
+```
+
+Runtime data is ephemeral: stopping the PostgreSQL, Kafka, or MinIO containers clears their data.

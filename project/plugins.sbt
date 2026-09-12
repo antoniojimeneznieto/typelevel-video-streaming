@@ -1,6 +1,3 @@
-//addSbtPlugin("org.typelevel" % "sbt-typelevel-settings" % "0.8.7")
-//addSbtPlugin("org.typelevel" % "sbt-typelevel-no-publish" % "0.8.7")
-
 addSbtPlugin("org.scala-js" % "sbt-scalajs" % "1.22.0")
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.6.2")
 addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.14.7")
