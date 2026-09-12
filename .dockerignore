@@ -1,0 +1,12 @@
+**
+!build.sbt
+!project/
+!project/build.properties
+!project/plugins.sbt
+!frontend/
+!frontend/**
+frontend/node_modules/
+frontend/target/
+frontend/dist/
+frontend/.env
+frontend/.env.*
