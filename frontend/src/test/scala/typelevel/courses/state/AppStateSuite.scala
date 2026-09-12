@@ -28,11 +28,11 @@ final class AppStateSuite extends CatsEffectSuite:
   test("a lower server resume position replaces progress and clears completion") {
     val completed = AppState.view(
       AppStateData(playbackProgress = Vector(progress(lesson.durationSeconds, completed = true))),
-      Catalog.courses
+      Catalog.courses,
     )
     val rewound = AppState.view(
       completed.data.copy(playbackProgress = Vector(progress(300, completed = false))),
-      Catalog.courses
+      Catalog.courses,
     )
 
     assertEquals(completed.progress(video.id), 100)
@@ -46,7 +46,7 @@ final class AppStateSuite extends CatsEffectSuite:
     val items = Vector(
       progress(10, completed = false),
       PlaybackProgress(other.id, other.lessons.head.id, 20, false, "2026-09-08T09:00:00Z"),
-      progress(30, completed = false)
+      progress(30, completed = false),
     )
     val state = AppState.view(AppStateData(playbackProgress = items), Catalog.courses)
 
@@ -56,7 +56,7 @@ final class AppStateSuite extends CatsEffectSuite:
   test("favorites expose backend course UUIDs as saved content") {
     val items = Vector(
       Favorite(video.id, "2026-09-08T10:00:00Z"),
-      Favorite("another-course", "2026-09-08T09:00:00Z")
+      Favorite("another-course", "2026-09-08T09:00:00Z"),
     )
     val state = AppState.view(AppStateData(favorites = items), Catalog.courses)
 
@@ -69,9 +69,9 @@ final class AppStateSuite extends CatsEffectSuite:
         progressStatus        = RemoteStateStatus.Error,
         favoritesStatus       = RemoteStateStatus.Ready,
         progressSyncError     = Some("progress unavailable"),
-        favoriteMutationError = Some("favorite unavailable")
+        favoriteMutationError = Some("favorite unavailable"),
       ),
-      Catalog.courses
+      Catalog.courses,
     )
 
     assertEquals(state.playbackStatus, RemoteStateStatus.Error)
@@ -82,9 +82,9 @@ final class AppStateSuite extends CatsEffectSuite:
   test("watching the full duration without completion remains capped at 99 percent") {
     val state = AppState.view(
       AppStateData(playbackProgress =
-        Vector(progress(lesson.durationSeconds + 10, completed = false))
+        Vector(progress(lesson.durationSeconds + 10, completed = false)),
       ),
-      Catalog.courses
+      Catalog.courses,
     )
 
     assertEquals(state.progress(video.id), 99)
@@ -99,8 +99,8 @@ final class AppStateSuite extends CatsEffectSuite:
       _       <- data.update(
              _.copy(
                favorites        = Vector(Favorite(video.id, "2026-09-08T10:00:00Z")),
-               playbackProgress = Vector(progress(lesson.durationSeconds, completed = true))
-             )
+               playbackProgress = Vector(progress(lesson.durationSeconds, completed = true)),
+             ),
            )
       completed <- state.get
       _         <- data.update(_.copy(playbackProgress = Vector(progress(300, completed = false))))
@@ -124,7 +124,7 @@ final class AppStateSuite extends CatsEffectSuite:
     val initial  = AppStateData(
       favorites         = Vector(another),
       playbackProgress  = Vector(progress(300, completed = false)),
-      progressSyncError = Some("progress unavailable")
+      progressSyncError = Some("progress unavailable"),
     )
 
     for
@@ -134,16 +134,16 @@ final class AppStateSuite extends CatsEffectSuite:
       _       <- data.update(current =>
              current.copy(
                favorites          = favorite +: current.favorites,
-               pendingFavoriteIds = Set(video.id)
-             )
+               pendingFavoriteIds = Set(video.id),
+             ),
            )
       optimistic <- state.get
       _          <- data.update(current =>
              current.copy(
                favorites             = current.favorites.filterNot(_.courseId == video.id),
                pendingFavoriteIds    = Set.empty,
-               favoriteMutationError = Some("favorite unavailable")
-             )
+               favoriteMutationError = Some("favorite unavailable"),
+             ),
            )
       rolledBack <- state.get
     yield
@@ -195,8 +195,8 @@ final class AppStateSuite extends CatsEffectSuite:
       session.asJson,
       Json.obj(
         "accessToken" -> Json.fromString("access-token"),
-        "expiresAt" -> Json.fromDoubleOrNull(1788861600000d)
-      )
+        "expiresAt" -> Json.fromDoubleOrNull(1788861600000d),
+      ),
     )
     assertEquals(decode[StoredAuthSession](session.asJson.noSpaces), Right(session))
   }
@@ -207,5 +207,5 @@ final class AppStateSuite extends CatsEffectSuite:
       lessonId        = lesson.id,
       positionSeconds = position,
       completed       = completed,
-      updatedAt       = "2026-09-08T10:00:00Z"
+      updatedAt       = "2026-09-08T10:00:00Z",
     )

@@ -13,7 +13,7 @@ final class AccessTokenVerifier[Principal] private (
     publicKey: RSAPublicKey,
     issuer: String,
     audience: String,
-    readPrincipal: DecodedJWT => Option[Principal]
+    readPrincipal: DecodedJWT => Option[Principal],
 ) extends BearerTokenVerifier[IO, Principal]:
 
   private val verifier = JWT
@@ -53,13 +53,13 @@ object AccessTokenVerifier:
   def apply[Principal](
       publicKey: RSAPublicKey,
       issuer: String,
-      audience: String
+      audience: String,
   )(readPrincipal: DecodedJWT => Option[Principal]): AccessTokenVerifier[Principal] =
     new AccessTokenVerifier(publicKey, issuer, audience, readPrincipal)
 
   def userId(
       publicKey: RSAPublicKey,
       issuer: String,
-      audience: String
+      audience: String,
   ): AccessTokenVerifier[UUID] =
     apply(publicKey, issuer, audience)(jwt => Some(UUID.fromString(jwt.getSubject)))

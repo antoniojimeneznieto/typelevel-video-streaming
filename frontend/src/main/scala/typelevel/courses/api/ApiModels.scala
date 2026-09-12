@@ -63,7 +63,7 @@ final case class ApiCourse(
     technologies: Vector[String],
     instructor: ApiInstructor,
     durationSeconds: Option[Int],
-    lessonCount: Option[Int]
+    lessonCount: Option[Int],
 ) derives Decoder
 
 final case class ApiLearningPath(
@@ -73,7 +73,7 @@ final case class ApiLearningPath(
     timeLabel: String,
     level: ApiCourseLevel,
     tone: ApiLearningPathTone,
-    courseIds: Vector[String]
+    courseIds: Vector[String],
 ) derives Decoder
 
 final case class Page[A](items: Vector[A], total: Long, limit: Int, offset: Int) derives Decoder
@@ -85,7 +85,7 @@ final case class ListCoursesParams(
     topic: Option[String]         = None,
     technology: Option[String]    = None,
     limit: Option[Int]            = None,
-    offset: Option[Int]           = None
+    offset: Option[Int]           = None,
 )
 
 final case class ListLearningPathsParams(
@@ -93,7 +93,7 @@ final case class ListLearningPathsParams(
     level: Option[ApiCourseLevel]     = None,
     tone: Option[ApiLearningPathTone] = None,
     limit: Option[Int]                = None,
-    offset: Option[Int]               = None
+    offset: Option[Int]               = None,
 )
 
 final case class PlaybackUrlResponse(url: String, expiresIn: Int) derives Decoder
@@ -103,7 +103,7 @@ final case class PlaybackProgress(
     lessonId: String,
     positionSeconds: Int,
     completed: Boolean,
-    updatedAt: String
+    updatedAt: String,
 ) derives Decoder
 
 final case class Favorite(courseId: String, createdAt: String) derives Decoder
@@ -112,7 +112,7 @@ final case class ProgressQuery(
     courseId: Option[String]   = None,
     completed: Option[Boolean] = None,
     limit: Option[Int]         = None,
-    offset: Option[Int]        = None
+    offset: Option[Int]        = None,
 )
 
 final case class FavoritesQuery(limit: Option[Int] = None, offset: Option[Int] = None)
@@ -122,7 +122,7 @@ final case class PositionRequest(positionSeconds: Int) derives Encoder
 private def enumDecoder[A](
     values: Array[A],
     value: A => String,
-    label: String
+    label: String,
 ): Decoder[A] = Decoder.decodeString.emap { candidate =>
   values.find(item => value(item) == candidate).toRight(s"Unknown $label: $candidate")
 }

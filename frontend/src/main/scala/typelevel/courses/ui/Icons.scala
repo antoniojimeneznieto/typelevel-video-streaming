@@ -58,7 +58,7 @@ object Icons:
   def apply(
       icon: Icon,
       label: Option[String] = None,
-      className: String     = ""
+      className: String     = "",
   ): Resource[IO, Node[IO]] = Resource.eval(IO.delay {
     val svg = dom.document.createElementNS(SvgNamespace, "svg")
     val use = dom.document.createElementNS(SvgNamespace, "use")
@@ -75,7 +75,7 @@ object Icons:
     svg.setAttribute("data-lucide", icon.id)
     svg.setAttribute(
       "class",
-      List(s"lucide lucide-${icon.id}", className).filter(_.nonEmpty).mkString(" ")
+      List(s"lucide lucide-${icon.id}", className).filter(_.nonEmpty).mkString(" "),
     )
 
     label match

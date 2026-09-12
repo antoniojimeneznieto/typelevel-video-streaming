@@ -9,7 +9,7 @@ import org.typelevel.ci.CIString
 import org.typelevel.video.streaming.backend.playback.api.{
   PlaybackUnavailableError,
   PlaybackUrlResponse,
-  VideoNotFoundError
+  VideoNotFoundError,
 }
 import org.typelevel.video.streaming.backend.playback.domain.{
   CourseId,
@@ -19,14 +19,14 @@ import org.typelevel.video.streaming.backend.playback.domain.{
   LessonId,
   LessonTitle,
   ObjectKey,
-  PlaybackUrl
+  PlaybackUrl,
 }
 import org.typelevel.video.streaming.backend.playback.repository.PlaybackRepository
 import org.typelevel.video.streaming.backend.playback.service.PlaybackServiceImpl
 import org.typelevel.video.streaming.backend.playback.storage.S3VideoStorage
 import org.typelevel.video.streaming.backend.runtime.auth.{
   BearerAuthenticationMiddleware,
-  BearerTokenVerifier
+  BearerTokenVerifier,
 }
 import org.typelevel.video.streaming.backend.runtime.context.IOLocalRequestContext
 import smithy4s.Blob
@@ -46,11 +46,11 @@ object PlaybackUrlRoutesSuite extends SimpleIOSuite:
     valid(LessonTitle("Threads at Scale")),
     valid(DurationSeconds(1849)),
     true,
-    objectKey
+    objectKey,
   )
   private val playback = PlaybackUrlResponse(
     valid(PlaybackUrl("https://videos.example.test/course/lesson.mp4?signature=test-only")),
-    valid(ExpiresInSeconds(900))
+    valid(ExpiresInSeconds(900)),
   )
 
   test("missing or invalid bearer credentials return 401 without calling storage") {
@@ -70,11 +70,11 @@ object PlaybackUrlRoutesSuite extends SimpleIOSuite:
                     responses.forall(_.status == Status.Unauthorized),
                     responses.forall(
                       _.headers.headers.exists(header =>
-                        header.name == CIString("WWW-Authenticate") && header.value == "Bearer"
-                      )
+                        header.name == CIString("WWW-Authenticate") && header.value == "Bearer",
+                      ),
                     ),
                     count == 0,
-                    principal.isEmpty
+                    principal.isEmpty,
                   )
                 }
     yield result
@@ -87,7 +87,7 @@ object PlaybackUrlRoutesSuite extends SimpleIOSuite:
       storage  = new S3VideoStorage:
                   override def getPlaybackUrl(objectKey: ObjectKey): IO[PlaybackUrlResponse] =
                     context.get.flatMap(principal =>
-                      calls.update(_ :+ (objectKey, principal)).as(playback)
+                      calls.update(_ :+ (objectKey, principal)).as(playback),
                     )
       result <- routes(storage, context).use { app =>
                   for
@@ -99,7 +99,7 @@ object PlaybackUrlRoutesSuite extends SimpleIOSuite:
                     response.status == Status.Ok,
                     Json.read[PlaybackUrlResponse](Blob(body)) == Right(playback),
                     actual == List((objectKey, Some(userId))),
-                    afterScope.isEmpty
+                    afterScope.isEmpty,
                   )
                 }
     yield result
@@ -115,7 +115,7 @@ object PlaybackUrlRoutesSuite extends SimpleIOSuite:
 
     val scenarios = List(
       (missingUser, Status.ServiceUnavailable, "User data is not available yet"),
-      (missingLesson, Status.NotFound, "Video not found")
+      (missingLesson, Status.NotFound, "Video not found"),
     )
 
     scenarios
@@ -136,7 +136,7 @@ object PlaybackUrlRoutesSuite extends SimpleIOSuite:
                         response.status == status,
                         body.contains(s"\"message\":\"$message\""),
                         count == 0,
-                        afterScope.isEmpty
+                        afterScope.isEmpty,
                       )
                     }
         yield result
@@ -164,7 +164,7 @@ object PlaybackUrlRoutesSuite extends SimpleIOSuite:
                   yield expect.all(
                     response.left.exists(_ eq failure),
                     count == 0,
-                    afterScope.isEmpty
+                    afterScope.isEmpty,
                   )
                 }
     yield result
@@ -176,8 +176,8 @@ object PlaybackUrlRoutesSuite extends SimpleIOSuite:
       (
         PlaybackUnavailableError("Video storage is temporarily unavailable"),
         Status.ServiceUnavailable,
-        "Video storage is temporarily unavailable"
-      )
+        "Video storage is temporarily unavailable",
+      ),
     )
 
     failures
@@ -198,7 +198,7 @@ object PlaybackUrlRoutesSuite extends SimpleIOSuite:
                         response.status == status,
                         body.contains(s"\"message\":\"$message\""),
                         count == 1,
-                        afterScope.isEmpty
+                        afterScope.isEmpty,
                       )
                     }
         yield result
@@ -209,7 +209,7 @@ object PlaybackUrlRoutesSuite extends SimpleIOSuite:
   private def routes(
       storage: S3VideoStorage,
       context: IOLocalRequestContext[UUID],
-      repository: PlaybackRepository = new KnownProjection
+      repository: PlaybackRepository = new KnownProjection,
   ): Resource[IO, HttpApp[IO]] =
     val verifier = new BearerTokenVerifier[IO, UUID]:
       override def verify(token: String): IO[Option[UUID]] =
@@ -230,10 +230,10 @@ object PlaybackUrlRoutesSuite extends SimpleIOSuite:
   private def request(authorization: Option[String]): Request[IO] =
     val request = Request[IO](
       Method.GET,
-      Uri.unsafeFromString(s"/courses/${courseId.value}/lessons/${lessonId.value}/playback")
+      Uri.unsafeFromString(s"/courses/${courseId.value}/lessons/${lessonId.value}/playback"),
     )
     authorization.fold(request)(value =>
-      request.putHeaders(Header.Raw(CIString("Authorization"), value))
+      request.putHeaders(Header.Raw(CIString("Authorization"), value)),
     )
 
   private def valid[A](result: Either[String, A]): A =

@@ -22,7 +22,7 @@ trait IdentityRepository:
   def findByEmail(email: Email): IO[Option[User]]
 
 final class IdentityRepositoryImpl(
-    sessions: Resource[IO, Session[IO]]
+    sessions: Resource[IO, Session[IO]],
 ) extends IdentityRepository:
 
   override def create(user: User): IO[Option[User]] =
@@ -35,7 +35,7 @@ final class IdentityRepositoryImpl(
               createdEvent = event.UserCreated(
                                eventId    = event.EventId(id),
                                occurredAt = created.createdAt,
-                               userId     = event.UserId(created.id.value)
+                               userId     = event.UserId(created.id.value),
                              )
               _ <- session.execute(insertUserCreated)(createdEvent)
             yield Some(created)
@@ -118,7 +118,7 @@ object IdentityRepositoryImpl:
       (
         created.eventId.value,
         created.userId.value.toString,
-        Json.writeBlob(created).toUTF8String
+        Json.writeBlob(created).toUTF8String,
       )
     }
 
@@ -155,7 +155,7 @@ object IdentityRepositoryImpl:
   private def enumValue[A <: smithy4s.Enumeration.Value](
       name: String,
       value: String,
-      values: List[A]
+      values: List[A],
   ): Either[String, A] =
     values
       .find(_.stringValue == value)

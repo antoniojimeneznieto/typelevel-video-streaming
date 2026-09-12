@@ -17,7 +17,7 @@ object CourseCard:
       course: Course,
       progress: Option[Int]         = None,
       compact: Boolean              = false,
-      destination: Option[AppRoute] = None
+      destination: Option[AppRoute] = None,
   ): Resource[IO, HtmlElement[IO]] =
     reactive(ctx, Signal.constant(course), progress.map(Signal.constant(_)), compact, destination)
 
@@ -26,7 +26,7 @@ object CourseCard:
       courses: Signal[IO, Vector[Course]],
       className: String     = "course-grid",
       showProgress: Boolean = false,
-      compact: Boolean      = false
+      compact: Boolean      = false,
   ): Resource[IO, HtmlElement[IO]] =
     div(
       cls := className,
@@ -43,7 +43,7 @@ object CourseCard:
               case None => div(())
           }
           .map(value => value: Node[IO])
-      } <-- courses.map(_.map(_.id).toList)
+      } <-- courses.map(_.map(_.id).toList),
     ).widen
 
   private def reactive(
@@ -51,7 +51,7 @@ object CourseCard:
       course: Signal[IO, Course],
       progress: Option[Signal[IO, Int]],
       compact: Boolean,
-      destination: Option[AppRoute]
+      destination: Option[AppRoute],
   ): Resource[IO, HtmlElement[IO]] =
     val courseDestination = course.map(value => destination.getOrElse(AppRoute.Course(value.slug)))
     for
@@ -70,12 +70,12 @@ object CourseCard:
                    span(
                      cls := "course-card__play",
                      aria.hidden := true,
-                     Icons(Icon.Play)
-                   )
+                     Icons(Icon.Play),
+                   ),
                  )
       titleLink <- a(
                      href <-- courseDestination.map(ctx.navigator.href),
-                     course.map(_.title)
+                     course.map(_.title),
                    )
       _    <- ctx.navigator.intercept(artLink, courseDestination.get.map(_.uri))
       _    <- ctx.navigator.intercept(titleLink, courseDestination.get.map(_.uri))
@@ -90,7 +90,7 @@ object CourseCard:
                     aria.valueMin := 0d,
                     aria.valueMax := 100d,
                     aria.valueNow <-- amount.map(_.toDouble),
-                    span(styleAttr <-- amount.map(value => s"width: $value%"))
+                    span(styleAttr <-- amount.map(value => s"width: $value%")),
                   )
                 },
                 div(
@@ -98,7 +98,7 @@ object CourseCard:
                   div(
                     cls := "course-card__meta-row",
                     span(cls := "eyebrow eyebrow--small", course.map(_.topic)),
-                    FavoriteButton.card(ctx, course)
+                    FavoriteButton.card(ctx, course),
                   ),
                   h3(titleLink),
                   Option.unless(compact)(p(course.map(_.shortDescription))),
@@ -109,8 +109,8 @@ object CourseCard:
                     course
                       .map(_.rating)
                       .changes
-                      .map(_.map(value => span(cls := "rating", Icons(Icon.Star), s" $value")))
-                  )
-                )
+                      .map(_.map(value => span(cls := "rating", Icons(Icon.Star), s" $value"))),
+                  ),
+                ),
               )
     yield card

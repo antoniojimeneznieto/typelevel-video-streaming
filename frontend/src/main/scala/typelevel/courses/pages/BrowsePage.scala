@@ -23,7 +23,7 @@ object BrowsePage:
   final private case class TopicRequest(
       topic: String,
       items: Vector[Course],
-      status: TopicStatus
+      status: TopicStatus,
   )
 
   def apply(ctx: AppContext): Resource[IO, HtmlElement[IO]] = for
@@ -34,14 +34,14 @@ object BrowsePage:
               cls := "app-page",
               a(cls := "skip-link", href := "#browse-content", "Skip to content"),
               SiteHeader.AppHeader(ctx),
-              content(ctx, activeTopic, topicRequest)
+              content(ctx, activeTopic, topicRequest),
             ).widen
   yield page
 
   private def topicRequests(
       ctx: AppContext,
       activeTopic: SignallingRef[IO, String],
-      topicRequest: SignallingRef[IO, Option[TopicRequest]]
+      topicRequest: SignallingRef[IO, Option[TopicRequest]],
   ): IO[Unit] =
     (activeTopic, ctx.catalog.courses)
       .mapN(_ -> _)
@@ -57,8 +57,8 @@ object BrowsePage:
                   ListCoursesParams(
                     topic  = Some(topic),
                     limit  = Some(100),
-                    offset = Some(0)
-                  )
+                    offset = Some(0),
+                  ),
                 )
                 .attempt
                 .flatMap {
@@ -66,7 +66,7 @@ object BrowsePage:
                     topicRequest.set(Some(TopicRequest(topic, items, TopicStatus.Ready)))
                   case Left(_) =>
                     topicRequest.set(Some(TopicRequest(topic, local, TopicStatus.Error)))
-                }
+                },
           )
       }
       .compile
@@ -75,7 +75,7 @@ object BrowsePage:
   private def content(
       ctx: AppContext,
       activeTopic: SignallingRef[IO, String],
-      topicRequest: SignallingRef[IO, Option[TopicRequest]]
+      topicRequest: SignallingRef[IO, Option[TopicRequest]],
   ): Resource[IO, HtmlElement[IO]] =
     val courses  = ctx.catalog.courses
     val featured = courses
@@ -102,7 +102,7 @@ object BrowsePage:
     def selectTopic(next: String): IO[Unit] =
       courses.get.flatMap { items =>
         val request = Option.unless(next == "All topics")(
-          TopicRequest(next, items.filter(_.topic == next), TopicStatus.Loading)
+          TopicRequest(next, items.filter(_.topic == next), TopicStatus.Loading),
         )
         topicRequest.set(request) *> activeTopic.set(next)
       }
@@ -114,8 +114,8 @@ object BrowsePage:
           cls := "browse-welcome app-shell",
           div(
             p(cls := "eyebrow", "Your learning space"),
-            h1(ctx.store.signal.map(welcome).changes)
-          )
+            h1(ctx.store.signal.map(welcome).changes),
+          ),
         ),
         featured.map(_.map(course => featuredHero(ctx, course))),
         continueSection(ctx, continueCourses),
@@ -125,7 +125,7 @@ object BrowsePage:
             cls := "app-section__heading app-section__heading--topics",
             div(
               p(cls := "eyebrow", "Explore the library"),
-              h2("Learn by topic")
+              h2("Learn by topic"),
             ),
             span(
               aria.live := "polite",
@@ -134,8 +134,8 @@ object BrowsePage:
                   case Some(value) if value.status == TopicStatus.Loading =>
                     s"Loading ${value.topic}…"
                   case _ => s"${items.size} library items"
-              }
-            )
+              },
+            ),
           ),
           div(
             cls := "topic-chips",
@@ -147,29 +147,29 @@ object BrowsePage:
                 cls <-- activeTopic.map(topic => Option.when(topic == item)("is-active").toList),
                 aria.pressed <-- activeTopic.map(topic => (topic == item).toString),
                 onClick(selectTopic(item)),
-                item
+                item,
               ).map(value => value: Node[IO])
-            } <-- ctx.catalog.topics.map(_.toList)
+            } <-- ctx.catalog.topics.map(_.toList),
           ),
           p(
             cls := "topic-filter-message",
             hidden <-- currentRequest.map(!_.exists(_.status == TopicStatus.Error)),
             role := List("alert"),
-            "The catalog API could not apply this filter. Showing locally cached results."
+            "The catalog API could not apply this filter. Showing locally cached results.",
           ),
           CourseCard.grid(
             ctx,
             filteredCourses.map(_.take(8)),
             className = "course-grid course-grid--four",
-            compact   = true
+            compact   = true,
           ),
           p(
             cls := "topic-filter-message",
             hidden <-- filteredCourses.map(_.nonEmpty),
-            "No content is available for this topic yet."
-          )
+            "No content is available for this topic yet.",
+          ),
         ),
-        ctx.catalog.learningPaths.map(pathsSection(ctx, _))
+        ctx.catalog.learningPaths.map(pathsSection(ctx, _)),
       ),
       footerTag(
         cls := "app-footer",
@@ -181,11 +181,11 @@ object BrowsePage:
               href := "https://typelevel.org/",
               target := "_blank",
               rel := List("noreferrer"),
-              "Typelevel.org"
-            )
-          )
-        )
-      )
+              "Typelevel.org",
+            ),
+          ),
+        ),
+      ),
     ).widen
 
   private def welcome(state: AppState): String = state.user match
@@ -195,7 +195,7 @@ object BrowsePage:
 
   private def featuredHero(
       ctx: AppContext,
-      featured: Course
+      featured: Course,
   ): Resource[IO, HtmlElement[IO]] =
     val watch   = AppRoute.Watch(featured.slug, "lesson-1")
     val details = AppRoute.Course(featured.slug)
@@ -205,7 +205,7 @@ object BrowsePage:
       img(
         src := featured.thumbnail.getOrElse("/learning-network.webp"),
         alt := "",
-        aria.hidden := true
+        aria.hidden := true,
       ),
       div(cls := "featured-course-hero__veil"),
       div(
@@ -213,11 +213,11 @@ object BrowsePage:
         span(
           cls := "featured-badge",
           span(()),
-          s" Featured ${featured.format.label.toLowerCase}"
+          s" Featured ${featured.format.label.toLowerCase}",
         ),
         p(
           cls := "eyebrow",
-          s"${featured.topic}${if featured.isNew then " · New" else ""}"
+          s"${featured.topic}${if featured.isNew then " · New" else ""}",
         ),
         h2(featured.title),
         p(featured.shortDescription),
@@ -227,9 +227,9 @@ object BrowsePage:
           span(featured.level.label),
           span(
             if featured.lessonCount == 1 then "1 video"
-            else s"${featured.lessonCount} lessons"
+            else s"${featured.lessonCount} lessons",
           ),
-          span(featured.duration)
+          span(featured.duration),
         ),
         div(
           cls := "hero-actions",
@@ -239,7 +239,7 @@ object BrowsePage:
               href := ctx.navigator.href(watch),
               ctx.navigator.intercept(self, watch),
               Icons(Icon.Play),
-              s" Play ${featured.format.label.toLowerCase}"
+              s" Play ${featured.format.label.toLowerCase}",
             )
           },
           a.withSelf { self =>
@@ -247,11 +247,11 @@ object BrowsePage:
               cls := "button button--glass",
               href := ctx.navigator.href(details),
               ctx.navigator.intercept(self, details),
-              "More details"
+              "More details",
             )
           },
-          FavoriteButton.featured(ctx, featured)
-        )
+          FavoriteButton.featured(ctx, featured),
+        ),
       ),
       Option.unless(featured.format == CourseFormat.Video)(
         div(
@@ -259,14 +259,14 @@ object BrowsePage:
           aria.hidden := true,
           span("def program: IO[Unit] ="),
           strong("  learn.start"),
-          span("    .flatMap(_.join)")
-        )
-      )
+          span("    .flatMap(_.join)"),
+        ),
+      ),
     ).widen
 
   private def continueSection(
       ctx: AppContext,
-      courses: Signal[IO, Vector[Course]]
+      courses: Signal[IO, Vector[Course]],
   ): Resource[IO, HtmlElement[IO]] =
     sectionTag(
       cls := "app-section app-shell",
@@ -279,9 +279,9 @@ object BrowsePage:
             href := ctx.navigator.href(AppRoute.MyLearning),
             ctx.navigator.intercept(self, AppRoute.MyLearning),
             "View my learning ",
-            Icons(Icon.ArrowRight)
+            Icons(Icon.ArrowRight),
           )
-        }
+        },
       ),
       div(
         cls := "continue-grid",
@@ -297,13 +297,13 @@ object BrowsePage:
                   continueCard(ctx, course)
             }
             .map(value => value: Node[IO])
-        } <-- courses.map(_.map(_.id).toList)
-      )
+        } <-- courses.map(_.map(_.id).toList),
+      ),
     ).widen
 
   private def continueCard(
       ctx: AppContext,
-      course: Signal[IO, Course]
+      course: Signal[IO, Course],
   ): Resource[IO, HtmlElement[IO]] =
     val amount = (course, ctx.store.progress).mapN { (course, progress) =>
       progress.getOrElse(course.id, 0)
@@ -312,7 +312,7 @@ object BrowsePage:
       .mapN { (course, amount) =>
         val nextIndex = math.min(
           course.lessons.size - 1,
-          math.floor(amount.toDouble / 100 * course.lessons.size).toInt
+          math.floor(amount.toDouble / 100 * course.lessons.size).toInt,
         )
         course.lessons(nextIndex)
       }
@@ -332,7 +332,7 @@ object BrowsePage:
             .map(value => (value.artwork, value.artLabel, value.thumbnail))
             .changes(using Eq.fromUniversalEquals)
             .map { (artwork, label, thumbnail) => Artwork(artwork, label, thumbnail = thumbnail) },
-          span(cls := "continue-card__play", Icons(Icon.Play))
+          span(cls := "continue-card__play", Icons(Icon.Play)),
         )
       },
       div(
@@ -342,8 +342,8 @@ object BrowsePage:
         div(
           cls := "continue-card__bottom",
           span(amount.map(value => s"$value% complete")),
-          span(Icons(Icon.Clock), nextLesson.map(value => s" ${value.duration}"))
-        )
+          span(Icons(Icon.Clock), nextLesson.map(value => s" ${value.duration}")),
+        ),
       ),
       div(
         cls := "progress-bar",
@@ -352,13 +352,13 @@ object BrowsePage:
         aria.valueMin := 0,
         aria.valueMax := 100,
         aria.valueNow <-- amount.map(_.toDouble),
-        span(styleAttr <-- amount.map(value => s"width: $value%"))
-      )
+        span(styleAttr <-- amount.map(value => s"width: $value%")),
+      ),
     ).widen
 
   private def pathsSection(
       ctx: AppContext,
-      learningPaths: Vector[LearningPath]
+      learningPaths: Vector[LearningPath],
   ): Resource[IO, HtmlElement[IO]] =
     sectionTag(
       cls := "app-section app-section--lavender",
@@ -372,9 +372,9 @@ object BrowsePage:
               href := ctx.navigator.href(AppRoute.Paths),
               ctx.navigator.intercept(self, AppRoute.Paths),
               "See all paths ",
-              Icons(Icon.ArrowRight)
+              Icons(Icon.ArrowRight),
             )
-          }
+          },
         ),
         div(
           cls := "browse-path-grid",
@@ -389,19 +389,19 @@ object BrowsePage:
                 div(
                   span(
                     cls := "eyebrow eyebrow--small",
-                    f"Path ${index + 1}%02d · ${learningPath.level.label}"
+                    f"Path ${index + 1}%02d · ${learningPath.level.label}",
                   ),
                   h3(learningPath.title),
                   p(learningPath.description),
                   span(
                     cls := "browse-path-card__meta",
-                    s"${learningPath.courseIds.size} courses · ${learningPath.time}"
-                  )
+                    s"${learningPath.courseIds.size} courses · ${learningPath.time}",
+                  ),
                 ),
-                Icons(Icon.ChevronRight, className = "browse-path-card__arrow")
+                Icons(Icon.ChevronRight, className = "browse-path-card__arrow"),
               )
             }
-          }
-        )
-      )
+          },
+        ),
+      ),
     ).widen

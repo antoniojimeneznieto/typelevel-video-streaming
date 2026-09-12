@@ -10,14 +10,14 @@ import smithy4s.{Blob, Schema}
 
 final class PlaybackEventWorker(
     config: KafkaConfig,
-    repository: PlaybackProjectionRepository
+    repository: PlaybackProjectionRepository,
 ):
 
   private val stringDeserializer = Deserializer[IO, String].option.map(_.orNull)
 
   private val settings = ConsumerSettings[IO, String, String](
     stringDeserializer,
-    stringDeserializer
+    stringDeserializer,
   )
     .withBootstrapServers(config.bootstrapServers)
     .withGroupId(config.groupId)
@@ -37,7 +37,7 @@ final class PlaybackEventWorker(
           record.partition,
           record.offset,
           record.value,
-          committable.offset.commit
+          committable.offset.commit,
         )
       }
       .compile
@@ -48,11 +48,11 @@ final class PlaybackEventWorker(
       partition: Int,
       offset: Long,
       value: String,
-      commit: IO[Unit]
+      commit: IO[Unit],
   ): IO[Unit] = IO.defer {
     def invalidRecord: IllegalArgumentException =
       new IllegalArgumentException(
-        s"Invalid playback event at topic=$topic partition=$partition offset=$offset"
+        s"Invalid playback event at topic=$topic partition=$partition offset=$offset",
       )
 
     def decode[A: Schema]: IO[A] =

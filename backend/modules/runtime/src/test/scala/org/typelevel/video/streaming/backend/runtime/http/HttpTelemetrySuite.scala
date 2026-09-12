@@ -39,8 +39,8 @@ object HttpTelemetrySuite extends SimpleIOSuite:
     val app = HttpApp[IO](_ =>
       IO.pure(
         Response[IO](Status.Unauthorized)
-          .putHeaders(Header.Raw(CIString("WWW-Authenticate"), "Bearer"))
-      )
+          .putHeaders(Header.Raw(CIString("WWW-Authenticate"), "Bearer")),
+      ),
     )
 
     for
@@ -63,12 +63,12 @@ object HttpTelemetrySuite extends SimpleIOSuite:
 
   test("telemetry preserves CORS preflight responses") {
     val app = CORS.policy.withAllowOriginAll(
-      HttpApp[IO](_ => IO.pure(Response[IO](Status.NotFound)))
+      HttpApp[IO](_ => IO.pure(Response[IO](Status.NotFound))),
     )
     val request = Request[IO](Method.OPTIONS, Uri.unsafeFromString("/users"))
       .putHeaders(
         Header.Raw(CIString("Origin"), "http://localhost:3000"),
-        Header.Raw(CIString("Access-Control-Request-Method"), "POST")
+        Header.Raw(CIString("Access-Control-Request-Method"), "POST"),
       )
 
     for
@@ -80,7 +80,7 @@ object HttpTelemetrySuite extends SimpleIOSuite:
   }
 
   test(
-    "server spans parent application spans without recording raw paths, queries, or credentials"
+    "server spans parent application spans without recording raw paths, queries, or credentials",
   ) {
     telemetry.use { case (otel, spans) =>
       given MeterProvider[IO]  = otel.meterProvider
@@ -88,14 +88,14 @@ object HttpTelemetrySuite extends SimpleIOSuite:
 
       val request = Request[IO](
         uri = Uri.unsafeFromString(
-          "/users/private-user-id?email=alice%40example.com&token=secret-token"
-        )
+          "/users/private-user-id?email=alice%40example.com&token=secret-token",
+        ),
       ).putHeaders(Header.Raw(CIString("Authorization"), "Bearer secret-token"))
 
       for
         tracer <- otel.tracerProvider.get("test-application")
         app     = HttpApp[IO](_ =>
-                tracer.span("database-operation").surround(IO.pure(Response[IO](Status.Ok)))
+                tracer.span("database-operation").surround(IO.pure(Response[IO](Status.Ok))),
               )
         instrumented <- HttpTelemetry(app)
         response     <- instrumented(request)
@@ -111,15 +111,15 @@ object HttpTelemetrySuite extends SimpleIOSuite:
                        .toMap
       yield expect(server.nonEmpty) and expect(child.nonEmpty) and
         expect(
-          child.exists(span => server.exists(parent => span.getParentSpanId == parent.getSpanId))
+          child.exists(span => server.exists(parent => span.getParentSpanId == parent.getSpanId)),
         ) and
         expect(attributes.get("http.request.method").contains("GET")) and
         expect(attributes.get("http.response.status_code").contains("200")) and
         expect(!attributes.contains("url.path")) and expect(!attributes.contains("url.query")) and
         expect(
           !attributes.values.exists(value =>
-            List("private-user-id", "alice", "secret-token").exists(value.contains)
-          )
+            List("private-user-id", "alice", "secret-token").exists(value.contains),
+          ),
         )
     }
   }

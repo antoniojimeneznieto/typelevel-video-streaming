@@ -10,7 +10,7 @@ final class WatchPageSuite extends FunSuite:
       lessonId        = "lesson-1",
       positionSeconds = position,
       completed       = completed,
-      updatedAt       = "2026-09-08T00:00:00Z"
+      updatedAt       = "2026-09-08T00:00:00Z",
     )
 
   test("progress positions are integral and constrained to the modeled lesson duration") {
@@ -29,11 +29,11 @@ final class WatchPageSuite extends FunSuite:
   test("server progress resumes unless the lesson is complete") {
     assertEquals(
       WatchPage.restoredPosition(Some(progress(123)), None, 1849, 1849.0),
-      123.0
+      123.0,
     )
     assertEquals(
       WatchPage.restoredPosition(Some(progress(1849, completed = true)), None, 1849, 1849.0),
-      0.0
+      0.0,
     )
   }
 
@@ -43,8 +43,8 @@ final class WatchPageSuite extends FunSuite:
         Some(progress(80)),
         refreshPosition = Some(250.5),
         lessonDuration  = 200,
-        mediaDuration   = 180.0
+        mediaDuration   = 180.0,
       ),
-      180.0
+      180.0,
     )
   }

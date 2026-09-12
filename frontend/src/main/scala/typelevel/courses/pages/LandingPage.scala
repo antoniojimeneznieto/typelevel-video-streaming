@@ -19,8 +19,8 @@ object LandingPage:
         href <-- ctx.store.user.map(_.fold(login)(_ => target).renderString),
         ctx.navigator.intercept(
           anchor,
-          ctx.store.user.get.map(_.fold(login)(_ => target))
-        )
+          ctx.store.user.get.map(_.fold(login)(_ => target)),
+        ),
       )
 
     div(
@@ -44,7 +44,7 @@ object LandingPage:
                 h1("Build scalable systems ", span("with confidence.")),
                 p(
                   cls := "landing-hero__lede",
-                  "Deep, practical videos on functional programming, effects, streaming, and production architecture."
+                  "Deep, practical videos on functional programming, effects, streaming, and production architecture.",
                 ),
                 div(
                   cls := "hero-actions",
@@ -53,7 +53,7 @@ object LandingPage:
                       cls := "button button--primary button--large",
                       linkTo(ctx, self, AppRoute.Register),
                       "Start learning ",
-                      Icons(Icon.ArrowRight)
+                      Icons(Icon.ArrowRight),
                     )
                   },
                   a.withSelf { self =>
@@ -61,9 +61,9 @@ object LandingPage:
                       cls := "button button--outline button--large",
                       productLink(self, "/browse"),
                       Icons(Icon.Play),
-                      " Browse the library"
+                      " Browse the library",
                     )
-                  }
+                  },
                 ),
                 div(
                   cls := "hero-proof",
@@ -71,10 +71,10 @@ object LandingPage:
                   div(strong(courses.size.toString), span("curated library items")),
                   div(
                     strong(courses.map(_.lessonCount).sum.toString),
-                    span("videos & lessons")
+                    span("videos & lessons"),
                   ),
-                  div(strong("4.9"), span("learner rating"))
-                )
+                  div(strong("4.9"), span("learner rating")),
+                ),
               ),
               div(
                 cls := "landing-hero__visual",
@@ -86,17 +86,17 @@ object LandingPage:
                     aria.label := s"Register to watch ${featured.fold("the featured video")(_.title)}",
                     img(
                       src := featured.flatMap(_.thumbnail).getOrElse("/learning-network.webp"),
-                      alt := ""
+                      alt := "",
                     ),
                     div(
                       cls := "hero-art-frame__topline",
                       span(featured.fold("Featured this week")(_.eyebrow)),
-                      span(featured.fold("Intermediate")(_.level.label))
+                      span(featured.fold("Intermediate")(_.level.label)),
                     ),
                     span(
                       cls := "hero-play-button",
                       aria.hidden := true,
-                      Icons(Icon.Play)
+                      Icons(Icon.Play),
                     ),
                     div(
                       cls := "hero-course-label",
@@ -104,21 +104,21 @@ object LandingPage:
                         featured.fold("0 lessons · ") { course =>
                           if course.lessonCount == 1 then s"1 video · ${course.duration}"
                           else s"${course.lessonCount} lessons · ${course.duration}"
-                        }
+                        },
                       ),
-                      strong(featured.fold("Featured video")(_.title))
-                    )
+                      strong(featured.fold("Featured video")(_.title)),
+                    ),
                   )
                 },
                 div(
                   cls := "floating-progress-card",
                   span(cls := "floating-progress-card__icon", Icons(Icon.CircleCheck)),
                   span(small("Lesson progress"), strong("Saved automatically")),
-                  div(cls := "mini-progress", span(()))
+                  div(cls := "mini-progress", span(())),
                 ),
-                div(cls := "hero-dots", aria.hidden := true)
-              )
-            )
+                div(cls := "hero-dots", aria.hidden := true),
+              ),
+            ),
           ),
           sectionTag(
             cls := "ecosystem-strip",
@@ -132,9 +132,9 @@ object LandingPage:
                 span("FS2"),
                 span("http4s"),
                 span("Circe"),
-                span("Skunk")
-              )
-            )
+                span("Skunk"),
+              ),
+            ),
           ),
           sectionTag(
             cls := "section featured-section",
@@ -145,24 +145,24 @@ object LandingPage:
                 cls := "section-heading",
                 div(
                   p(cls := "eyebrow", "Curated for momentum"),
-                  h2("Start with what you want to build.")
+                  h2("Start with what you want to build."),
                 ),
                 a.withSelf { self =>
                   (
                     cls := "text-link",
                     productLink(self, "/browse"),
                     "Explore the library ",
-                    Icons(Icon.ArrowRight)
+                    Icons(Icon.ArrowRight),
                   )
-                }
+                },
               ),
               div(
                 cls := "course-grid course-grid--three",
                 courses.take(3).toList.map { course =>
                   CourseCard(ctx, course, destination = Some(AppRoute.Register))
-                }
-              )
-            )
+                },
+              ),
+            ),
           ),
           sectionTag(
             cls := "section paths-section",
@@ -173,11 +173,11 @@ object LandingPage:
                 cls := "section-heading section-heading--light",
                 div(
                   p(cls := "eyebrow", "Guided learning paths"),
-                  h2("A clear route through the ecosystem.")
+                  h2("A clear route through the ecosystem."),
                 ),
                 p(
-                  "Follow a thoughtful sequence, keep your progress, and know exactly what comes next."
-                )
+                  "Follow a thoughtful sequence, keep your progress, and know exactly what comes next.",
+                ),
               ),
               div(
                 cls := "path-grid",
@@ -196,13 +196,13 @@ object LandingPage:
                         cls := "path-card__meta",
                         span(s"${path.courseIds.size} courses"),
                         span(path.time),
-                        Icons(Icon.ArrowRight)
-                      )
+                        Icons(Icon.ArrowRight),
+                      ),
                     )
                   }
-                }
-              )
-            )
+                },
+              ),
+            ),
           ),
           sectionTag(
             cls := "section learning-values",
@@ -214,36 +214,36 @@ object LandingPage:
                 p(cls := "eyebrow", "Made for real understanding"),
                 h2("Learn from the Typelevel community."),
                 p(
-                  "A growing collection of talks and videos about the ideas, tools, and decisions behind functional Scala."
+                  "A growing collection of talks and videos about the ideas, tools, and decisions behind functional Scala.",
                 ),
                 a.withSelf { self =>
                   (
                     cls := "button button--outline",
                     productLink(self, "/browse"),
                     "Explore the library ",
-                    Icons(Icon.ArrowRight)
+                    Icons(Icon.ArrowRight),
                   )
-                }
+                },
               ),
               div(
                 cls := "value-list",
                 valueItem(
                   Icon.BookOpen,
                   "Knowledge from the community",
-                  "Watch talks from people building and using the Typelevel ecosystem."
+                  "Watch talks from people building and using the Typelevel ecosystem.",
                 ),
                 valueItem(
                   Icon.Code,
                   "Decisions behind the code",
-                  "Understand the tradeoffs and experience that shape real systems."
+                  "Understand the tradeoffs and experience that shape real systems.",
                 ),
                 valueItem(
                   Icon.Sparkles,
                   "Keep your place",
-                  "Save videos and resume from where you stopped."
-                )
-              )
-            )
+                  "Save videos and resume from where you stopped.",
+                ),
+              ),
+            ),
           ),
           sectionTag(
             cls := "testimonial-section",
@@ -251,17 +251,17 @@ object LandingPage:
               cls := "shell testimonial-section__inner",
               span(cls := "testimonial-section__quote", aria.hidden := true, "“"),
               blockQuote(
-                "Typelevel is more than a collection of libraries. It is a community sharing how functional programming works in practice."
+                "Typelevel is more than a collection of libraries. It is a community sharing how functional programming works in practice.",
               ),
               div(
                 cls := "testimonial-author",
                 span("TL"),
                 p(
                   strong("Typelevel Learning Center"),
-                  small("Talks and ideas from across the ecosystem")
-                )
-              )
-            )
+                  small("Talks and ideas from across the ecosystem"),
+                ),
+              ),
+            ),
           ),
           sectionTag(
             cls := "section final-cta",
@@ -271,7 +271,7 @@ object LandingPage:
               p(cls := "eyebrow", "Start exploring"),
               h2("Find a talk that interests you."),
               p(
-                "Create an account to watch community videos, save your favorites, and continue where you left off."
+                "Create an account to watch community videos, save your favorites, and continue where you left off.",
               ),
               div(
                 cls := "hero-actions",
@@ -280,32 +280,32 @@ object LandingPage:
                     cls := "button button--light button--large",
                     linkTo(ctx, self, AppRoute.Register),
                     "Create a free account ",
-                    Icons(Icon.ArrowRight)
+                    Icons(Icon.ArrowRight),
                   )
                 },
                 a.withSelf { self =>
                   (
                     cls := "button button--ghost-light button--large",
                     productLink(self, "/browse"),
-                    "Explore the library"
+                    "Explore the library",
                   )
-                }
-              )
-            )
-          )
+                },
+              ),
+            ),
+          ),
         )
       },
-      Footer(ctx)
+      Footer(ctx),
     )
 
   private def linkTo(
       ctx: AppContext,
       anchor: HtmlAnchorElement[IO],
-      route: AppRoute
+      route: AppRoute,
   ) =
     (
       href := ctx.navigator.href(route),
-      ctx.navigator.intercept(anchor, route)
+      ctx.navigator.intercept(anchor, route),
     )
 
   private def pathIcon(index: Int) = index match
@@ -316,5 +316,5 @@ object LandingPage:
   private def valueItem(icon: Icon, title: String, description: String) =
     articleTag(
       span(Icons(icon)),
-      div(h3(title), p(description))
+      div(h3(title), p(description)),
     )

@@ -11,14 +11,14 @@ object Artwork:
       variant: ArtworkVariant,
       label: String,
       className: String         = "",
-      thumbnail: Option[String] = None
+      thumbnail: Option[String] = None,
   ): Resource[IO, HtmlElement[IO]] =
     thumbnail match
       case Some(path) =>
         div(
           cls := List("artwork artwork--thumbnail", className).filter(_.nonEmpty).mkString(" "),
           aria.hidden := true,
-          img(cls := "artwork__thumbnail", src := path, alt := "")
+          img(cls := "artwork__thumbnail", src := path, alt := ""),
         ).widen
       case None =>
         div(
@@ -33,5 +33,5 @@ object Artwork:
           span(cls := "artwork__line artwork__line--two"),
           span(cls := "artwork__tile artwork__tile--one"),
           span(cls := "artwork__tile artwork__tile--two"),
-          span(cls := "artwork__label", label)
+          span(cls := "artwork__label", label),
         ).widen

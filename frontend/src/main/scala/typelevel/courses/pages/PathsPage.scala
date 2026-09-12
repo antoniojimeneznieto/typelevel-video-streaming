@@ -25,8 +25,8 @@ object PathsPage:
               span(cls := "paths-hero__icon", Icons(Icon.Route)),
               p(cls := "eyebrow", "Guided learning paths"),
               h1("Know what to learn next."),
-              p("Curated sequences that connect foundational ideas to production decisions.")
-            )
+              p("Curated sequences that connect foundational ideas to production decisions."),
+            ),
           ),
           div(
             cls := "app-shell paths-list",
@@ -40,13 +40,13 @@ object PathsPage:
                   span(cls := "path-detail__number", f"${pathIndex + 1}%02d"),
                   p(
                     cls := "eyebrow",
-                    s"${learningPath.level.label} · ${learningPath.time}"
+                    s"${learningPath.level.label} · ${learningPath.time}",
                   ),
                   h2(learningPath.title),
                   p(learningPath.description),
                   ul(
                     li(Icons(Icon.CircleCheck), " Curated course order"),
-                    li(Icons(Icon.Clock), " Learn at your own pace")
+                    li(Icons(Icon.Clock), " Learn at your own pace"),
                   ),
                   pathCourses.headOption.map { firstCourse =>
                     val destination = AppRoute.Course(firstCourse.slug)
@@ -56,10 +56,10 @@ object PathsPage:
                         href := ctx.navigator.href(destination),
                         ctx.navigator.intercept(self, destination),
                         "Start this path ",
-                        Icons(Icon.ArrowRight)
+                        Icons(Icon.ArrowRight),
                       )
                     }
-                  }
+                  },
                 ),
                 div(
                   cls := "path-detail__courses",
@@ -78,17 +78,17 @@ object PathsPage:
                             s"${course.duration} · ${
                                 if course.lessonCount == 1 then "1 video"
                                 else s"${course.lessonCount} lessons"
-                              }"
-                          )
+                              }",
+                          ),
                         ),
-                        Icons(Icon.ArrowRight)
+                        Icons(Icon.ArrowRight),
                       )
                     }
-                  }
-                )
+                  },
+                ),
               )
-            }
-          )
+            },
+          ),
         )
-      }
+      },
     ).widen

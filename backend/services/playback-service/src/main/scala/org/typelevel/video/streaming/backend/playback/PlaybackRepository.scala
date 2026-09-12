@@ -24,7 +24,7 @@ trait PlaybackRepository:
   def findProgress(
       userId: UUID,
       courseId: CourseId,
-      lessonId: LessonId
+      lessonId: LessonId,
   ): IO[Option[PlaybackProgress]]
 
   def listProgress(
@@ -32,7 +32,7 @@ trait PlaybackRepository:
       limit: PageLimit,
       offset: PageOffset,
       courseId: Option[CourseId],
-      completed: Option[Boolean]
+      completed: Option[Boolean],
   ): IO[PlaybackProgressPage]
 
   def addFavorite(userId: UUID, courseId: CourseId, createdAt: Timestamp): IO[Option[Favorite]]
@@ -42,7 +42,7 @@ trait PlaybackRepository:
   def listFavorites(userId: UUID, limit: PageLimit, offset: PageOffset): IO[FavoritePage]
 
 final class PlaybackRepositoryImpl(
-    sessions: Resource[IO, Session[IO]]
+    sessions: Resource[IO, Session[IO]],
 ) extends PlaybackRepository:
 
   override def userExists(userId: UUID): IO[Boolean] =
@@ -60,7 +60,7 @@ final class PlaybackRepositoryImpl(
   override def findProgress(
       userId: UUID,
       courseId: CourseId,
-      lessonId: LessonId
+      lessonId: LessonId,
   ): IO[Option[PlaybackProgress]] =
     sessions.use(_.option(selectProgress)((userId, courseId, lessonId)))
 
@@ -69,7 +69,7 @@ final class PlaybackRepositoryImpl(
       limit: PageLimit,
       offset: PageOffset,
       courseId: Option[CourseId],
-      completed: Option[Boolean]
+      completed: Option[Boolean],
   ): IO[PlaybackProgressPage] =
     sessions.use { session =>
       session.execute(selectProgressPage)((userId, limit, offset, courseId, completed)).map {
@@ -81,7 +81,7 @@ final class PlaybackRepositoryImpl(
   override def addFavorite(
       userId: UUID,
       courseId: CourseId,
-      createdAt: Timestamp
+      createdAt: Timestamp,
   ): IO[Option[Favorite]] =
     sessions.use(_.option(insertFavorite)((userId, courseId, createdAt)))
 
@@ -91,7 +91,7 @@ final class PlaybackRepositoryImpl(
   override def listFavorites(
       userId: UUID,
       limit: PageLimit,
-      offset: PageOffset
+      offset: PageOffset,
   ): IO[FavoritePage] =
     sessions.use { session =>
       session.execute(selectFavoritesPage)((userId, limit, offset)).map { rows =>
@@ -145,7 +145,7 @@ object PlaybackRepositoryImpl:
   private val favoriteValues: Codec[(UUID, CourseId, Timestamp)] = uuid *: courseId *: timestamp
 
   private val progressFilter: Codec[
-    (UUID, PageLimit, PageOffset, Option[CourseId], Option[Boolean])
+    (UUID, PageLimit, PageOffset, Option[CourseId], Option[Boolean]),
   ] = uuid *: pageLimit *: pageOffset *: courseId.opt *: bool.opt
 
   private val favoriteFilter: Codec[(UUID, PageLimit, PageOffset)] =
@@ -186,7 +186,7 @@ object PlaybackRepositoryImpl:
 
   private val selectProgressPage: Query[
     (UUID, PageLimit, PageOffset, Option[CourseId], Option[Boolean]),
-    (TotalCount, Option[PlaybackProgress])
+    (TotalCount, Option[PlaybackProgress]),
   ] =
     sql"""
       WITH filter (user_id, page_limit, page_offset, course_id, completed) AS (
@@ -233,7 +233,7 @@ object PlaybackRepositoryImpl:
 
   private val selectFavoritesPage: Query[
     (UUID, PageLimit, PageOffset),
-    (TotalCount, Option[Favorite])
+    (TotalCount, Option[Favorite]),
   ] =
     sql"""
       WITH filter (user_id, page_limit, page_offset) AS (

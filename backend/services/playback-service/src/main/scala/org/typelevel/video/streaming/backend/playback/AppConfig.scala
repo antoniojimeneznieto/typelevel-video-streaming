@@ -17,7 +17,7 @@ final case class S3Config(
     region: String,
     bucket: String,
     pathStyleAccessEnabled: Boolean,
-    urlExpiresIn: ExpiresInSeconds
+    urlExpiresIn: ExpiresInSeconds,
 )
 
 final case class JwtConfig(publicKeyPath: Path)
@@ -26,7 +26,7 @@ final case class KafkaConfig(
     bootstrapServers: String,
     groupId: String,
     lessonPublishedTopic: String,
-    userCreatedTopic: String
+    userCreatedTopic: String,
 )
 
 final case class AppConfig(
@@ -34,7 +34,7 @@ final case class AppConfig(
     s3: S3Config,
     jwt: JwtConfig,
     postgres: PostgresConfig,
-    kafka: KafkaConfig
+    kafka: KafkaConfig,
 )
 
 object AppConfig:
@@ -42,7 +42,7 @@ object AppConfig:
   private[playback] val endpointDecoder: ConfigDecoder[String, URI] =
     ConfigDecoder[String]
       .mapOption(
-        "HTTP(S) endpoint without credentials, path, query or fragment"
+        "HTTP(S) endpoint without credentials, path, query or fragment",
       ) { value =>
         Try(URI.create(value)).toOption.filter { uri =>
           Set("http", "https").contains(uri.getScheme) &&
@@ -81,10 +81,10 @@ object AppConfig:
         .as(
           ConfigDecoder[String].mapOption("S3 bucket name") { value =>
             Option.when(value.matches("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"))(value)
-          }
+          },
         ),
       env("S3_PATH_STYLE_ACCESS_ENABLED").as[Boolean].default(true),
-      env("S3_URL_EXPIRES_IN_SECONDS").as[ExpiresInSeconds].default(defaultUrlLifetime)
+      env("S3_URL_EXPIRES_IN_SECONDS").as[ExpiresInSeconds].default(defaultUrlLifetime),
     ).parMapN(S3Config.apply)
 
   private val jwtConfig: ConfigValue[Effect, JwtConfig] =
@@ -95,7 +95,7 @@ object AppConfig:
 
   private val nonEmptyString: ConfigDecoder[String, String] =
     ConfigDecoder[String].mapOption("Non-empty value")(value =>
-      Option.when(value.trim.nonEmpty)(value)
+      Option.when(value.trim.nonEmpty)(value),
     )
 
   private val kafkaConfig: ConfigValue[Effect, KafkaConfig] =
@@ -103,7 +103,7 @@ object AppConfig:
       env("KAFKA_BOOTSTRAP_SERVERS").default("localhost:9092").as(nonEmptyString),
       env("KAFKA_GROUP_ID").default("playback-projections-v1").as(nonEmptyString),
       env("KAFKA_LESSON_PUBLISHED_TOPIC").default("catalog.lesson-published.v1").as(nonEmptyString),
-      env("KAFKA_USER_CREATED_TOPIC").default("identity.user-created.v1").as(nonEmptyString)
+      env("KAFKA_USER_CREATED_TOPIC").default("identity.user-created.v1").as(nonEmptyString),
     ).parMapN(KafkaConfig.apply).flatMap { config =>
       if config.lessonPublishedTopic == config.userCreatedTopic then
         ConfigValue.failed(ciris.ConfigError("Kafka event topics must be distinct"))
@@ -116,5 +116,5 @@ object AppConfig:
       s3Config,
       jwtConfig,
       PostgresConfig.config("playback", "playback-local-secret"),
-      kafkaConfig
+      kafkaConfig,
     ).parMapN(AppConfig.apply).load[F]

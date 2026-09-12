@@ -14,7 +14,7 @@ import org.typelevel.video.streaming.backend.playback.domain.*
 import org.typelevel.video.streaming.backend.playback.repository.{
   PlaybackProjectionRepositoryImpl,
   PlaybackRepository,
-  PlaybackRepositoryImpl
+  PlaybackRepositoryImpl,
 }
 import org.typelevel.video.streaming.backend.playback.service.PlaybackServiceImpl
 import org.typelevel.video.streaming.backend.playback.storage.S3VideoStorage
@@ -46,7 +46,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
     playbackSchema.map { statements =>
       expect.all(
         statements.count(_.startsWith("CREATE TABLE ")) == 4,
-        statements.count(_.startsWith("CREATE INDEX ")) == 2
+        statements.count(_.startsWith("CREATE INDEX ")) == 2,
       )
     }
   }
@@ -73,11 +73,11 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
             valid(LessonTitle("Test lesson")),
             valid(DurationSeconds(300)),
             true,
-            valid(ObjectKey(s"courses/${courseA.value}/lesson-1.mp4"))
-          )
+            valid(ObjectKey(s"courses/${courseA.value}/lesson-1.mp4")),
+          ),
         ),
         missingLesson.isEmpty,
-        missingCourseLesson.isEmpty
+        missingCourseLesson.isEmpty,
       )
     }
   }
@@ -109,7 +109,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
         otherLessonCurrent.contains(otherLesson),
         otherUserCurrent.contains(otherUser),
         missing.isEmpty,
-        missingUser.isEmpty
+        missingUser.isEmpty,
       )
     }
   }
@@ -155,7 +155,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
         emptyPage.limit == limit,
         emptyPage.offset == beyond,
         emptyUser.items.isEmpty,
-        emptyUser.total.value == 0L
+        emptyUser.total.value == 0L,
       )
     }
   }
@@ -193,13 +193,13 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
         emptyPage.limit == limit,
         emptyPage.offset == beyond,
         emptyUser.items.isEmpty,
-        emptyUser.total.value == 0L
+        emptyUser.total.value == 0L,
       )
     }
   }
 
   test(
-    "favorite ordering breaks timestamp ties by course ID and deletion is scoped and idempotent"
+    "favorite ordering breaks timestamp ties by course ID and deletion is scoped and idempotent",
   ) {
     withRepository { repository =>
       for
@@ -217,7 +217,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
         aliceFavorites.items == List(Favorite(courseB, at(0))),
         aliceFavorites.total.value == 1L,
         bobFavorites.items == List(Favorite(courseA, at(1))),
-        bobFavorites.total.value == 1L
+        bobFavorites.total.value == 1L,
       )
     }
   }
@@ -235,13 +235,13 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
         results.flatten.forall(_.courseId == courseA),
         results.flatten.forall(favorite => timestamps.contains(favorite.createdAt)),
         page.total.value == 1L,
-        page.items == results.head.toList
+        page.items == results.head.toList,
       )
     }
   }
 
   test(
-    "foreign keys reject progress for unknown users or lessons and favorites for unknown users"
+    "foreign keys reject progress for unknown users or lessons and favorites for unknown users",
   ) {
     withRepository { repository =>
       for
@@ -266,7 +266,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
         isForeignKeyViolation(unknownProgressCourse),
         isForeignKeyViolation(unknownFavoriteUser),
         progressPage.total.value == 0L,
-        favoritePage.total.value == 0L
+        favoritePage.total.value == 0L,
       )
     }
   }
@@ -275,12 +275,12 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
     withRepository { repository =>
       val playback = PlaybackUrlResponse(
         valid(PlaybackUrl("https://videos.example.test/lesson.mp4?signature=test-only")),
-        valid(ExpiresInSeconds(300))
+        valid(ExpiresInSeconds(300)),
       )
       val storage = new S3VideoStorage:
         override def getPlaybackUrl(objectKey: ObjectKey): IO[PlaybackUrlResponse] =
           IO.raiseUnless(objectKey.value == s"courses/${courseA.value}/lesson-1.mp4")(
-            new AssertionError("Unexpected projected object key")
+            new AssertionError("Unexpected projected object key"),
           ).as(playback)
 
       for
@@ -292,13 +292,13 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
                       saved <- service.updatePlaybackProgress(
                                  courseA,
                                  lessonOne,
-                                 valid(PositionSeconds(300))
+                                 valid(PositionSeconds(300)),
                                )
                       progress <- service.listPlaybackProgress(
                                     defaultLimit,
                                     zeroOffset,
                                     Some(courseA),
-                                    Some(true)
+                                    Some(true),
                                   )
                       favorite     <- service.addFavorite(courseA)
                       repeated     <- service.addFavorite(courseA)
@@ -317,7 +317,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
                       repeated == favorite,
                       favorites.items == List(favorite),
                       bobFavorites.items.isEmpty,
-                      remaining.items.isEmpty
+                      remaining.items.isEmpty,
                     )
                   }
         after <- context.get
@@ -330,7 +330,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
     else
       ignore[IO](
         "Postgres integration test: enable with PLAYBACK_REPOSITORY_TESTS=true " +
-          "sbt 'playbackService/testOnly *PlaybackRepositorySuite'"
+          "sbt 'playbackService/testOnly *PlaybackRepositorySuite'",
       )
 
   private def isolatedRepository: Resource[IO, PlaybackRepository] =
@@ -339,7 +339,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
       schema     <- Resource.make(
                   IO(UUID.randomUUID())
                     .map(id => s"playback_repository_test_${id.toString.replace("-", "")}")
-                    .flatTap(name => adminCommand(s"CREATE SCHEMA ${schemaIdentifier(name)}"))
+                    .flatTap(name => adminCommand(s"CREATE SCHEMA ${schemaIdentifier(name)}")),
                 )(name => adminCommand(s"DROP SCHEMA ${schemaIdentifier(name)} CASCADE"))
       sessions <-
         connection
@@ -356,7 +356,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
       .withPort(sys.env.getOrElse("PLAYBACK_TEST_POSTGRES_PORT", "5432").toInt)
       .withUserAndPassword(
         sys.env.getOrElse("PLAYBACK_TEST_POSTGRES_USER", "postgres"),
-        sys.env.getOrElse("PLAYBACK_TEST_POSTGRES_PASSWORD", "postgres")
+        sys.env.getOrElse("PLAYBACK_TEST_POSTGRES_PASSWORD", "postgres"),
       )
       .withDatabase(sys.env.getOrElse("PLAYBACK_TEST_POSTGRES_DATABASE", "postgres"))
 
@@ -378,7 +378,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
       .map(_.resolve(relative))
       .find(path => Files.isRegularFile(path))
       .getOrElse(
-        throw new IllegalStateException("Cannot locate the repository's Postgres init SQL")
+        throw new IllegalStateException("Cannot locate the repository's Postgres init SQL"),
       )
     val sql     = Files.readString(source)
     val section = sql.indexOf("-- Playback projections")
@@ -401,9 +401,9 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
     require(ddl.nonEmpty, "Playback schema is empty")
     require(
       ddl.forall(statement =>
-        statement.startsWith("CREATE TABLE ") || statement.startsWith("CREATE INDEX ")
+        statement.startsWith("CREATE TABLE ") || statement.startsWith("CREATE INDEX "),
       ),
-      "Expected only Playback table/index DDL; refusing to execute other init commands"
+      "Expected only Playback table/index DDL; refusing to execute other init commands",
     )
     ddl
   }
@@ -413,7 +413,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
 
     List(alice, bob).traverse_ { id =>
       IO(UUID.randomUUID()).flatMap(eventId =>
-        repository.userCreated(event.UserCreated(event.EventId(eventId), at(0), event.UserId(id)))
+        repository.userCreated(event.UserCreated(event.EventId(eventId), at(0), event.UserId(id))),
       )
     } *> lessons.traverse_ { case (course, lesson) =>
       IO(UUID.randomUUID()).flatMap(eventId =>
@@ -426,9 +426,9 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
             valid(event.LessonTitle("Test lesson")),
             valid(event.DurationSeconds(300)),
             true,
-            valid(event.ObjectKey(s"courses/${course.value}/${lesson.value}.mp4"))
-          )
-        )
+            valid(event.ObjectKey(s"courses/${course.value}/${lesson.value}.mp4")),
+          ),
+        ),
       )
     }
 
@@ -437,7 +437,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
       lesson: LessonId,
       position: Int,
       completed: Boolean,
-      seconds: Long
+      seconds: Long,
   ): PlaybackProgress =
     PlaybackProgress(course, lesson, valid(PositionSeconds(position)), completed, at(seconds))
 

@@ -19,14 +19,14 @@ object Catalog:
         duration        = duration,
         durationSeconds = durationSeconds,
         description     = description.getOrElse(defaultLessonDescription),
-        preview         = index == 0
+        preview         = index == 0,
       )
     }.toVector
 
   private def lesson(
       title: String,
       duration: String,
-      description: String
+      description: String,
   ): (String, String, Option[String]) = (title, duration, Some(description))
 
   val courses: Vector[Course] = Vector(
@@ -57,26 +57,26 @@ object Catalog:
       source          = Some(
         ContentSource(
           "Sphere.it by VirtusLab on YouTube",
-          "https://www.youtube.com/watch?v=PLApcas04V0"
-        )
+          "https://www.youtube.com/watch?v=PLApcas04V0",
+        ),
       ),
       instructor = Instructor("Daniel Spiewak", "Speaker · Sphere.it Conf 2022", "DS"),
       outcomes   = Vector(
         "Connect hardware execution constraints to the JVM thread model",
         "Explain where asynchronous I/O helps and where it does not",
-        "Reason about tail latency in high-scale, I/O-bound services"
+        "Reason about tail latency in high-scale, I/O-bound services",
       ),
       prerequisites = Vector(
         "Basic familiarity with the JVM",
-        "An interest in concurrency and service performance"
+        "An interest in concurrency and service performance",
       ),
       lessons = lessons(
         lesson(
           "Threads at Scale",
           "30:49",
-          "From raw hardware and JVM threads to asynchronous I/O, effect systems, and practical latency improvements."
-        )
-      )
+          "From raw hardware and JVM threads to asynchronous I/O, effect systems, and practical latency improvements.",
+        ),
+      ),
     ),
     Course(
       id               = "00000000-0000-0000-0000-000000000101",
@@ -105,23 +105,23 @@ object Catalog:
       source          = Some(
         ContentSource(
           "Scala Days Conferences on YouTube",
-          "https://www.youtube.com/watch?v=51kW8zK7YhQ"
-        )
+          "https://www.youtube.com/watch?v=51kW8zK7YhQ",
+        ),
       ),
       instructor = Instructor("Arman Bilge", "Typelevel · Scala Days 2025", "AB"),
       outcomes   = Vector(
         "Understand how the Typelevel ecosystem and community evolved",
         "See how cross-platform support influenced the Cats Effect runtime",
-        "Learn how newer tools are lowering the barrier to functional Scala"
+        "Learn how newer tools are lowering the barrier to functional Scala",
       ),
       prerequisites = Vector("An interest in Scala and open-source communities"),
       lessons       = lessons(
         lesson(
           "A Typelevel Retrospective",
           "35:42",
-          "A tour through Typelevel’s community growth, cross-platform ecosystem, runtime work, and efforts to make the stack easier to adopt."
-        )
-      )
+          "A tour through Typelevel’s community growth, cross-platform ecosystem, runtime work, and efforts to make the stack easier to adopt.",
+        ),
+      ),
     ),
     Course(
       id               = "00000000-0000-0000-0000-000000000105",
@@ -148,22 +148,22 @@ object Catalog:
       artLabel        = "CHUNK",
       thumbnail       = Some("/fs2-chunk-thumbnail.jpg"),
       source          = Some(
-        ContentSource("Konfy on YouTube", "https://www.youtube.com/watch?v=wOybldcyMLs")
+        ContentSource("Konfy on YouTube", "https://www.youtube.com/watch?v=wOybldcyMLs"),
       ),
       instructor = Instructor("Michael Pilquist", "Speaker · Scala Love 2022", "MP"),
       outcomes   = Vector(
         "Understand the role Chunk plays inside FS2",
         "See how performance constraints shape data-structure design",
-        "Recognize the trade-offs behind the evolution of the Chunk API"
+        "Recognize the trade-offs behind the evolution of the Chunk API",
       ),
       prerequisites = Vector("Scala fundamentals", "Some familiarity with FS2 streams"),
       lessons       = lessons(
         lesson(
           "fs2.Chunk",
           "47:54",
-          "A close look at the structure that powers FS2, its evolution, and the constraints that shaped its design."
-        )
-      )
+          "A close look at the structure that powers FS2, its evolution, and the constraints that shaped its design.",
+        ),
+      ),
     ),
     Course(
       id               = "00000000-0000-0000-0000-000000000102",
@@ -190,22 +190,22 @@ object Catalog:
       artLabel        = "CE3",
       thumbnail       = Some("/cats-effect-3-thumbnail.jpg"),
       source          = Some(
-        ContentSource("Konfy on YouTube", "https://www.youtube.com/watch?v=JrpFFRdf7Q8")
+        ContentSource("Konfy on YouTube", "https://www.youtube.com/watch?v=JrpFFRdf7Q8"),
       ),
       instructor = Instructor("Daniel Spiewak", "Speaker · Scala Love", "DS"),
       outcomes   = Vector(
         "Understand the core ideas behind Cats Effect 3",
         "Build a mental model for asynchronous and concurrent effects",
-        "See how the runtime supports purely functional Scala programs"
+        "See how the runtime supports purely functional Scala programs",
       ),
       prerequisites = Vector("Scala fundamentals", "An introduction to functional effects"),
       lessons       = lessons(
         lesson(
           "Cats Effect 3",
           "39:30",
-          "Daniel Spiewak introduces Cats Effect 3 and its model for functional asynchronous and concurrent programming."
-        )
-      )
+          "Daniel Spiewak introduces Cats Effect 3 and its model for functional asynchronous and concurrent programming.",
+        ),
+      ),
     ),
     Course(
       id               = "00000000-0000-0000-0000-000000000106",
@@ -234,27 +234,27 @@ object Catalog:
       source          = Some(
         ContentSource(
           "Scala Days Conferences on YouTube",
-          "https://www.youtube.com/watch?v=nNqx2HiL7cc"
-        )
+          "https://www.youtube.com/watch?v=nNqx2HiL7cc",
+        ),
       ),
       instructor = Instructor("Thanh Le", "Speaker · Scala Days 2025", "TL"),
       outcomes   = Vector(
         "Evaluate the trade-offs of conventional monad transformers",
         "Understand how the submarine technique transports typed errors",
-        "See how Scala 3 language features support implicit error capabilities"
+        "See how Scala 3 language features support implicit error capabilities",
       ),
       prerequisites = Vector(
         "Scala 3 fundamentals",
-        "Familiarity with monadic code and typed errors"
+        "Familiarity with monadic code and typed errors",
       ),
       lessons = lessons(
         lesson(
           "Rethinking Monad Transformers",
           "33:27",
-          "A Scala 3 approach to carrying typed errors through an effect without a conventional transformer stack."
-        )
-      )
-    )
+          "A Scala 3 approach to carrying typed errors through an effect without a conventional transformer stack.",
+        ),
+      ),
+    ),
   )
 
   val learningPaths: Vector[LearningPath] = Vector(
@@ -264,11 +264,11 @@ object Catalog:
       description = "Explore the ecosystem, its community, and its core ideas.",
       courseIds   = Vector(
         "00000000-0000-0000-0000-000000000101",
-        "00000000-0000-0000-0000-000000000102"
+        "00000000-0000-0000-0000-000000000102",
       ),
       time  = "1 hour 15 minutes",
       level = CourseLevel.Beginner,
-      tone  = PathTone.Yellow
+      tone  = PathTone.Yellow,
     ),
     LearningPath(
       id          = "inside-typelevel",
@@ -278,12 +278,12 @@ object Catalog:
       courseIds = Vector(
         "00000000-0000-0000-0000-000000000104",
         "00000000-0000-0000-0000-000000000105",
-        "00000000-0000-0000-0000-000000000106"
+        "00000000-0000-0000-0000-000000000106",
       ),
       time  = "1 hour 52 minutes",
       level = CourseLevel.Intermediate,
-      tone  = PathTone.Purple
-    )
+      tone  = PathTone.Purple,
+    ),
   )
 
   val topics: Vector[String] = Vector(
@@ -291,7 +291,7 @@ object Catalog:
     "Effects & Concurrency",
     "Typelevel Community",
     "Streaming",
-    "Error Handling"
+    "Error Handling",
   )
 
   private val coursesBySlug = courses.map(course => course.slug -> course).toMap

@@ -14,7 +14,7 @@ object PlaybackEventWorkerSuite extends SimpleIOSuite:
     bootstrapServers     = "localhost:9092",
     groupId              = "playback-test",
     lessonPublishedTopic = "catalog.lesson-published",
-    userCreatedTopic     = "identity.user-created"
+    userCreatedTopic     = "identity.user-created",
   )
 
   private val eventId    = "00000000-0000-0000-0000-000000000001"
@@ -55,7 +55,7 @@ object PlaybackEventWorkerSuite extends SimpleIOSuite:
       observed == Vector("user", "commit"),
       event.exists(_.eventId.value.toString == eventId),
       event.exists(_.userId.value.toString == userId),
-      event.exists(_.occurredAt.toInstant.toString == occurredAt)
+      event.exists(_.occurredAt.toInstant.toString == occurredAt),
     )
   }
 
@@ -72,7 +72,7 @@ object PlaybackEventWorkerSuite extends SimpleIOSuite:
              2,
              42L,
              lessonPublished,
-             actions.update(_ :+ "commit")
+             actions.update(_ :+ "commit"),
            )
       observed <- actions.get
       event    <- received.get
@@ -85,7 +85,7 @@ object PlaybackEventWorkerSuite extends SimpleIOSuite:
       event.exists(_.title.value == "Threads at Scale"),
       event.exists(_.durationSeconds.value == 1849),
       event.exists(_.isPreview),
-      event.exists(_.objectKey.value == s"courses/$courseId/lesson-1.mp4")
+      event.exists(_.objectKey.value == s"courses/$courseId/lesson-1.mp4"),
     )
   }
 
@@ -98,7 +98,7 @@ object PlaybackEventWorkerSuite extends SimpleIOSuite:
       config.lessonPublishedTopic -> lessonPublished.replace("lesson-1", "INVALID LESSON"),
       config.userCreatedTopic -> null,
       config.userCreatedTopic -> "null",
-      "unknown-topic" -> userCreated
+      "unknown-topic" -> userCreated,
     )
 
     invalid
@@ -114,9 +114,9 @@ object PlaybackEventWorkerSuite extends SimpleIOSuite:
           observed.isEmpty,
           result.left.exists(_.isInstanceOf[IllegalArgumentException]),
           result.left.exists(
-            _.getMessage == s"Invalid playback event at topic=$topic partition=2 offset=42"
+            _.getMessage == s"Invalid playback event at topic=$topic partition=2 offset=42",
           ),
-          result.left.exists(_.getCause == null)
+          result.left.exists(_.getCause == null),
         )
       }
       .map(_.reduce(_ and _))
@@ -151,7 +151,7 @@ object PlaybackEventWorkerSuite extends SimpleIOSuite:
                     2,
                     42L,
                     lessonPublished,
-                    actions.update(_ :+ "commit") *> IO.raiseError(failure)
+                    actions.update(_ :+ "commit") *> IO.raiseError(failure),
                   )
                   .attempt
       observed <- actions.get

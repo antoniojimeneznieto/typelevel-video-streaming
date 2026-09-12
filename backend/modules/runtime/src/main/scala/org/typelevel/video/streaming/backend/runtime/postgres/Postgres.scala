@@ -11,7 +11,7 @@ import skunk.Session
 object Postgres:
 
   def sessionPool[F[_]: Temporal: Network: Console: MeterProvider: TracerProvider](
-      config: PostgresConfig
+      config: PostgresConfig,
   ): Resource[F, Resource[F, Session[F]]] =
     Session
       .Builder[F]

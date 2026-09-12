@@ -10,12 +10,12 @@ final case class PostgresConfig(
     user: String,
     database: String,
     password: Secret[String],
-    maxConnections: Int
+    maxConnections: Int,
 )
 
 object PostgresConfig:
 
-  private final case class PositiveInt(value: Int)
+  final private case class PositiveInt(value: Int)
 
   private given ConfigDecoder[String, Host] =
     ConfigDecoder[String].mapOption("Host")(Host.fromString)
@@ -30,7 +30,7 @@ object PostgresConfig:
 
   def config(
       defaultDatabase: String,
-      defaultPassword: String
+      defaultPassword: String,
   ): ConfigValue[Effect, PostgresConfig] =
     (
       env("POSTGRES_HOST").as[Host].default(host"127.0.0.1"),
@@ -38,7 +38,7 @@ object PostgresConfig:
       env("POSTGRES_USER").as[String].default(defaultDatabase),
       env("POSTGRES_DB").as[String].default(defaultDatabase),
       env("POSTGRES_PASSWORD").as[String].default(defaultPassword).secret,
-      env("POSTGRES_MAX_CONNECTIONS").as[PositiveInt].default(PositiveInt(10))
+      env("POSTGRES_MAX_CONNECTIONS").as[PositiveInt].default(PositiveInt(10)),
     ).parMapN { (host, port, user, database, password, maxConnections) =>
       PostgresConfig(
         host,
@@ -46,6 +46,6 @@ object PostgresConfig:
         user,
         database,
         password,
-        maxConnections.value
+        maxConnections.value,
       )
     }

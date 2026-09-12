@@ -14,7 +14,7 @@ object HttpServer:
 
   def run[F[_]: Async: Network: MeterProvider: TracerProvider](
       config: HttpServerConfig,
-      httpApp: HttpApp[F]
+      httpApp: HttpApp[F],
   ): F[Unit] =
     HttpTelemetry(CORS.policy.withAllowOriginAll(httpApp)).flatMap { instrumented =>
       EmberServerBuilder

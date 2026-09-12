@@ -9,7 +9,7 @@ import org.http4s.otel4s.middleware.trace.redact.{PathRedactor, QueryRedactor}
 import org.http4s.otel4s.middleware.trace.server.{
   PathAndQueryRedactor,
   ServerMiddleware,
-  ServerSpanDataProvider
+  ServerSpanDataProvider,
 }
 import org.http4s.server.middleware.Metrics
 import org.typelevel.otel4s.metrics.MeterProvider
@@ -17,8 +17,6 @@ import org.typelevel.otel4s.trace.TracerProvider
 
 object HttpTelemetry:
 
-  // Requests can contain IDs, credentials, or arbitrary search text in their URLs.
-  // Omit raw paths and queries until endpoint-aware route templates are configured.
   private val redactor: PathAndQueryRedactor = new PathRedactor with QueryRedactor:
     override def redactPath(path: Uri.Path): Uri.Path = Uri.Path.empty
     override def redactQuery(query: Query): Query     = Query.empty

@@ -3,7 +3,7 @@ package org.typelevel.video.streaming.backend.runtime.context
 import cats.effect.{IO, IOLocal}
 
 final class IOLocalRequestContext[A] private (
-    local: IOLocal[Option[A]]
+    local: IOLocal[Option[A]],
 ) extends RequestContext[IO, A]:
 
   override def get: IO[Option[A]] =

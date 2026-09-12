@@ -11,11 +11,11 @@ import org.typelevel.video.streaming.backend.identity.service.{
   AccessTokenIssuerImpl,
   AccessTokenVerifierImpl,
   IdentityServiceImpl,
-  PasswordHasherImpl
+  PasswordHasherImpl,
 }
 import org.typelevel.video.streaming.backend.runtime.auth.{
   BearerAuthenticationMiddleware,
-  RsaKeyLoader
+  RsaKeyLoader,
 }
 import org.typelevel.video.streaming.backend.runtime.context.IOLocalRequestContext
 import org.typelevel.video.streaming.backend.runtime.http.HttpServer
@@ -40,18 +40,18 @@ object Main extends IOApp.Simple:
             passwordHasher  = PasswordHasherImpl()
             tokenIssuer     = AccessTokenIssuerImpl(
                             privateKey,
-                            config.jwt.accessTokenExpiresIn
+                            config.jwt.accessTokenExpiresIn,
                           )
             tokenVerifier = AccessTokenVerifierImpl(publicKey)
             service       = new IdentityServiceImpl(
                         repository,
                         passwordHasher,
                         tokenIssuer,
-                        requestContext
+                        requestContext,
                       )
             authentication = new BearerAuthenticationMiddleware(
                                tokenVerifier,
-                               requestContext
+                               requestContext,
                              )
             _ <- SimpleRestJsonBuilder
                    .routes(service)

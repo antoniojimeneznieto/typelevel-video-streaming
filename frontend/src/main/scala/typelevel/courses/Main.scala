@@ -20,7 +20,7 @@ object Main extends IOWebApp:
     store   <- AppStore.resource(
                catalog,
                IdentityApi(config.identityBaseUrl, client),
-               PlaybackApi(config.playbackBaseUrl, client)
+               PlaybackApi(config.playbackBaseUrl, client),
              )
     navigator     = Navigator(router)
     ctx           = AppContext(navigator, store, catalog)

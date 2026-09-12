@@ -19,7 +19,7 @@ object SearchPage:
       query: String,
       topic: String,
       level: String,
-      format: String
+      format: String,
   ):
     def hasFilters: Boolean =
       query.nonEmpty || topic != "All topics" || level != "All levels" || format != "All formats"
@@ -38,7 +38,7 @@ object SearchPage:
 
   private def render(
       ctx: AppContext,
-      draft: SignallingRef[IO, Draft]
+      draft: SignallingRef[IO, Draft],
   ): Resource[IO, HtmlElement[IO]] =
     val searchParams = ctx.navigator.location.map(params).changes(using Eq.fromUniversalEquals)
     val draftValue   = (searchParams, draft).mapN { (current, value) =>
@@ -65,7 +65,7 @@ object SearchPage:
           cls := "search-page__heading",
           p(cls := "eyebrow", "Course library"),
           h1("Find your next useful idea."),
-          p("Search by concept, project, technology, or instructor.")
+          p("Search by concept, project, technology, or instructor."),
         ),
         form(
           cls := "library-search",
@@ -77,11 +77,11 @@ object SearchPage:
               onInput --> (_.foreach(_ =>
                 (searchParams.get, self.value.get).flatMapN { (current, value) =>
                   draft.set(Draft(current.query, value))
-                }
+                },
               )),
               placeholder := "Try “structured concurrency” or “http4s”…",
               aria.label := "Search course library",
-              autoFocus := true
+              autoFocus := true,
             )
           },
           draftValue.map(_.nonEmpty).changes.map { nonEmpty =>
@@ -97,28 +97,28 @@ object SearchPage:
                     _   <- ctx.navigator.go(updateParam(uri, "q", "", ""))
                   yield ()
                 },
-                Icons(Icon.X)
+                Icons(Icon.X),
               )
             }
           },
-          button(typ := "submit", cls := "button button--primary", "Search")
+          button(typ := "submit", cls := "button button--primary", "Search"),
         ),
         filters(ctx, searchParams, clearAll),
-        results(ctx, searchParams, ctx.catalog.courses, clearAll)
-      )
+        results(ctx, searchParams, ctx.catalog.courses, clearAll),
+      ),
     ).widen
 
   private def filters(
       ctx: AppContext,
       current: Signal[IO, SearchParams],
-      clearAll: IO[Unit]
+      clearAll: IO[Unit],
   ): Resource[IO, HtmlElement[IO]] =
     def filterSelect(
         labelText: String,
         key: String,
         defaultValue: String,
         values: Signal[IO, Vector[String]],
-        selected: SearchParams => String
+        selected: SearchParams => String,
     ) = label(
       span(labelText),
       select.withSelf { self =>
@@ -128,10 +128,10 @@ object SearchPage:
           onChange --> (_.foreach(_ =>
             (ctx.navigator.location.get, self.value.get).flatMapN { (uri, nextValue) =>
               ctx.navigator.go(updateParam(uri, key, nextValue, defaultValue))
-            }
-          ))
+            },
+          )),
         )
-      }
+      },
     )
 
     div(
@@ -146,17 +146,17 @@ object SearchPage:
             typ := "button",
             cls := "search-filters__reset",
             onClick(clearAll),
-            "Clear all"
+            "Clear all",
           )
         }
-      }
+      },
     ).widen
 
   private def results(
       ctx: AppContext,
       current: Signal[IO, SearchParams],
       courses: Signal[IO, Vector[Course]],
-      clearAll: IO[Unit]
+      clearAll: IO[Unit],
   ): Resource[IO, HtmlElement[IO]] =
     val matching = (current, courses).mapN(matchingCourses).changes(using Eq.fromUniversalEquals)
 
@@ -170,10 +170,10 @@ object SearchPage:
           }),
           span(
             matching.map(items =>
-              s"${items.size} ${if items.size == 1 then "result" else "results"}"
-            )
-          )
-        )
+              s"${items.size} ${if items.size == 1 then "result" else "results"}",
+            ),
+          ),
+        ),
       ),
       matching.map(_.nonEmpty).changes.map {
         case true =>
@@ -184,14 +184,14 @@ object SearchPage:
             span(Icons(Icon.Search)),
             h2("No exact match—yet."),
             p(
-              "Try a broader topic or clear a filter. “effects”, “Scala”, and “testing” are good places to start."
+              "Try a broader topic or clear a filter. “effects”, “Scala”, and “testing” are good places to start.",
             ),
             button(
               cls := "button button--primary",
               typ := "button",
               onClick(clearAll),
-              "Explore all courses"
-            )
+              "Explore all courses",
+            ),
           ).widen
       },
       (current, matching)
@@ -205,18 +205,18 @@ object SearchPage:
               Icons(Icon.Sparkles),
               p(
                 strong("Not sure where to begin?"),
-                " Follow the Functional Scala Foundations path for a guided start."
+                " Follow the Functional Scala Foundations path for a guided start.",
               ),
               a.withSelf { self =>
                 (
                   href := ctx.navigator.href(destination),
                   ctx.navigator.intercept(self, destination),
-                  "View the path"
+                  "View the path",
                 )
-              }
+              },
             )
           }
-        }
+        },
     ).widen
 
   private def matchingCourses(current: SearchParams, courses: Vector[Course]): Vector[Course] =
@@ -227,7 +227,7 @@ object SearchPage:
         course.shortDescription,
         course.description,
         course.topic,
-        course.instructor.name
+        course.instructor.name,
       ) ++ course.technologies).mkString(" ").toLowerCase
       val matchesQuery  = normalized.isEmpty || haystack.contains(normalized)
       val matchesTopic  = current.topic == "All topics" || course.topic == current.topic
@@ -240,7 +240,7 @@ object SearchPage:
     query  = uri.query.params.getOrElse("q", ""),
     topic  = uri.query.params.getOrElse("topic", "All topics"),
     level  = uri.query.params.getOrElse("level", "All levels"),
-    format = uri.query.params.getOrElse("format", "All formats")
+    format = uri.query.params.getOrElse("format", "All formats"),
   )
 
   private def updateParam(uri: Uri, key: String, value: String, defaultValue: String): Uri =

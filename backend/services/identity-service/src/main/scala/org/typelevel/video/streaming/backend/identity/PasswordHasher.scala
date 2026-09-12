@@ -16,7 +16,7 @@ trait PasswordHasher:
   def verify(password: Password, hash: PasswordHash): IO[Boolean]
 
 final class PasswordHasherImpl private (
-    function: Argon2Function
+    function: Argon2Function,
 ) extends PasswordHasher:
 
   private val secureRandom = new SecureRandom()
@@ -40,7 +40,7 @@ final class PasswordHasherImpl private (
       val hashFunction = Argon2Function.getInstanceFromHash(encodedHash)
       hashFunction.check(
         Password.value(password).getBytes(StandardCharsets.UTF_8),
-        encodedHash.getBytes(StandardCharsets.UTF_8)
+        encodedHash.getBytes(StandardCharsets.UTF_8),
       )
     }
 
@@ -60,6 +60,6 @@ object PasswordHasherImpl:
         Parallelism,
         OutputLength,
         Argon2.ID,
-        Version
-      )
+        Version,
+      ),
     )

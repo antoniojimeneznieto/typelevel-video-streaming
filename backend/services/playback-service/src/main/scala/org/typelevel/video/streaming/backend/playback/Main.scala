@@ -11,7 +11,7 @@ import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.playback.config.AppConfig
 import org.typelevel.video.streaming.backend.playback.repository.{
   PlaybackProjectionRepositoryImpl,
-  PlaybackRepositoryImpl
+  PlaybackRepositoryImpl,
 }
 import org.typelevel.video.streaming.backend.playback.service.PlaybackServiceImpl
 import org.typelevel.video.streaming.backend.playback.storage.S3VideoStorageImpl
@@ -19,7 +19,7 @@ import org.typelevel.video.streaming.backend.playback.worker.PlaybackEventWorker
 import org.typelevel.video.streaming.backend.runtime.auth.{
   AccessTokenVerifier,
   BearerAuthenticationMiddleware,
-  RsaKeyLoader
+  RsaKeyLoader,
 }
 import org.typelevel.video.streaming.backend.runtime.context.IOLocalRequestContext
 import org.typelevel.video.streaming.backend.runtime.http.HttpServer
@@ -51,7 +51,7 @@ object Main extends IOApp.Simple:
 
         resources.use { case (routes, worker) =>
           val app = routes.orNotFound.map(
-            _.putHeaders(Header.Raw(CIString("Cache-Control"), "no-store"))
+            _.putHeaders(Header.Raw(CIString("Cache-Control"), "no-store")),
           )
 
           (HttpServer.run(config.server, app), worker.run).parTupled.void

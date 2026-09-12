@@ -8,7 +8,7 @@ import cats.syntax.all.*
 import org.http4s.Uri
 import org.typelevel.video.streaming.backend.playback.api.{
   PlaybackUnavailableError,
-  VideoNotFoundError
+  VideoNotFoundError,
 }
 import org.typelevel.video.streaming.backend.playback.config.S3Config
 import org.typelevel.video.streaming.backend.playback.domain.{ExpiresInSeconds, ObjectKey}
@@ -16,7 +16,7 @@ import org.typelevel.video.streaming.backend.playback.storage.S3VideoStorageImpl
 import software.amazon.awssdk.auth.credentials.{
   AwsBasicCredentials,
   AwsCredentialsProvider,
-  StaticCredentialsProvider
+  StaticCredentialsProvider,
 }
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails
 import software.amazon.awssdk.core.exception.SdkClientException
@@ -35,10 +35,10 @@ object S3VideoStorageSuite extends SimpleIOSuite:
     region                 = "us-east-1",
     bucket                 = "course-videos",
     pathStyleAccessEnabled = true,
-    urlExpiresIn           = valid(ExpiresInSeconds(300))
+    urlExpiresIn           = valid(ExpiresInSeconds(300)),
   )
   private val credentials = StaticCredentialsProvider.create(
-    AwsBasicCredentials.create("test-access-key", "test-secret-key")
+    AwsBasicCredentials.create("test-access-key", "test-secret-key"),
   )
 
   test("HEAD and the browser-compatible signed URL use the exact projection object key") {
@@ -64,7 +64,7 @@ object S3VideoStorageSuite extends SimpleIOSuite:
           query.get("X-Amz-Signature").exists(_.matches("[a-f0-9]{64}")),
           query.get("response-content-type").contains("video/mp4"),
           query.get("response-content-disposition").contains("inline"),
-          response.expiresIn == config.urlExpiresIn
+          response.expiresIn == config.urlExpiresIn,
         )
       }
     }
@@ -75,7 +75,7 @@ object S3VideoStorageSuite extends SimpleIOSuite:
       endpoint               = None,
       publicEndpoint         = None,
       region                 = "eu-central-1",
-      pathStyleAccessEnabled = false
+      pathStyleAccessEnabled = false,
     )
     val client = headClient(_ => HeadObjectResponse.builder().build())
 
@@ -86,7 +86,7 @@ object S3VideoStorageSuite extends SimpleIOSuite:
           url.scheme.contains(Uri.Scheme.https),
           url.host.map(_.value).contains("course-videos.s3.eu-central-1.amazonaws.com"),
           url.path.renderString == s"/${objectKey.value}",
-          url.query.params.get("X-Amz-SignedHeaders").contains("host")
+          url.query.params.get("X-Amz-SignedHeaders").contains("host"),
         )
       }
     }
@@ -110,7 +110,7 @@ object S3VideoStorageSuite extends SimpleIOSuite:
       s3Error(404, "NoSuchBucket"),
       s3Error(403, "AccessDenied"),
       s3Error(503, "SlowDown"),
-      SdkClientException.create("Synthetic storage failure with private connection details")
+      SdkClientException.create("Synthetic storage failure with private connection details"),
     )
 
     presigner(config).use { signer =>
@@ -149,7 +149,7 @@ object S3VideoStorageSuite extends SimpleIOSuite:
 
   private def presigner(
       settings: S3Config,
-      provider: AwsCredentialsProvider = credentials
+      provider: AwsCredentialsProvider = credentials,
   ): Resource[IO, S3Presigner] =
     Resource.fromAutoCloseable(IO.blocking {
       val builder = S3Presigner
@@ -160,7 +160,7 @@ object S3VideoStorageSuite extends SimpleIOSuite:
           S3Configuration
             .builder()
             .pathStyleAccessEnabled(settings.pathStyleAccessEnabled)
-            .build()
+            .build(),
         )
       settings.publicEndpoint.orElse(settings.endpoint).foreach(builder.endpointOverride)
       builder.build()

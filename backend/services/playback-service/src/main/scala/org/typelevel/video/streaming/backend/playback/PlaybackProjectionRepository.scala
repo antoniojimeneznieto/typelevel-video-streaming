@@ -14,7 +14,7 @@ trait PlaybackProjectionRepository:
   def lessonPublished(event: LessonPublished): IO[Unit]
 
 final class PlaybackProjectionRepositoryImpl(
-    sessions: Resource[IO, Session[IO]]
+    sessions: Resource[IO, Session[IO]],
 ) extends PlaybackProjectionRepository:
 
   override def userCreated(event: UserCreated): IO[Unit] =
@@ -40,7 +40,7 @@ object PlaybackProjectionRepositoryImpl:
         event.isPreview,
         event.objectKey.value,
         event.eventId.value,
-        event.occurredAt.toOffsetDateTime
+        event.occurredAt.toOffsetDateTime,
       )
     }
 

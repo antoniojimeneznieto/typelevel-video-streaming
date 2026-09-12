@@ -35,7 +35,7 @@ object WatchPage:
       isMuted: SignallingRef[IO, Boolean],
       captionsOn: SignallingRef[IO, Boolean],
       autoNext: SignallingRef[IO, Boolean],
-      autoplayTarget: Ref[IO, Option[(String, String)]]
+      autoplayTarget: Ref[IO, Option[(String, String)]],
   )
 
   final private case class PlayerRefs(
@@ -56,12 +56,12 @@ object WatchPage:
       sourceRequests: SignallingRef[IO, (Long, Boolean)],
       stage: Ref[IO, Option[dom.Element]],
       autoPlayPending: Ref[IO, Boolean],
-      progressWriter: ProgressWriter
+      progressWriter: ProgressWriter,
   )
 
   def apply(
       ctx: AppContext,
-      route: Signal[IO, (String, String)]
+      route: Signal[IO, (String, String)],
   ): Resource[IO, HtmlElement[IO]] =
     for
       isMuted        <- SignallingRef[IO].of(false).toResource
@@ -73,14 +73,14 @@ object WatchPage:
                 styleAttr := "display: contents",
                 children[(String, String)] { (slug, lessonId) =>
                   renderRoute(ctx, shared, slug, lessonId).map(value => value: Node[IO])
-                } <-- route.map(value => List(value))
+                } <-- route.map(value => List(value)),
               )
     yield page
 
   def apply(
       ctx: AppContext,
       slug: String,
-      lessonId: String
+      lessonId: String,
   ): Resource[IO, HtmlElement[IO]] =
     SignallingRef[IO].of((slug, lessonId)).toResource.flatMap(apply(ctx, _))
 
@@ -88,7 +88,7 @@ object WatchPage:
       ctx: AppContext,
       shared: SharedState,
       slug: String,
-      lessonId: String
+      lessonId: String,
   ): Resource[IO, HtmlElement[IO]] =
     div(
       styleAttr := "display: contents",
@@ -100,7 +100,7 @@ object WatchPage:
             case None => notFound(ctx).map(value => value: Node[IO])
             case Some(lesson) =>
               renderLesson(ctx, shared, course, lesson, lessonIndex).map(value => value: Node[IO])
-      }
+      },
     )
 
   private def renderLesson(
@@ -108,7 +108,7 @@ object WatchPage:
       shared: SharedState,
       course: Course,
       lesson: Lesson,
-      lessonIndex: Int
+      lessonIndex: Int,
   ): Resource[IO, HtmlElement[IO]] =
     val nextLesson        = course.lessons.lift(lessonIndex + 1)
     val lessonProgress    = ctx.store.lessonProgress(course.id, lesson.id)
@@ -142,11 +142,11 @@ object WatchPage:
                             },
                           error => progressSaveError.set(error.map(progressErrorMessage)),
                           ctx.store.runInBackground,
-                          ctx.store.runLessonProgressWriter(course.id, lesson.id)
+                          ctx.store.runLessonProgressWriter(course.id, lesson.id),
                         )
       shouldAutoPlay <-
         Resource.eval(
-          shared.autoplayTarget.modify(target => (None, target.contains((course.slug, lesson.id))))
+          shared.autoplayTarget.modify(target => (None, target.contains((course.slug, lesson.id)))),
         )
       autoPlayPending <- Ref[IO].of(shouldAutoPlay).toResource
       refs             = PlayerRefs(
@@ -167,7 +167,7 @@ object WatchPage:
                sourceRequests       = sourceRequests,
                stage                = stageRef,
                autoPlayPending      = autoPlayPending,
-               progressWriter       = progressWriter
+               progressWriter       = progressWriter,
              )
       videoElement <- videoTag("Your browser does not support HTML video.")
       video         = rawVideo(videoElement)
@@ -179,7 +179,7 @@ object WatchPage:
                      lessonProgress = lessonProgress,
                      shared         = shared,
                      refs           = refs,
-                     video          = video
+                     video          = video,
                    )
       _          <- setupVideo(video, course.thumbnail)
       _          <- if isStandaloneVideo then Resource.unit else setupCaptions(video)
@@ -187,7 +187,7 @@ object WatchPage:
       playerReady = (sourceState: Signal[IO, SourceState], ctx.store.progressStatus).mapN {
                       case (
                             SourceState.Ready(_),
-                            RemoteStateStatus.Ready | RemoteStateStatus.Error
+                            RemoteStateStatus.Ready | RemoteStateStatus.Error,
                           ) =>
                         true
                       case _ => false
@@ -201,7 +201,7 @@ object WatchPage:
                  controller        = controller,
                  refs              = refs,
                  playerReady       = playerReady,
-                 isStandaloneVideo = isStandaloneVideo
+                 isStandaloneVideo = isStandaloneVideo,
                )
       rawStage = rawElement(stage)
       _       <- Resource.eval(stageRef.set(Some(rawStage)))
@@ -218,8 +218,8 @@ object WatchPage:
                   cls :=
                     (if isStandaloneVideo then "watch-layout watch-layout--standalone"
                      else "watch-layout"),
-                  div(cls := "watch-main", stage)
-                )
+                  div(cls := "watch-main", stage),
+                ),
               )
     yield page
 
@@ -232,7 +232,7 @@ object WatchPage:
       controller: PlayerController,
       refs: PlayerRefs,
       playerReady: Signal[IO, Boolean],
-      isStandaloneVideo: Boolean
+      isStandaloneVideo: Boolean,
   ): Resource[IO, HtmlElement[IO]] =
     sectionTag.withSelf { stage =>
       val rawStage = rawElement(stage)
@@ -269,8 +269,8 @@ object WatchPage:
                   typ := "button",
                   onClick(controller.togglePlayback),
                   aria.label := "Play video",
-                  Icons(Icon.Play)
-                )
+                  Icons(Icon.Play),
+                ),
               )
             }
           },
@@ -279,8 +279,8 @@ object WatchPage:
             p(
               cls := "playback-toast playback-toast--error",
               role := List("status"),
-              message
-            )
+              message,
+            ),
           )
         }),
         playerReady.map { ready =>
@@ -290,11 +290,11 @@ object WatchPage:
                 stage        = rawStage,
                 controller   = controller,
                 refs         = refs,
-                showCaptions = !isStandaloneVideo
-              )
+                showCaptions = !isStandaloneVideo,
+              ),
             )
           }
-        }
+        },
       )
     }
 
@@ -302,7 +302,7 @@ object WatchPage:
       ctx: AppContext,
       course: Course,
       lesson: Lesson,
-      isStandaloneVideo: Boolean
+      isStandaloneVideo: Boolean,
   ): Resource[IO, HtmlElement[IO]] =
     val backRoute = AppRoute.Course(course.slug)
     div(
@@ -313,14 +313,14 @@ object WatchPage:
           href := ctx.navigator.href(backRoute),
           aria.label := s"Back to ${if isStandaloneVideo then "video" else "course"}",
           ctx.navigator.intercept(self, backRoute),
-          Icons(Icon.ArrowLeft)
+          Icons(Icon.ArrowLeft),
         )
       },
       div(
         cls := "video-stage__title",
         Option.when(course.title != lesson.title)(span(course.title)),
-        h1(lesson.title)
-      )
+        h1(lesson.title),
+      ),
     )
 
   private def playbackLoading: Resource[IO, HtmlElement[IO]] =
@@ -330,7 +330,7 @@ object WatchPage:
       aria.live := "polite",
       span(cls := "session-check__spinner", aria.hidden := true),
       strong("Preparing secure playback…"),
-      small("The video URL is requested from the playback service.")
+      small("The video URL is requested from the playback service."),
     )
 
   private def progressLoading: Resource[IO, HtmlElement[IO]] =
@@ -339,13 +339,13 @@ object WatchPage:
       role := List("status"),
       aria.live := "polite",
       span(cls := "session-check__spinner", aria.hidden := true),
-      strong("Restoring your progress…")
+      strong("Restoring your progress…"),
     )
 
   private def playbackError(
       course: Course,
       message: String,
-      retry: IO[Unit]
+      retry: IO[Unit],
   ): Resource[IO, HtmlElement[IO]] =
     div(
       cls := "playback-state playback-state--error",
@@ -357,7 +357,7 @@ object WatchPage:
         cls := "button button--light",
         onClick(retry),
         Icons(Icon.RefreshCw),
-        "Try again"
+        "Try again",
       ),
       course.source.map { source =>
         a(
@@ -365,16 +365,16 @@ object WatchPage:
           target := "_blank",
           rel := List("noreferrer"),
           Icons(Icon.ExternalLink),
-          "View the original"
+          "View the original",
         )
-      }
+      },
     )
 
   private def lessonSlide(
       course: Course,
       lesson: Lesson,
       lessonIndex: Int,
-      phase: Int
+      phase: Int,
   ): Resource[IO, Node[IO]] =
     asNode(
       div(
@@ -383,18 +383,18 @@ object WatchPage:
           cls := "lesson-slide__top",
           aria.hidden := true,
           span(s"TYPELEVEL LEARNING CENTER / ${course.topic.toUpperCase}"),
-          span(s"LESSON ${pad2(lessonIndex + 1)}")
+          span(s"LESSON ${pad2(lessonIndex + 1)}"),
         ),
         phasePanel(course, lesson, phase),
         div(cls := "lesson-slide__shape lesson-slide__shape--one"),
-        div(cls := "lesson-slide__shape lesson-slide__shape--two")
-      )
+        div(cls := "lesson-slide__shape lesson-slide__shape--two"),
+      ),
     )
 
   private def phasePanel(
       course: Course,
       lesson: Lesson,
-      phase: Int
+      phase: Int,
   ): Resource[IO, Node[IO]] =
     val safeTitle = lesson.title.replace("\"", "'")
     val demoCode  =
@@ -411,7 +411,7 @@ object WatchPage:
             p("FOCUSED LESSON"),
             div(cls := "lesson-slide__display-title", lesson.title),
             span(cls := "lesson-slide__rule"),
-            small(course.instructor.name)
+            small(course.instructor.name),
           )
         case 1 =>
           div(
@@ -419,7 +419,7 @@ object WatchPage:
             aria.hidden := true,
             p("UNDERSTAND. THEN PRACTICE."),
             pre(demoCode),
-            small("Turn the explanation into a small, concrete exercise.")
+            small("Turn the explanation into a small, concrete exercise."),
           )
         case _ =>
           div(
@@ -430,7 +430,7 @@ object WatchPage:
               cls := "lesson-slide__display-title",
               "Understand it.",
               br(()),
-              span("Make it yours.")
+              span("Make it yours."),
             ),
             div(
               cls := "lesson-slide__steps",
@@ -438,16 +438,16 @@ object WatchPage:
               i(()),
               span("practice"),
               i(()),
-              span("apply")
-            )
-          )
+              span("apply"),
+            ),
+          ),
     )
 
   private def customVideoControls(
       stage: dom.Element,
       controller: PlayerController,
       refs: PlayerRefs,
-      showCaptions: Boolean
+      showCaptions: Boolean,
   ): Resource[IO, HtmlElement[IO]] =
     val timeLabel = (refs.currentTime: Signal[IO, Double], refs.duration: Signal[IO, Double]).mapN {
       (time, total) => s"${formatTime(time)} / ${formatTime(total)}"
@@ -470,11 +470,11 @@ object WatchPage:
                       aria.label <-- refs.isPlaying.map(if _ then "Pause video" else "Play video"),
                       title <-- refs.isPlaying.map(if _ then "Pause (Space)" else "Play (Space)"),
                       refs.isPlaying.map(playing =>
-                        asNode(Icons(if playing then Icon.Pause else Icon.Play))
-                      )
+                        asNode(Icons(if playing then Icon.Pause else Icon.Play)),
+                      ),
                     )
       _ <- Resource.eval(
-             IO.delay(rawElement(playButton).setAttribute("aria-keyshortcuts", "Space"))
+             IO.delay(rawElement(playButton).setAttribute("aria-keyshortcuts", "Space")),
            )
       controls <- div(
                     cls := "custom-video-controls video-player-chrome",
@@ -491,20 +491,20 @@ object WatchPage:
                         value <-- timelineValue,
                         aria.label := "Video timeline",
                         styleAttr <-- timelineStyle,
-                        onInput(controller.seek(self))
+                        onInput(controller.seek(self)),
                       )
                     },
                     Option.when(showCaptions) {
                       button(
                         typ := "button",
                         cls <-- controller.shared.captionsOn.map(on =>
-                          if on then List("is-active") else Nil
+                          if on then List("is-active") else Nil,
                         ),
                         onClick(controller.toggleCaptions),
                         aria.label <-- controller.shared.captionsOn.map(
-                          if _ then "Turn captions off" else "Turn captions on"
+                          if _ then "Turn captions off" else "Turn captions on",
                         ),
-                        Icons(Icon.Captions)
+                        Icons(Icon.Captions),
                       )
                     },
                     button(
@@ -514,14 +514,14 @@ object WatchPage:
                       else "Mute video"),
                       controller.shared.isMuted.map { muted =>
                         asNode(Icons(if muted then Icon.VolumeX else Icon.Volume2))
-                      }
+                      },
                     ),
                     button(
                       typ := "button",
                       onClick(toggleFullscreen(stage)),
                       aria.label := "Toggle fullscreen",
-                      Icons(Icon.Maximize)
-                    )
+                      Icons(Icon.Maximize),
+                    ),
                   )
     yield controls
 
@@ -533,7 +533,7 @@ object WatchPage:
       lessonProgress: Signal[IO, Option[PlaybackProgress]],
       val shared: SharedState,
       refs: PlayerRefs,
-      video: dom.HTMLVideoElement
+      video: dom.HTMLVideoElement,
   ):
     private def sourceReady: IO[Boolean] = refs.sourceState.get.map {
       case SourceState.Ready(_) => true
@@ -597,7 +597,7 @@ object WatchPage:
             progress <- lessonProgress.get
             _        <- refs.refreshSnapshot.set(Some(RefreshSnapshot(position, !video.paused)))
             _        <- IO.whenA(position > 0.0 || !progress.exists(_.completed))(
-                   queueProgressSave(position)
+                   queueProgressSave(position),
                  )
           yield ()
         case _ => IO.unit
@@ -632,7 +632,7 @@ object WatchPage:
                               progress        = progress,
                               refreshPosition = snapshot.map(_.position),
                               lessonDuration  = lesson.durationSeconds,
-                              mediaDuration   = mediaLimit
+                              mediaDuration   = mediaLimit,
                             )
                  shouldSeek = math.abs(video.currentTime - position) > 0.01
                  _         <- refs.suppressSeekSave.set(shouldSeek)
@@ -664,7 +664,7 @@ object WatchPage:
       sourceReady.ifM(
         refs.latestPosition.set(finiteOrZero(video.currentTime)) *>
           refs.currentTime.set(finiteOrZero(video.currentTime)),
-        IO.unit
+        IO.unit,
       )
 
     def handleSeeked: IO[Unit] =
@@ -673,7 +673,7 @@ object WatchPage:
         else
           (sourceReady, refs.restored.get).tupled.flatMap { (ready, restored) =>
             IO.whenA(ready && restored)(
-              refs.hasPlaybackActivity.set(true) *> queueProgressSave(video.currentTime)
+              refs.hasPlaybackActivity.set(true) *> queueProgressSave(video.currentTime),
             )
           }
       }
@@ -708,8 +708,8 @@ object WatchPage:
                   refs.isPlaying.set(false) *>
                   refs.sourceState.set(
                     SourceState.Failed(
-                      "The secure video URL could not be loaded. Please request a new one."
-                    )
+                      "The secure video URL could not be loaded. Please request a new one.",
+                    ),
                   )
             }
         case _ => IO.unit
@@ -720,7 +720,7 @@ object WatchPage:
     def togglePlayback: IO[Unit] =
       playerReady.ifM(
         IO.delay(video.paused).flatMap(if _ then playVideo(video) else IO.delay(video.pause())),
-        IO.unit
+        IO.unit,
       )
 
     def seek(input: HtmlInputElement[IO]): IO[Unit] =
@@ -768,7 +768,7 @@ object WatchPage:
     def checkpoint: IO[Unit] =
       refs.isPlaying.get.ifM(
         refs.latestPosition.get.flatMap(queueProgressSave(_)),
-        IO.unit
+        IO.unit,
       )
 
     def flushProgress: IO[Unit] =
@@ -786,7 +786,7 @@ object WatchPage:
 
   private def videoEvents(
       video: HtmlVideoElement[IO],
-      controller: PlayerController
+      controller: PlayerController,
   ): Resource[IO, Unit] =
     video.modify(
       (
@@ -798,8 +798,8 @@ object WatchPage:
         onTimeUpdate(controller.handleTimeUpdate),
         onSeeked(controller.handleSeeked),
         onEnded(controller.handleEnded),
-        onError(controller.handleMediaError)
-      )
+        onError(controller.handleMediaError),
+      ),
     )
 
   private def sourceLifecycle(refs: PlayerRefs, controller: PlayerController): Resource[IO, Unit] =
@@ -828,7 +828,7 @@ object WatchPage:
   private def stageEvents(
       stage: dom.Element,
       controller: PlayerController,
-      chromeVisible: Signal[IO, Boolean]
+      chromeVisible: Signal[IO, Boolean],
   ): Resource[IO, Unit] =
     // Calico 0.2.3 has no bubbling focusin/focusout modifiers or data-* attribute builder.
     val focusIn =
@@ -854,7 +854,7 @@ object WatchPage:
 
   private def progressStatusLifecycle(
       status: Signal[IO, RemoteStateStatus],
-      controller: PlayerController
+      controller: PlayerController,
   ): Resource[IO, Unit] =
     (IO.cede *> status.discrete
       .evalMap(_ => controller.restoreProgress)
@@ -879,26 +879,26 @@ object WatchPage:
 
     Resource
       .make(
-        (IO.cede *> visibility.merge(pageHide).compile.drain).start
+        (IO.cede *> visibility.merge(pageHide).compile.drain).start,
       )(fiber => fiber.cancel *> controller.release)
       .void
 
   private def setupVideo(
       video: dom.HTMLVideoElement,
-      thumbnail: Option[String]
+      thumbnail: Option[String],
   ): Resource[IO, Unit] =
     Resource.make(
       IO.delay {
         video.setAttribute("playsinline", "")
         video.preload = "metadata"
         video.poster  = thumbnail.getOrElse("")
-      }
+      },
     )(_ =>
       IO.delay {
         video.pause()
         video.removeAttribute("src")
         video.load()
-      }
+      },
     )
 
   private def setupCaptions(video: dom.HTMLVideoElement): Resource[IO, Unit] =
@@ -962,7 +962,7 @@ object WatchPage:
       progress: Option[PlaybackProgress],
       refreshPosition: Option[Double],
       lessonDuration: Int,
-      mediaDuration: Double
+      mediaDuration: Double,
   ): Double =
     val requested = refreshPosition.getOrElse {
       if progress.exists(_.completed) then 0.0
@@ -975,8 +975,8 @@ object WatchPage:
       case element: dom.Element =>
         Option(
           element.closest(
-            "input, textarea, select, button, a, [role='slider'], [contenteditable]:not([contenteditable='false'])"
-          )
+            "input, textarea, select, button, a, [role='slider'], [contenteditable]:not([contenteditable='false'])",
+          ),
         ).nonEmpty
       case _ => false
 
@@ -1031,7 +1031,7 @@ object WatchPage:
           href := ctx.navigator.href(browseRoute),
           ctx.navigator.intercept(self, browseRoute),
           Icons(Icon.ArrowLeft),
-          "Browse videos"
+          "Browse videos",
         )
-      }
+      },
     )

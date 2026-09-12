@@ -7,5 +7,5 @@ object Telemetry:
 
   def resource(serviceName: String): Resource[IO, OtelJava[IO]] =
     OtelJava.autoConfigured[IO](
-      _.addPropertiesSupplier(() => java.util.Map.of("otel.service.name", serviceName))
+      _.addPropertiesSupplier(() => java.util.Map.of("otel.service.name", serviceName)),
     )
