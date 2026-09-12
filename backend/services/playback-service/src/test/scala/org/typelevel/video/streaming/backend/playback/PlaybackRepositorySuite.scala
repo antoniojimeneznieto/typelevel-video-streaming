@@ -386,7 +386,7 @@ object PlaybackRepositorySuite extends SimpleIOSuite:
     val marker = "SET ROLE playback;"
     val start  = sql.indexOf(marker, section)
     require(start >= 0, "Playback schema start is missing")
-    val end = sql.indexOf("-- End Playback projections", start)
+    val end = sql.indexOf("RESET ROLE;", start)
     require(end > start, "Playback schema end is missing")
     val ddl = sql
       .substring(start + marker.length, end)
