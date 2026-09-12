@@ -3,7 +3,6 @@ import { defineConfig, loadEnv } from 'vite'
 
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  // Match the explicit linker directories in build.sbt; no sbt console-output parsing.
   const scalaJSDirectory = fileURLToPath(
     new URL(`./target/scalajs-${command === 'serve' ? 'fast' : 'full'}/`, import.meta.url),
   )

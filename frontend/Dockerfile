@@ -1,7 +1,6 @@
 FROM node:22-bookworm-slim AS node
 
 FROM sbtscala/scala-sbt:eclipse-temurin-21.0.12_8_1.13.0_3.3.8 AS build
-# The launcher loads sbt 2.0.7 from project/build.properties.
 USER root
 COPY --from=node /usr/local/ /usr/local/
 

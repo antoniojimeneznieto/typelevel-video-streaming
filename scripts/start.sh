@@ -65,7 +65,6 @@ sbt 'statusService/Docker/publishLocal; identityService/Docker/publishLocal; cat
 
 stage="validating backend image entrypoints"
 echo "$stage"
-# Load each image's main class without starting the application.
 for service_name in status identity catalog playback; do
   docker run --rm --network none \
     "typelevel-video-streaming/$service_name-service:local" \

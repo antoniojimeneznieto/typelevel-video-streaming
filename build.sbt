@@ -15,7 +15,6 @@ val Smithy4sVersion       = "0.19.11"
 val Fs2KafkaVersion       = "4.1.0-RC1"
 val Fs2KafkaOtel4sVersion = "0.2.0-RC1"
 val Otel4sVersion         = "1.1.0"
-// Keep aligned with the OpenTelemetry Java SDK used by otel4s.
 val OpenTelemetryVersion = "1.64.0"
 val CirisVersion         = "3.9.0"
 val AwsSdkVersion        = "2.49.2"
@@ -46,7 +45,6 @@ def noPublishSettings =
 def serviceSettings(serviceName: String, mainClassName: String, exposedPort: Int) =
   Seq(
     name := serviceName,
-    // sbt 2 caches tasks by their .value inputs, not captured helper arguments.
     serviceMainClass := mainClassName,
     Compile / mainClass := Some(serviceMainClass.value),
     Compile / run / fork := true,
