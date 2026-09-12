@@ -1,0 +1,357 @@
+name: typelevel-video-streaming
+
+services:
+  frontend:
+    image: typelevel-video-streaming/frontend:local
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    pull_policy: never
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:8080"
+    depends_on:
+      - identity-service
+      - catalog-service
+      - playback-service
+    restart: unless-stopped
+
+  status-service:
+    image: typelevel-video-streaming/status-service:local
+    pull_policy: never
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8080"
+    ports:
+      - "${STATUS_SERVICE_PORT:-8080}:8080"
+    restart: unless-stopped
+
+  identity-service:
+    image: typelevel-video-streaming/identity-service:local
+    pull_policy: never
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8081"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: identity
+      POSTGRES_DB: identity
+      POSTGRES_PASSWORD: ${IDENTITY_POSTGRES_PASSWORD:-identity-local-secret}
+      POSTGRES_MAX_CONNECTIONS: "10"
+      JWT_PRIVATE_KEY_PATH: /run/secrets/identity-private-key.pem
+      JWT_PUBLIC_KEY_PATH: /run/secrets/identity-public-key.pem
+      JWT_ACCESS_TOKEN_EXPIRES_IN_SECONDS: "7200"
+    ports:
+      - "${IDENTITY_SERVICE_PORT:-8081}:8081"
+    volumes:
+      - ./infrastructure/identity/keys/private-key.pem:/run/secrets/identity-private-key.pem:ro
+      - ./infrastructure/identity/keys/public-key.pem:/run/secrets/identity-public-key.pem:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  catalog-service:
+    image: typelevel-video-streaming/catalog-service:local
+    pull_policy: never
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8082"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: catalog
+      POSTGRES_DB: catalog
+      POSTGRES_PASSWORD: ${CATALOG_POSTGRES_PASSWORD:-catalog-local-secret}
+      POSTGRES_MAX_CONNECTIONS: "10"
+    ports:
+      - "${CATALOG_SERVICE_PORT:-8082}:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  playback-service:
+    image: typelevel-video-streaming/playback-service:local
+    pull_policy: never
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8083"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: playback
+      POSTGRES_DB: playback
+      POSTGRES_PASSWORD: ${PLAYBACK_POSTGRES_PASSWORD:-playback-local-secret}
+      POSTGRES_MAX_CONNECTIONS: "10"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-playback-projections-v1}
+      KAFKA_LESSON_PUBLISHED_TOPIC: ${KAFKA_LESSON_PUBLISHED_TOPIC:-catalog.lesson-published.v1}
+      KAFKA_USER_CREATED_TOPIC: ${KAFKA_USER_CREATED_TOPIC:-identity.user-created.v1}
+      JWT_PUBLIC_KEY_PATH: /run/secrets/identity-public-key.pem
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:${MINIO_API_PORT:-9000}}
+      S3_BUCKET: ${S3_BUCKET:-videos}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-${MINIO_ROOT_USER:-catalogservice}}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-${MINIO_ROOT_PASSWORD:-catalogservice-local-secret}}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      S3_PATH_STYLE_ACCESS_ENABLED: ${S3_PATH_STYLE_ACCESS_ENABLED:-true}
+      S3_URL_EXPIRES_IN_SECONDS: ${S3_URL_EXPIRES_IN_SECONDS:-900}
+    ports:
+      - "${PLAYBACK_SERVICE_PORT:-8083}:8083"
+    volumes:
+      - ./infrastructure/identity/keys/public-key.pem:/run/secrets/identity-public-key.pem:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=10", "-c", "max_wal_senders=10"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      IDENTITY_POSTGRES_PASSWORD: ${IDENTITY_POSTGRES_PASSWORD:-identity-local-secret}
+      IDENTITY_DEBEZIUM_PASSWORD: ${IDENTITY_DEBEZIUM_PASSWORD:-identity-debezium-local-secret}
+      CATALOG_POSTGRES_PASSWORD: ${CATALOG_POSTGRES_PASSWORD:-catalog-local-secret}
+      CATALOG_DEBEZIUM_PASSWORD: ${CATALOG_DEBEZIUM_PASSWORD:-catalog-debezium-local-secret}
+      PLAYBACK_POSTGRES_PASSWORD: ${PLAYBACK_POSTGRES_PASSWORD:-playback-local-secret}
+    volumes:
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/postgresql/data:size=1g,mode=0700
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:4.0.2
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,HOST://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,HOST://localhost:${KAFKA_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    tmpfs:
+      - /var/lib/kafka/data:size=1g,uid=1000,gid=1000,mode=0700
+      - /mnt/shared/config:size=16m,uid=1000,gid=1000,mode=0700
+      - /etc/kafka/secrets:size=1m,uid=1000,gid=1000,mode=0700
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      start_period: 20s
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    ports:
+      - "127.0.0.1:${KAFKA_PORT:-9092}:9094"
+    restart: unless-stopped
+
+  kafka-init:
+    image: apache/kafka:4.0.2
+    environment:
+      KAFKA_LESSON_PUBLISHED_TOPIC: ${KAFKA_LESSON_PUBLISHED_TOPIC:-catalog.lesson-published.v1}
+      KAFKA_USER_CREATED_TOPIC: ${KAFKA_USER_CREATED_TOPIC:-identity.user-created.v1}
+    entrypoint: ["/bin/bash", "-ec"]
+    command:
+      - |
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+          --topic "$$KAFKA_LESSON_PUBLISHED_TOPIC" --partitions 3 --replication-factor 1 \
+          --config retention.ms=-1 --config retention.bytes=-1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+          --topic "$$KAFKA_USER_CREATED_TOPIC" --partitions 3 --replication-factor 1 \
+          --config retention.ms=-1 --config retention.bytes=-1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+          --topic debezium-connect-configs --partitions 1 --replication-factor 1 \
+          --config cleanup.policy=compact
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+          --topic debezium-connect-offsets --partitions 3 --replication-factor 1 \
+          --config cleanup.policy=compact
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+          --topic debezium-connect-status --partitions 3 --replication-factor 1 \
+          --config cleanup.policy=compact
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+
+  debezium-connect:
+    image: quay.io/debezium/connect:3.4.3.Final
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: identity-outbox-connect-v1
+      CONFIG_STORAGE_TOPIC: debezium-connect-configs
+      OFFSET_STORAGE_TOPIC: debezium-connect-offsets
+      STATUS_STORAGE_TOPIC: debezium-connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_PARTITIONS: "3"
+      CONNECT_STATUS_STORAGE_PARTITIONS: "3"
+      CONNECT_TOPIC_CREATION_ENABLE: "false"
+      REST_HOST_NAME: 0.0.0.0
+      ADVERTISED_HOST_NAME: debezium-connect
+      OFFSET_FLUSH_INTERVAL_MS: "1000"
+      KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_CONFIG_PROVIDERS: env
+      CONNECT_CONFIG_PROVIDERS_ENV_CLASS: org.apache.kafka.common.config.provider.EnvVarConfigProvider
+      CONNECT_CONFIG_PROVIDERS_ENV_PARAM_ALLOWLIST_PATTERN: "^(IDENTITY_DEBEZIUM_PASSWORD|CATALOG_DEBEZIUM_PASSWORD|KAFKA_USER_CREATED_TOPIC|KAFKA_LESSON_PUBLISHED_TOPIC)$$"
+      IDENTITY_DEBEZIUM_PASSWORD: ${IDENTITY_DEBEZIUM_PASSWORD:-identity-debezium-local-secret}
+      CATALOG_DEBEZIUM_PASSWORD: ${CATALOG_DEBEZIUM_PASSWORD:-catalog-debezium-local-secret}
+      KAFKA_USER_CREATED_TOPIC: ${KAFKA_USER_CREATED_TOPIC:-identity.user-created.v1}
+      KAFKA_LESSON_PUBLISHED_TOPIC: ${KAFKA_LESSON_PUBLISHED_TOPIC:-catalog.lesson-published.v1}
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "5", "http://localhost:8083/connectors"]
+      start_period: 30s
+      interval: 5s
+      timeout: 6s
+      retries: 24
+    ports:
+      - "127.0.0.1:${DEBEZIUM_CONNECT_PORT:-8084}:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  identity-outbox-init:
+    image: typelevel-video-streaming/outbox-init:local
+    build: ./infrastructure/debezium
+    environment:
+      DEBEZIUM_CONNECT_URL: http://debezium-connect:8083
+      OUTBOX_SERVICE: identity
+    depends_on:
+      debezium-connect:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
+  catalog-outbox-init:
+    image: typelevel-video-streaming/outbox-init:local
+    build: ./infrastructure/debezium
+    environment:
+      DEBEZIUM_CONNECT_URL: http://debezium-connect:8083
+      OUTBOX_SERVICE: catalog
+    depends_on:
+      debezium-connect:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin-local-secret}
+      PGADMIN_DISABLE_POSTFIX: "true"
+    volumes:
+      - ./infrastructure/postgres/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    tmpfs:
+      - /var/lib/pgadmin:size=128m,uid=5050,gid=0,mode=0700
+    ports:
+      - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  playback-ready:
+    profiles: ["readiness"]
+    image: typelevel-video-streaming/playback-ready:local
+    build: ./infrastructure/playback/ready
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      IDENTITY_POSTGRES_PASSWORD: ${IDENTITY_POSTGRES_PASSWORD:-identity-local-secret}
+      CATALOG_POSTGRES_PASSWORD: ${CATALOG_POSTGRES_PASSWORD:-catalog-local-secret}
+      PLAYBACK_POSTGRES_PASSWORD: ${PLAYBACK_POSTGRES_PASSWORD:-playback-local-secret}
+      DEBEZIUM_CONNECT_URL: http://debezium-connect:8083
+      PLAYBACK_HOST: playback-service
+      PLAYBACK_PORT: "8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      identity-outbox-init:
+        condition: service_completed_successfully
+      catalog-outbox-init:
+        condition: service_completed_successfully
+      playback-service:
+        condition: service_started
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
+  minio-seed:
+    profiles: ["seed"]
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    entrypoint: ["/bin/bash", "/seed/seed.sh"]
+    environment:
+      SEED_VIDEOS: ${SEED_VIDEOS:-true}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-catalogservice}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-catalogservice-local-secret}
+      S3_BUCKET: ${S3_BUCKET:-videos}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+    volumes:
+      - ./infrastructure/minio/seed/seed.sh:/seed/seed.sh:ro
+      - ./infrastructure/minio/videos:/videos:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-catalogservice}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-catalogservice-local-secret}
+      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:${FRONTEND_PORT:-3000}
+    tmpfs:
+      - /data:size=2g,mode=0700
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    restart: unless-stopped
