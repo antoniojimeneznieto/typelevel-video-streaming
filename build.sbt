@@ -58,7 +58,8 @@ lazy val backend = project
   .aggregate(
     runtime,
     events,
-    statusService
+    statusService,
+    identityService
   )
   .enablePlugins(NoPublishPlugin)
   .settings(
@@ -112,6 +113,31 @@ lazy val statusService = project
       "org.typelevel" %% "cats-effect" % CatsEffectVersion,
       "com.comcast" %% "ip4s-core" % Ip4sVersion,
       "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
+      "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect")
+  )
+
+lazy val identityService = project
+  .in(file("backend/services/identity-service"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin, NoPublishPlugin, Smithy4sCodegenPlugin)
+  .dependsOn(runtime, events)
+  .settings(
+    serviceSettings(
+      serviceName   = "identity-service",
+      mainClassName = "org.typelevel.video.streaming.backend.identity.Main",
+      exposedPort   = 8081
+    )
+  )
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "com.disneystreaming.smithy4s" %% "smithy4s-core" % Smithy4sVersion,
+      "com.comcast" %% "ip4s-core" % Ip4sVersion,
+      "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
+      "org.tpolecat" %% "skunk-core" % SkunkVersion,
+      "com.password4j" % "password4j" % Password4jVersion,
       "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
     ),
