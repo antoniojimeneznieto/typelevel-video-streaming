@@ -57,7 +57,8 @@ lazy val backend = project
   .in(file("backend"))
   .aggregate(
     runtime,
-    events
+    events,
+    statusService
   )
   .enablePlugins(NoPublishPlugin)
   .settings(
@@ -93,4 +94,26 @@ lazy val events = project
     Compile / exportJars := true,
     libraryDependencies +=
       "com.disneystreaming.smithy4s" %% "smithy4s-core" % Smithy4sVersion
+  )
+
+lazy val statusService = project
+  .in(file("backend/services/status-service"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin, NoPublishPlugin)
+  .dependsOn(runtime)
+  .settings(
+    serviceSettings(
+      serviceName   = "status-service",
+      mainClassName = "org.typelevel.video.streaming.backend.status.Main",
+      exposedPort   = 8080
+    )
+  )
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "com.comcast" %% "ip4s-core" % Ip4sVersion,
+      "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
+      "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect")
   )
