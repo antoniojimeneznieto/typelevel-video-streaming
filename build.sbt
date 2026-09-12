@@ -60,7 +60,8 @@ lazy val backend = project
     events,
     statusService,
     identityService,
-    catalogService
+    catalogService,
+    playbackService
   )
   .enablePlugins(NoPublishPlugin)
   .settings(
@@ -163,6 +164,29 @@ lazy val catalogService = project
       "com.comcast" %% "ip4s-core" % Ip4sVersion,
       "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
+      "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect")
+  )
+
+lazy val playbackService = project
+  .in(file("backend/services/playback-service"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin, NoPublishPlugin, Smithy4sCodegenPlugin)
+  .dependsOn(runtime, events)
+  .settings(
+    serviceSettings(
+      serviceName   = "playback-service",
+      mainClassName = "org.typelevel.video.streaming.backend.playback.Main",
+      exposedPort   = 8083
+    )
+  )
+  .settings(
+    libraryDependencies ++= Seq(
+      "software.amazon.awssdk" % "s3" % AwsSdkVersion,
+      "org.typelevel" %% "fs2-kafka" % Fs2KafkaVersion,
+      "software.amazon.awssdk" % "url-connection-client" % AwsSdkVersion,
+      "software.amazon.awssdk" % "sts" % AwsSdkVersion,
       "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
     ),
