@@ -46,11 +46,37 @@ def serviceSettings(serviceName: String, mainClassName: String, exposedPort: Int
 
 lazy val root = project
   .in(file("."))
-  .aggregate(backend)
+  .aggregate(backend, frontend)
   .enablePlugins(NoPublishPlugin)
   .settings(
     name := "typelevel-video-streaming",
     publish / skip := true
+  )
+
+lazy val frontend = project
+  .in(file("frontend"))
+  .enablePlugins(ScalaJSPlugin, NoPublishPlugin)
+  .settings(
+    name := "frontend",
+    scalaJSUseMainModuleInitializer := true,
+    scalaJSLinkerConfig ~= {
+      _.withModuleKind(ModuleKind.ESModule)
+        .withModuleSplitStyle(ModuleSplitStyle.SmallModulesFor(List("typelevel.courses")))
+    },
+    libraryDependencies ++= Seq(
+      "com.armanbilge" %%% "calico" % "0.2.3",
+      "com.armanbilge" %%% "calico-router" % "0.2.3",
+      "com.armanbilge" %%% "fs2-dom" % "0.2.1",
+      "co.fs2" %%% "fs2-core" % "3.11.0",
+      "org.http4s" %%% "http4s-dom" % "0.2.12",
+      "org.http4s" %%% "http4s-circe" % Http4sStableVersion,
+      "org.scala-js" %%% "scalajs-dom" % "2.8.0",
+      "org.typelevel" %%% "cats-core" % "2.13.0",
+      "org.typelevel" %%% "cats-effect" % CatsEffectVersion,
+      "io.circe" %%% "circe-core" % "0.14.16",
+      "io.circe" %%% "circe-parser" % "0.14.16",
+      "org.typelevel" %%% "munit-cats-effect" % "2.2.0" % Test
+    )
   )
 
 lazy val backend = project
