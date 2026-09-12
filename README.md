@@ -36,9 +36,9 @@ From the repository root:
 The script builds the images, initializes the databases, uploads the bundled demo videos to MinIO,
 and starts the frontend, backend services, and infrastructure. The first run can take several minutes.
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:8000](http://localhost:8000).
 
-Grafana is available at [http://localhost:3001](http://localhost:3001) (login: `admin` / `admin`).
+Grafana is available at [http://localhost:3000](http://localhost:3000) (login: `admin` / `admin`).
 The four backend services export HTTP traces and metrics to the bundled collector over the Docker network.
 
 The stack runs in the background. To stop it:
