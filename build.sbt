@@ -46,8 +46,51 @@ def serviceSettings(serviceName: String, mainClassName: String, exposedPort: Int
 
 lazy val root = project
   .in(file("."))
+  .aggregate(backend)
   .enablePlugins(NoPublishPlugin)
   .settings(
     name := "typelevel-video-streaming",
     publish / skip := true
+  )
+
+lazy val backend = project
+  .in(file("backend"))
+  .aggregate(
+    runtime,
+    events
+  )
+  .enablePlugins(NoPublishPlugin)
+  .settings(
+    name := "backend",
+    publish / skip := true
+  )
+
+lazy val runtime = project
+  .in(file("backend/modules/runtime"))
+  .enablePlugins(NoPublishPlugin)
+  .settings(
+    name := "runtime",
+    Compile / exportJars := true,
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "com.comcast" %% "ip4s-core" % Ip4sVersion,
+      "co.fs2" %% "fs2-io" % Fs2Version,
+      "is.cir" %% "ciris" % CirisVersion,
+      "org.http4s" %% "http4s-ember-server" % Http4sStableVersion,
+      "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % Smithy4sVersion,
+      "org.tpolecat" %% "skunk-core" % SkunkVersion,
+      "com.auth0" % "java-jwt" % JavaJwtVersion,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect")
+  )
+
+lazy val events = project
+  .in(file("backend/modules/events"))
+  .enablePlugins(NoPublishPlugin, Smithy4sCodegenPlugin)
+  .settings(
+    name := "events",
+    Compile / exportJars := true,
+    libraryDependencies +=
+      "com.disneystreaming.smithy4s" %% "smithy4s-core" % Smithy4sVersion
   )
