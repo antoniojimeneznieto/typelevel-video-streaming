@@ -63,6 +63,15 @@ stage="building backend images"
 echo "$stage"
 sbt 'statusService/Docker/publishLocal; identityService/Docker/publishLocal; catalogService/Docker/publishLocal; playbackService/Docker/publishLocal'
 
+stage="validating backend image entrypoints"
+echo "$stage"
+# Load each image's main class without starting the application.
+for service_name in status identity catalog playback; do
+  docker run --rm --network none \
+    "typelevel-video-streaming/$service_name-service:local" \
+    -J--dry-run
+done
+
 stage="preparing Identity signing keys"
 echo "$stage"
 bash "$script_directory/generate-identity-keys.sh"

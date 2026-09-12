@@ -33,29 +33,33 @@ semanticdbVersion := scalafixSemanticdb.revision
 addCommandAlias("fix", "; scalafixAll; scalafmtAll; scalafmtSbt")
 addCommandAlias("lint", "; scalafixAll --check; scalafmtCheckAll; scalafmtSbtCheck")
 
+val serviceMainClass = settingKey[String]("Main class for this service's application launcher")
+
 def noPublishSettings =
   Def.settings(
     publish := {},
     publishLocal := {},
     publishArtifact := false,
-    publish / skip := true
+    publish / skip := true,
   )
 
 def serviceSettings(serviceName: String, mainClassName: String, exposedPort: Int) =
   Seq(
     name := serviceName,
-    Compile / mainClass := Some(mainClassName),
+    // sbt 2 caches tasks by their .value inputs, not captured helper arguments.
+    serviceMainClass := mainClassName,
+    Compile / mainClass := Some(serviceMainClass.value),
     Compile / run / fork := true,
     dockerAlias :=
       DockerAlias(
         registryHost = None,
         username     = Some("typelevel-video-streaming"),
         name         = serviceName,
-        tag          = Some("local")
+        tag          = Some("local"),
       ),
     dockerBaseImage := "eclipse-temurin:17-jre-noble",
     dockerExposedPorts := Seq(exposedPort),
-    dockerUpdateLatest := false
+    dockerUpdateLatest := false,
   )
 
 lazy val root = project
@@ -64,7 +68,7 @@ lazy val root = project
   .settings(noPublishSettings)
   .settings(
     name := "typelevel-video-streaming",
-    publish / skip := true
+    publish / skip := true,
   )
 
 lazy val frontend = project
@@ -94,8 +98,8 @@ lazy val frontend = project
       "org.typelevel" %% "cats-effect" % CatsEffectVersion,
       "io.circe" %% "circe-core" % "0.14.16",
       "io.circe" %% "circe-parser" % "0.14.16",
-      "org.typelevel" %% "munit-cats-effect" % "2.2.0" % Test
-    )
+      "org.typelevel" %% "munit-cats-effect" % "2.2.0" % Test,
+    ),
   )
 
 lazy val backend = project
@@ -106,12 +110,12 @@ lazy val backend = project
     statusService,
     identityService,
     catalogService,
-    playbackService
+    playbackService,
   )
   .settings(noPublishSettings)
   .settings(
     name := "backend",
-    publish / skip := true
+    publish / skip := true,
   )
 
 lazy val runtime = project
@@ -134,9 +138,9 @@ lazy val runtime = project
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % Smithy4sVersion,
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
       "com.auth0" % "java-jwt" % JavaJwtVersion,
-      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
-    testFrameworks += new TestFramework("weaver.framework.CatsEffect")
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
 
 lazy val events = project
@@ -147,7 +151,7 @@ lazy val events = project
     name := "events",
     Compile / exportJars := true,
     libraryDependencies +=
-      "com.disneystreaming.smithy4s" %% "smithy4s-core" % Smithy4sVersion
+      "com.disneystreaming.smithy4s" %% "smithy4s-core" % Smithy4sVersion,
   )
 
 lazy val statusService = project
@@ -159,8 +163,8 @@ lazy val statusService = project
     serviceSettings(
       serviceName   = "status-service",
       mainClassName = "org.typelevel.video.streaming.backend.status.Main",
-      exposedPort   = 8080
-    )
+      exposedPort   = 8080,
+    ),
   )
   .settings(
     libraryDependencies ++= Seq(
@@ -168,9 +172,9 @@ lazy val statusService = project
       "com.comcast" %% "ip4s-core" % Ip4sVersion,
       "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
       "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
-      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
-    testFrameworks += new TestFramework("weaver.framework.CatsEffect")
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
 
 lazy val identityService = project
@@ -182,8 +186,8 @@ lazy val identityService = project
     serviceSettings(
       serviceName   = "identity-service",
       mainClassName = "org.typelevel.video.streaming.backend.identity.Main",
-      exposedPort   = 8081
-    )
+      exposedPort   = 8081,
+    ),
   )
   .settings(
     libraryDependencies ++= Seq(
@@ -194,9 +198,9 @@ lazy val identityService = project
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
       "com.password4j" % "password4j" % Password4jVersion,
       "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
-      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
-    testFrameworks += new TestFramework("weaver.framework.CatsEffect")
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
 
 lazy val catalogService = project
@@ -208,8 +212,8 @@ lazy val catalogService = project
     serviceSettings(
       serviceName   = "catalog-service",
       mainClassName = "org.typelevel.video.streaming.backend.catalog.Main",
-      exposedPort   = 8082
-    )
+      exposedPort   = 8082,
+    ),
   )
   .settings(
     libraryDependencies ++= Seq(
@@ -219,9 +223,9 @@ lazy val catalogService = project
       "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
       "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
-      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
-    testFrameworks += new TestFramework("weaver.framework.CatsEffect")
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
 
 lazy val playbackService = project
@@ -233,8 +237,8 @@ lazy val playbackService = project
     serviceSettings(
       serviceName   = "playback-service",
       mainClassName = "org.typelevel.video.streaming.backend.playback.Main",
-      exposedPort   = 8083
-    )
+      exposedPort   = 8083,
+    ),
   )
   .settings(
     libraryDependencies ++= Seq(
@@ -244,7 +248,7 @@ lazy val playbackService = project
       "software.amazon.awssdk" % "url-connection-client" % AwsSdkVersion,
       "software.amazon.awssdk" % "sts" % AwsSdkVersion,
       "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
-      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
-    testFrameworks += new TestFramework("weaver.framework.CatsEffect")
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
