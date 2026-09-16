@@ -1,63 +1,63 @@
 import com.typesafe.sbt.packager.docker.DockerAlias
-import org.scalajs.linker.interface.ModuleKind
+import org.scalajs.linker.interface.{ModuleKind, ModuleSplitStyle}
 
-val ScalaLtsVersion = "3.3.8"
-val CatsEffectVersion = "3.7.0"
-val Fs2Version = "3.13.0"
-val Http4sStableVersion = "0.23.34"
-val Http4sDomVersion = "0.2.12"
-val Http4sOtel4sVersion = "0.18.0"
-val CalicoVersion = "0.2.3"
-val Ip4sVersion = "3.8.0"
-val ScalaJsDomVersion = "2.8.1"
-val CirceVersion = "0.14.16"
-val WeaverVersion = "0.13.0"
-val LogbackVersion = "1.5.35"
-val Log4catsVersion = "2.8.0"
-val SkunkVersion = "2.0.0-RC3"
-val Smithy4sVersion = "0.19.8"
-val Fs2KafkaVersion = "4.1.0-RC1"
+val ScalaLtsVersion       = "3.3.8"
+val CatsEffectVersion     = "3.7.0"
+val Fs2Version            = "3.13.0"
+val Http4sStableVersion   = "0.23.34"
+val Http4sOtel4sVersion   = "0.18.0"
+val Ip4sVersion           = "3.8.0"
+val WeaverVersion         = "0.13.0"
+val LogbackVersion        = "1.5.35"
+val Log4catsVersion       = "2.8.0"
+val SkunkVersion          = "2.0.0-RC3"
+val Smithy4sVersion       = "0.19.11"
+val Fs2KafkaVersion       = "4.1.0-RC1"
 val Fs2KafkaOtel4sVersion = "0.2.0-RC1"
-val JavaJwtVersion = "4.5.0"
-val JwksRsaVersion = "0.22.1"
-val CirisVersion = "3.9.0"
-val FlywayVersion = "12.9.0"
-val PostgresJdbcVersion = "42.7.11"
-val Otel4sVersion = "1.1.0"
+val Otel4sVersion         = "1.1.0"
+val OpenTelemetryVersion = "1.64.0"
+val CirisVersion         = "3.9.0"
+val AwsSdkVersion        = "2.49.2"
+val Password4jVersion    = "1.8.4"
+val JavaJwtVersion       = "4.6.0"
 
-ThisBuild / organization := "org.typelevel.video.streaming"
-ThisBuild / scalaVersion := ScalaLtsVersion
-ThisBuild / version := "0.1.0-SNAPSHOT"
-//ThisBuild / tlJdkRelease := Some(17)
-ThisBuild / semanticdbEnabled := true
-ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
+organization := "org.typelevel.video.streaming"
+scalaVersion := ScalaLtsVersion
+version := "0.1.0-SNAPSHOT"
+scalacOptions ++= Seq("-release", "17")
+javacOptions ++= Seq("--release", "17")
+semanticdbEnabled := true
+semanticdbVersion := scalafixSemanticdb.revision
 
 addCommandAlias("fix", "; scalafixAll; scalafmtAll; scalafmtSbt")
 addCommandAlias("lint", "; scalafixAll --check; scalafmtCheckAll; scalafmtSbtCheck")
+
+val serviceMainClass = settingKey[String]("Main class for this service's application launcher")
 
 def noPublishSettings =
   Def.settings(
     publish := {},
     publishLocal := {},
     publishArtifact := false,
-    publish / skip := true
+    publish / skip := true,
   )
 
 def serviceSettings(serviceName: String, mainClassName: String, exposedPort: Int) =
   Seq(
     name := serviceName,
-    Compile / mainClass := Some(mainClassName),
+    serviceMainClass := mainClassName,
+    Compile / mainClass := Some(serviceMainClass.value),
     Compile / run / fork := true,
     dockerAlias :=
       DockerAlias(
         registryHost = None,
-        username = Some("typelevel-video-streaming"),
-        name = serviceName,
-        tag = Some("local")
+        username     = Some("typelevel-video-streaming"),
+        name         = serviceName,
+        tag          = Some("local"),
       ),
     dockerBaseImage := "eclipse-temurin:17-jre-noble",
     dockerExposedPorts := Seq(exposedPort),
-    dockerUpdateLatest := false
+    dockerUpdateLatest := false,
   )
 
 lazy val root = project
@@ -66,95 +66,7 @@ lazy val root = project
   .settings(noPublishSettings)
   .settings(
     name := "typelevel-video-streaming",
-    publish / skip := true
-  )
-
-lazy val backend = project
-  .in(file("backend"))
-  .aggregate(common, statusService, userService)
-  .settings(noPublishSettings)
-  .settings(
-    name := "backend",
-    publish / skip := true
-  )
-
-lazy val common = project
-  .in(file("backend/modules/common"))
-  .settings(noPublishSettings)
-  .settings(
-    name := "common",
-    Compile / exportJars := true,
-    libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
-      "org.typelevel" %% "otel4s-oteljava" % Otel4sVersion,
-      "com.comcast" %% "ip4s-core" % Ip4sVersion,
-      "org.http4s" %% "http4s-core" % Http4sStableVersion,
-      "org.http4s" %% "http4s-otel4s-middleware-metrics" % Http4sOtel4sVersion,
-      "org.typelevel" %% "log4cats-core" % Log4catsVersion,
-      "is.cir" %% "ciris" % CirisVersion,
-      "org.tpolecat" %% "skunk-core" % SkunkVersion,
-      "com.auth0" % "java-jwt" % JavaJwtVersion,
-      "com.auth0" % "jwks-rsa" % JwksRsaVersion,
-      "org.typelevel" %% "log4cats-noop" % Log4catsVersion % Test,
-      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
-    ),
-  )
-
-lazy val statusService = project
-  .in(file("backend/services/status-service"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin)
-  .dependsOn(common)
-  .settings(noPublishSettings)
-  .settings(
-    serviceSettings(
-      serviceName = "status-service",
-      mainClassName = "org.typelevel.video.streaming.backend.status.Main",
-      exposedPort = 8080
-    )
-  )
-  .settings(
-    libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
-      "co.fs2" %% "fs2-core" % Fs2Version,
-      "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
-      "org.http4s" %% "http4s-ember-server" % Http4sStableVersion,
-      "org.http4s" %% "http4s-otel4s-middleware-trace-server" % Http4sOtel4sVersion,
-      "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
-      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
-    ),
-  )
-
-lazy val userService = project
-  .in(file("backend/services/user-service"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin, Smithy4sCodegenPlugin)
-  .dependsOn(common)
-  .settings(noPublishSettings)
-  .settings(
-    serviceSettings(
-      serviceName = "user-service",
-      mainClassName = "org.typelevel.video.streaming.backend.user.Main",
-      exposedPort = 8081
-    )
-  )
-  .settings(
-    libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
-      "org.http4s" %% "http4s-ember-server" % Http4sStableVersion,
-      "org.http4s" %% "http4s-ember-client" % Http4sStableVersion,
-      "org.http4s" %% "http4s-otel4s-middleware-trace-server" % Http4sOtel4sVersion,
-      "org.http4s" %% "http4s-otel4s-middleware-trace-client" % Http4sOtel4sVersion,
-      "org.typelevel" %% "log4cats-slf4j" % Log4catsVersion,
-      "org.tpolecat" %% "skunk-core" % SkunkVersion,
-      "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % Smithy4sVersion,
-      "com.disneystreaming.smithy4s" %% "smithy4s-http4s-swagger" % Smithy4sVersion,
-      "org.typelevel" %% "fs2-kafka" % Fs2KafkaVersion,
-      "io.github.irevive" %% "fs2-kafka-otel4s-trace" % Fs2KafkaOtel4sVersion,
-      "org.flywaydb" % "flyway-core" % FlywayVersion,
-      "org.flywaydb" % "flyway-database-postgresql" % FlywayVersion,
-      "org.postgresql" % "postgresql" % PostgresJdbcVersion % Runtime,
-      "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
-      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test
-    ),
+    publish / skip := true,
   )
 
 lazy val frontend = project
@@ -164,18 +76,177 @@ lazy val frontend = project
   .settings(
     name := "frontend",
     scalaJSUseMainModuleInitializer := true,
-    Compile / fastLinkJS / scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.ESModule)),
-    Compile / fullLinkJS / scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.ESModule)),
     Compile / fastLinkJS / scalaJSLinkerOutputDirectory :=
-      baseDirectory.value / "target" / "site",
+      baseDirectory.value / "target" / "scalajs-fast",
     Compile / fullLinkJS / scalaJSLinkerOutputDirectory :=
-      baseDirectory.value / "target" / "site",
+      baseDirectory.value / "target" / "scalajs-full",
+    scalaJSLinkerConfig ~= {
+      _.withModuleKind(ModuleKind.ESModule)
+        .withModuleSplitStyle(ModuleSplitStyle.SmallModulesFor(List("typelevel.courses")))
+    },
     libraryDependencies ++= Seq(
-      "com.armanbilge" %% "calico" % CalicoVersion,
-      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "com.armanbilge" %% "calico" % "0.2.3",
+      "com.armanbilge" %% "calico-router" % "0.2.3",
+      "com.armanbilge" %% "fs2-dom" % "0.2.1",
       "co.fs2" %% "fs2-core" % Fs2Version,
-      "org.http4s" %% "http4s-dom" % Http4sDomVersion,
-      "io.circe" %% "circe-parser" % CirceVersion,
-      "org.scala-js" %% "scalajs-dom" % ScalaJsDomVersion
-    )
+      "org.http4s" %% "http4s-dom" % "0.2.12",
+      "org.http4s" %% "http4s-circe" % Http4sStableVersion,
+      "org.scala-js" %% "scalajs-dom" % "2.8.1",
+      "org.typelevel" %% "cats-core" % "2.13.0",
+      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "io.circe" %% "circe-core" % "0.14.16",
+      "io.circe" %% "circe-parser" % "0.14.16",
+      "org.typelevel" %% "munit-cats-effect" % "2.2.0" % Test,
+    ),
+  )
+
+lazy val backend = project
+  .in(file("backend"))
+  .aggregate(
+    runtime,
+    events,
+    statusService,
+    identityService,
+    catalogService,
+    playbackService,
+  )
+  .settings(noPublishSettings)
+  .settings(
+    name := "backend",
+    publish / skip := true,
+  )
+
+lazy val runtime = project
+  .in(file("backend/modules/runtime"))
+  .settings(noPublishSettings)
+  .settings(
+    name := "runtime",
+    Compile / exportJars := true,
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "org.typelevel" %% "otel4s-oteljava" % Otel4sVersion,
+      "io.opentelemetry" % "opentelemetry-exporter-otlp" % OpenTelemetryVersion % Runtime,
+      "org.typelevel" %% "log4cats-core" % Log4catsVersion,
+      "com.comcast" %% "ip4s-core" % Ip4sVersion,
+      "co.fs2" %% "fs2-io" % Fs2Version,
+      "is.cir" %% "ciris" % CirisVersion,
+      "org.http4s" %% "http4s-ember-server" % Http4sStableVersion,
+      "org.http4s" %% "http4s-otel4s-middleware-metrics" % Http4sOtel4sVersion,
+      "org.http4s" %% "http4s-otel4s-middleware-trace-server" % Http4sOtel4sVersion,
+      "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % Smithy4sVersion,
+      "org.tpolecat" %% "skunk-core" % SkunkVersion,
+      "com.auth0" % "java-jwt" % JavaJwtVersion,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
+  )
+
+lazy val events = project
+  .in(file("backend/modules/events"))
+  .enablePlugins(Smithy4sCodegenPlugin)
+  .settings(noPublishSettings)
+  .settings(
+    name := "events",
+    Compile / exportJars := true,
+    libraryDependencies +=
+      "com.disneystreaming.smithy4s" %% "smithy4s-core" % Smithy4sVersion,
+  )
+
+lazy val statusService = project
+  .in(file("backend/services/status-service"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
+  .settings(noPublishSettings)
+  .dependsOn(runtime)
+  .settings(
+    serviceSettings(
+      serviceName   = "status-service",
+      mainClassName = "org.typelevel.video.streaming.backend.status.Main",
+      exposedPort   = 8080,
+    ),
+  )
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "com.comcast" %% "ip4s-core" % Ip4sVersion,
+      "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
+      "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
+  )
+
+lazy val identityService = project
+  .in(file("backend/services/identity-service"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin, Smithy4sCodegenPlugin)
+  .settings(noPublishSettings)
+  .dependsOn(runtime, events)
+  .settings(
+    serviceSettings(
+      serviceName   = "identity-service",
+      mainClassName = "org.typelevel.video.streaming.backend.identity.Main",
+      exposedPort   = 8081,
+    ),
+  )
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "com.disneystreaming.smithy4s" %% "smithy4s-core" % Smithy4sVersion,
+      "com.comcast" %% "ip4s-core" % Ip4sVersion,
+      "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
+      "org.tpolecat" %% "skunk-core" % SkunkVersion,
+      "com.password4j" % "password4j" % Password4jVersion,
+      "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
+  )
+
+lazy val catalogService = project
+  .in(file("backend/services/catalog-service"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin, Smithy4sCodegenPlugin)
+  .settings(noPublishSettings)
+  .dependsOn(runtime)
+  .settings(
+    serviceSettings(
+      serviceName   = "catalog-service",
+      mainClassName = "org.typelevel.video.streaming.backend.catalog.Main",
+      exposedPort   = 8082,
+    ),
+  )
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "com.disneystreaming.smithy4s" %% "smithy4s-core" % Smithy4sVersion,
+      "com.comcast" %% "ip4s-core" % Ip4sVersion,
+      "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
+      "org.tpolecat" %% "skunk-core" % SkunkVersion,
+      "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
+  )
+
+lazy val playbackService = project
+  .in(file("backend/services/playback-service"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin, Smithy4sCodegenPlugin)
+  .settings(noPublishSettings)
+  .dependsOn(runtime, events)
+  .settings(
+    serviceSettings(
+      serviceName   = "playback-service",
+      mainClassName = "org.typelevel.video.streaming.backend.playback.Main",
+      exposedPort   = 8083,
+    ),
+  )
+  .settings(
+    libraryDependencies ++= Seq(
+      "software.amazon.awssdk" % "s3" % AwsSdkVersion,
+      "org.typelevel" %% "fs2-kafka" % Fs2KafkaVersion,
+      "io.github.irevive" %% "fs2-kafka-otel4s-trace" % Fs2KafkaOtel4sVersion,
+      "software.amazon.awssdk" % "url-connection-client" % AwsSdkVersion,
+      "software.amazon.awssdk" % "sts" % AwsSdkVersion,
+      "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
