@@ -2,6 +2,7 @@ package org.typelevel.video.streaming.backend.playback
 
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
+import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.events.{LessonPublished, UserCreated}
 import org.typelevel.video.streaming.backend.playback.config.KafkaConfig
 import org.typelevel.video.streaming.backend.playback.repository.PlaybackProjectionRepository
@@ -9,6 +10,8 @@ import org.typelevel.video.streaming.backend.playback.worker.PlaybackEventWorker
 import weaver.SimpleIOSuite
 
 object PlaybackEventWorkerSuite extends SimpleIOSuite:
+
+  private given TracerProvider[IO] = TracerProvider.noop[IO]
 
   private val config = KafkaConfig(
     bootstrapServers     = "localhost:9092",
