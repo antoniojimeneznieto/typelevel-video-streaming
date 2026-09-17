@@ -1,7 +1,10 @@
 package org.typelevel.video.streaming.backend.playback.worker
 
 import cats.effect.IO
+import fs2.kafka.otel4s.trace.KafkaTracer
+import fs2.kafka.otel4s.trace.syntax.*
 import fs2.kafka.{AutoOffsetReset, CommitRecovery, ConsumerSettings, Deserializer, KafkaConsumer}
+import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.events.{LessonPublished, UserCreated}
 import org.typelevel.video.streaming.backend.playback.config.KafkaConfig
 import org.typelevel.video.streaming.backend.playback.repository.PlaybackProjectionRepository
@@ -11,7 +14,7 @@ import smithy4s.{Blob, Schema}
 final class PlaybackEventWorker(
     config: KafkaConfig,
     repository: PlaybackProjectionRepository,
-):
+)(using TracerProvider[IO]):
 
   private val stringDeserializer = Deserializer[IO, String].option.map(_.orNull)
 
@@ -29,8 +32,8 @@ final class PlaybackEventWorker(
     KafkaConsumer
       .stream(settings)
       .subscribeTo(config.lessonPublishedTopic, config.userCreatedTopic)
-      .records
-      .evalMap { committable =>
+      .traced(KafkaTracer.Config.default)
+      .recordsWithProcessTraced {committable =>
         val record = committable.record
         process(
           record.topic,
