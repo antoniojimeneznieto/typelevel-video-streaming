@@ -38,7 +38,7 @@ final case class Lesson(
     duration: String,
     durationSeconds: Int,
     description: String,
-    preview: Boolean
+    preview: Boolean,
 )
 
 final case class Instructor(name: String, role: String, initials: String)
@@ -71,7 +71,7 @@ final case class Course(
     instructor: Instructor,
     outcomes: Vector[String],
     prerequisites: Vector[String],
-    lessons: Vector[Lesson]
+    lessons: Vector[Lesson],
 )
 
 final case class LearningPath(
@@ -81,5 +81,5 @@ final case class LearningPath(
     courseIds: Vector[String],
     time: String,
     level: CourseLevel,
-    tone: PathTone
+    tone: PathTone,
 )

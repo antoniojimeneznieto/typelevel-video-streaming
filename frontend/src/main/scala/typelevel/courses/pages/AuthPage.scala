@@ -19,7 +19,7 @@ object AuthPage:
   def apply(
       ctx: AppContext,
       mode: Mode,
-      location: Signal[IO, Uri]
+      location: Signal[IO, Uri],
   ): Resource[IO, HtmlElement[IO]] =
     val isRegister           = mode == Mode.Register
     val requestedDestination = location.map { current =>
@@ -54,33 +54,33 @@ object AuthPage:
                         href := ctx.navigator.href(AppRoute.Landing),
                         ctx.navigator.intercept(self, AppRoute.Landing),
                         Icons(Icon.ArrowLeft),
-                        " Back home"
+                        " Back home",
                       )
-                    }
+                    },
                   ),
                   div(
                     cls := "auth-brand-panel__content",
                     p(cls := "eyebrow", "From the Typelevel community"),
                     h1("Learn from the people", br(()), span("building the ecosystem.")),
                     p(
-                      "Explore talks and videos about effects, streaming, libraries, and the ideas behind functional Scala."
+                      "Explore talks and videos about effects, streaming, libraries, and the ideas behind functional Scala.",
                     ),
                     ul(
                       authBenefit(Icon.CirclePlay, "Discover talks from across the community"),
                       authBenefit(Icon.Bookmark, "Save videos you want to revisit"),
-                      authBenefit(Icon.Clock, "Continue from where you stopped")
-                    )
+                      authBenefit(Icon.Clock, "Continue from where you stopped"),
+                    ),
                   ),
                   img(
                     cls := "auth-brand-panel__art",
                     src := "/learning-network.webp",
                     alt := "",
-                    aria.hidden := true
+                    aria.hidden := true,
                   ),
                   div(
                     cls := "auth-brand-panel__footer",
-                    span("typelevel learning center")
-                  )
+                    span("typelevel learning center"),
+                  ),
                 ),
                 sectionTag(
                   cls := "auth-form-panel",
@@ -93,9 +93,9 @@ object AuthPage:
                         href := ctx.navigator.href(AppRoute.Landing),
                         ctx.navigator.intercept(self, AppRoute.Landing),
                         aria.label := "Back home",
-                        Icons(Icon.ArrowLeft)
+                        Icons(Icon.ArrowLeft),
                       )
-                    }
+                    },
                   ),
                   div(
                     cls := "auth-form-wrap",
@@ -103,13 +103,13 @@ object AuthPage:
                       cls := "auth-form-heading",
                       p(
                         cls := "eyebrow",
-                        if isRegister then "Create your account" else "Welcome back"
+                        if isRegister then "Create your account" else "Welcome back",
                       ),
                       h2(if isRegister then "Start learning today." else "Continue your path."),
                       p(
                         if isRegister then "Free to explore. Your progress stays with you."
-                        else "Enter your details to pick up where you left off."
-                      )
+                        else "Enter your details to pick up where you left off.",
+                      ),
                     ),
                     form(
                       cls := "auth-form",
@@ -124,8 +124,8 @@ object AuthPage:
                           password,
                           error,
                           notice,
-                          submitting
-                        )
+                          submitting,
+                        ),
                       ),
                       aria.busy <-- submitting,
                       Option.when(isRegister)(
@@ -136,8 +136,8 @@ object AuthPage:
                           placeholderText = "Ada Lovelace",
                           autocomplete    = "name",
                           error           = error,
-                          submitting      = submitting
-                        )
+                          submitting      = submitting,
+                        ),
                       ),
                       textField(
                         labelText       = "Email address",
@@ -146,7 +146,7 @@ object AuthPage:
                         placeholderText = "you@example.com",
                         autocomplete    = "email",
                         error           = error,
-                        submitting      = submitting
+                        submitting      = submitting,
                       ),
                       label(
                         cls := "field",
@@ -159,12 +159,12 @@ object AuthPage:
                               disabled <-- submitting,
                               onClick(
                                 notice.set(
-                                  "Password reset is not available yet."
-                                ) *> error.set("")
+                                  "Password reset is not available yet.",
+                                ) *> error.set(""),
                               ),
-                              "Forgot password?"
-                            )
-                          )
+                              "Forgot password?",
+                            ),
+                          ),
                         ),
                         span(
                           cls := "password-field",
@@ -179,11 +179,11 @@ object AuthPage:
                                 (if isRegister then "new-password" else "current-password"),
                               disabled <-- submitting,
                               aria.invalid <-- error.map(message =>
-                                if message.nonEmpty then "true" else "false"
+                                if message.nonEmpty then "true" else "false",
                               ),
                               aria.describedBy <-- error.map(message =>
-                                Option.when(message.nonEmpty)("auth-error")
-                              )
+                                Option.when(message.nonEmpty)("auth-error"),
+                              ),
                             )
                           },
                           button(
@@ -194,14 +194,14 @@ object AuthPage:
                             else "Show password"),
                             showPassword.map { shown =>
                               Icons(if shown then Icon.EyeOff else Icon.Eye)
-                            }
-                          )
-                        )
+                            },
+                          ),
+                        ),
                       ),
                       Option.when(isRegister)(
                         password.map { value =>
                           Option.when(value.nonEmpty)(passwordStrength(value))
-                        }
+                        },
                       ),
                       error.map { message =>
                         Option.when(message.nonEmpty)(
@@ -209,13 +209,13 @@ object AuthPage:
                             idAttr := "auth-error",
                             cls := "form-message form-message--error",
                             role := List("alert"),
-                            message
-                          )
+                            message,
+                          ),
                         )
                       },
                       notice.map { message =>
                         Option.when(message.nonEmpty)(
-                          p(cls := "form-message", role := List("status"), message)
+                          p(cls := "form-message", role := List("status"), message),
                         )
                       },
                       button(
@@ -227,8 +227,8 @@ object AuthPage:
                           else if isRegister then "Create account"
                           else "Log in"
                         },
-                        submitting.map(active => Option.unless(active)(Icons(Icon.ArrowRight)))
-                      )
+                        submitting.map(active => Option.unless(active)(Icons(Icon.ArrowRight))),
+                      ),
                     ),
                     p(
                       cls := "auth-switch",
@@ -238,12 +238,12 @@ object AuthPage:
                         (
                           href <-- alternateUri.map(value => ctx.navigator.href(value)),
                           ctx.navigator.intercept(self, alternateUri.get),
-                          if isRegister then "Log in" else "Create an account"
+                          if isRegister then "Log in" else "Create an account",
                         )
-                      }
-                    )
-                  )
-                )
+                      },
+                    ),
+                  ),
+                ),
               )
     yield page
 
@@ -256,7 +256,7 @@ object AuthPage:
       password: SignallingRef[IO, String],
       error: SignallingRef[IO, String],
       notice: SignallingRef[IO, String],
-      submitting: SignallingRef[IO, Boolean]
+      submitting: SignallingRef[IO, Boolean],
   )(event: Event[IO]): IO[Unit] =
     event.preventDefault *> submitting.get.ifM(
       IO.unit,
@@ -269,7 +269,7 @@ object AuthPage:
                             isRegister,
                             currentName,
                             currentEmail.trim,
-                            currentPassword
+                            currentPassword,
                           )
         _ <- validationError.fold {
                submitting.set(true) *>
@@ -282,14 +282,14 @@ object AuthPage:
                    }
                    .guarantee(submitting.set(false))
              }(error.set)
-      yield ())
+      yield ()),
     )
 
   private def validate(
       isRegister: Boolean,
       name: String,
       email: String,
-      password: String
+      password: String,
   ): Option[String] =
     if isRegister && name.trim.isEmpty then Some("Please enter your name.")
     else if isRegister && name.trim.length > 100 then
@@ -322,7 +322,7 @@ object AuthPage:
       placeholderText: String,
       autocomplete: String,
       error: SignallingRef[IO, String],
-      submitting: SignallingRef[IO, Boolean]
+      submitting: SignallingRef[IO, Boolean],
   ) =
     label(
       cls := "field",
@@ -336,9 +336,9 @@ object AuthPage:
           placeholder := placeholderText,
           autoComplete := autocomplete,
           aria.invalid <-- error.map(message => if message.nonEmpty then "true" else "false"),
-          aria.describedBy <-- error.map(message => Option.when(message.nonEmpty)("auth-error"))
+          aria.describedBy <-- error.map(message => Option.when(message.nonEmpty)("auth-error")),
         )
-      }
+      },
     )
 
   private def passwordStrength(password: String) =
@@ -346,7 +346,7 @@ object AuthPage:
       password.length >= 12,
       password.exists(_.isUpper),
       password.exists(_.isDigit),
-      password.exists(character => !character.isLetterOrDigit)
+      password.exists(character => !character.isLetterOrDigit),
     ).count(identity)
 
     div(
@@ -355,13 +355,13 @@ object AuthPage:
       div(
         (1 to 4).toList.map { step =>
           span(cls := Option.when(step <= strength)("is-filled").getOrElse(""))
-        }
+        },
       ),
       small(
         if strength < 2 then "Keep going"
         else if strength < 4 then "Good password"
-        else "Strong password"
-      )
+        else "Strong password",
+      ),
     )
 
   private def authBenefit(icon: Icon, copy: String) =

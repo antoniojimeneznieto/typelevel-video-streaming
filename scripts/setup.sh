@@ -109,7 +109,7 @@ if "$need_java" || "$need_sbt" || "$need_docker"; then
   echo
   echo "Install only missing prerequisites; existing Docker installations and shell profiles are preserved."
   "$need_java" && echo "  JDK: Temurin 21 via Homebrew on macOS; OpenJDK via apt on Linux."
-  "$need_sbt" && echo "  sbt 1.12.13: official checksum-verified release under /usr/local/share/typelevel-workshop."
+  "$need_sbt" && echo "  sbt 2.0.7: official checksum-verified release under /usr/local/share/typelevel-workshop."
   "$need_docker" && echo "  Docker: Desktop via Homebrew on macOS; Engine + Compose + Buildx via Docker's apt repository on Linux."
   echo "Downloads and administrator access may be required. Docker Desktop terms must be accepted in its app."
   confirm "Proceed with these installations?" || { echo "Cancelled. Nothing installed."; exit 1; }
@@ -150,18 +150,18 @@ if "$need_java" || "$need_sbt" || "$need_docker"; then
   fi
 
   if "$need_sbt"; then
-    sbt_directory=/usr/local/share/typelevel-workshop/sbt-1.12.13
+    sbt_directory=/usr/local/share/typelevel-workshop/sbt-2.0.7
     [[ ! -e /usr/local/bin/sbt && ! -L /usr/local/bin/sbt ]] ||
       fail "/usr/local/bin/sbt already exists. Fix its PATH/permissions instead of replacing it."
     [[ ! -e "$sbt_directory" ]] || fail "$sbt_directory already exists. Inspect the previous installation before retrying."
     curl --fail --show-error --silent --location --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 300 \
-      https://github.com/sbt/sbt/releases/download/v1.12.13/sbt-1.12.13.tgz -o "$setup_directory/sbt.tgz"
+      https://github.com/sbt/sbt/releases/download/v2.0.7/sbt-2.0.7.tgz -o "$setup_directory/sbt.tgz"
     if has sha256sum; then
       digest="$(sha256sum "$setup_directory/sbt.tgz")"
     else
       digest="$(shasum -a 256 "$setup_directory/sbt.tgz")"
     fi
-    [[ "${digest%% *}" == 8267292e60235c60c2d25ea1a38f25c92d6ec47758d5222636b8c1ecf08cd5e7 ]] ||
+    [[ "${digest%% *}" == 439451520724253bbf22f3a34b0bad9379f18effb65a11755cd8bf705b7c202f ]] ||
       fail "sbt checksum verification failed; archive was not extracted."
     tar -xzf "$setup_directory/sbt.tgz" -C "$setup_directory"
     sudo install -d -m 0755 /usr/local/share/typelevel-workshop /usr/local/bin

@@ -17,12 +17,12 @@ final class CatalogApi(baseUri: Uri, client: Client[IO]):
           .withOptionQueryParam("topic", params.topic.filter(_.nonEmpty))
           .withOptionQueryParam("technology", params.technology.filter(_.nonEmpty))
           .withOptionQueryParam("limit", params.limit)
-          .withOptionQueryParam("offset", params.offset)
-      )
+          .withOptionQueryParam("offset", params.offset),
+      ),
     )
 
   def listLearningPaths(
-      params: ListLearningPathsParams = ListLearningPathsParams()
+      params: ListLearningPathsParams = ListLearningPathsParams(),
   ): IO[Page[ApiLearningPath]] =
     HttpClient.json[Page[ApiLearningPath]](
       client,
@@ -32,6 +32,6 @@ final class CatalogApi(baseUri: Uri, client: Client[IO]):
           .withOptionQueryParam("level", params.level.map(_.value))
           .withOptionQueryParam("tone", params.tone.map(_.value))
           .withOptionQueryParam("limit", params.limit)
-          .withOptionQueryParam("offset", params.offset)
-      )
+          .withOptionQueryParam("offset", params.offset),
+      ),
     )

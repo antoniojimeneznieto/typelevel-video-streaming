@@ -7,7 +7,7 @@ import org.typelevel.video.streaming.backend.runtime.config.{HttpServerConfig, P
 
 final case class AppConfig(
     server: HttpServerConfig,
-    postgres: PostgresConfig
+    postgres: PostgresConfig,
 )
 
 object AppConfig:
@@ -17,6 +17,6 @@ object AppConfig:
       HttpServerConfig.config(port"8082"),
       PostgresConfig.config(
         defaultDatabase = "catalog",
-        defaultPassword = "catalog-local-secret"
-      )
+        defaultPassword = "catalog-local-secret",
+      ),
     ).parMapN(AppConfig.apply).load[F]

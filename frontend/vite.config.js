@@ -1,11 +1,16 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig, loadEnv } from 'vite'
-import scalaJSPlugin from '@scala-js/vite-plugin-scalajs'
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const scalaJSDirectory = fileURLToPath(
+    new URL(`./target/scalajs-${command === 'serve' ? 'fast' : 'full'}/`, import.meta.url),
+  )
 
   return {
-    plugins: [scalaJSPlugin({ cwd: '..', projectID: 'frontend' })],
+    resolve: {
+      alias: [{ find: /^scalajs:/, replacement: scalaJSDirectory }],
+    },
     define: {
       __IDENTITY_API_URL__: JSON.stringify(
         env.VITE_IDENTITY_API_URL || 'http://localhost:8081',

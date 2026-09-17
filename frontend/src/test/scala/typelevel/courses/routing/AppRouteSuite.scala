@@ -9,15 +9,15 @@ final class AppRouteSuite extends FunSuite:
     assertEquals(AppRoute.parse(Uri.unsafeFromString("/browse")), AppRoute.Browse)
     assertEquals(
       AppRoute.parse(Uri.unsafeFromString("/content/thinking-in-types")),
-      AppRoute.Course("thinking-in-types")
+      AppRoute.Course("thinking-in-types"),
     )
     assertEquals(
       AppRoute.parse(Uri.unsafeFromString("/watch/fs2-streaming/lesson-3")),
-      AppRoute.Watch("fs2-streaming", "lesson-3")
+      AppRoute.Watch("fs2-streaming", "lesson-3"),
     )
     assertEquals(
       AppRoute.parse(Uri.unsafeFromString("/watch/fs2-streaming")),
-      AppRoute.Watch("fs2-streaming", "lesson-1")
+      AppRoute.Watch("fs2-streaming", "lesson-1"),
     )
     assertEquals(AppRoute.parse(Uri.unsafeFromString("/about")), AppRoute.NotFound)
   }
@@ -44,11 +44,11 @@ final class AppRouteSuite extends FunSuite:
   test("course aliases and default watch routes retain trailing-slash behavior") {
     assertEquals(
       AppRoute.parse(Uri.unsafeFromString("/content/typelevel-retrospective/?from=browse")),
-      AppRoute.Course("typelevel-retrospective")
+      AppRoute.Course("typelevel-retrospective"),
     )
     assertEquals(
       AppRoute.parse(Uri.unsafeFromString("/watch/fs2-chunk/?from=paths")),
-      AppRoute.Watch("fs2-chunk", "lesson-1")
+      AppRoute.Watch("fs2-chunk", "lesson-1"),
     )
   }
 

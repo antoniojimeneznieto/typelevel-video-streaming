@@ -5,13 +5,13 @@ import cats.effect.std.Queue
 import cats.syntax.all.*
 
 /** A view owns the queue's lifetime; the application owns draining it after the view closes. */
-private[pages] final class ProgressWriter private (
+final private[pages] class ProgressWriter private (
     state: Ref[IO, ProgressWriter.State],
     wake: Queue[IO, Unit],
     finished: Deferred[IO, Unit],
     persist: (Int, Boolean) => IO[Unit],
     report: Option[Throwable] => IO[Unit],
-    runInBackground: IO[Unit] => IO[Unit]
+    runInBackground: IO[Unit] => IO[Unit],
 ):
   import ProgressWriter.*
 
@@ -24,9 +24,9 @@ private[pages] final class ProgressWriter private (
             Write(
               position,
               false,
-              force = current.pending.exists(_.force) || current.flushes.nonEmpty
-            )
-          )
+              force = current.pending.exists(_.force) || current.flushes.nonEmpty,
+            ),
+          ),
         )
     } *> wake.tryOffer(()).void
 
@@ -40,14 +40,14 @@ private[pages] final class ProgressWriter private (
                       else
                         current.copy(
                           pending = Some(Write(position, true, force = true)),
-                          flushes = done :: current.flushes
+                          flushes = done :: current.flushes,
                         ) -> true
                     }
         _ <- IO.whenA(accepted)(
                runInBackground(
-                 persist(position, true).attempt.void.guarantee(done.complete(()).void)
+                 persist(position, true).attempt.void.guarantee(done.complete(()).void),
                ) *>
-                 wake.tryOffer(()).void
+                 wake.tryOffer(()).void,
              )
       yield ()
     }
@@ -64,10 +64,10 @@ private[pages] final class ProgressWriter private (
               Write(
                 value,
                 true,
-                force = current.pending.exists(_.force) || current.flushes.nonEmpty
-              )
+                force = current.pending.exists(_.force) || current.flushes.nonEmpty,
+              ),
             )
-            .orElse(current.pending.map(_.copy(keepalive = true)))
+            .orElse(current.pending.map(_.copy(keepalive = true))),
         )
     } *> wake.tryOffer(()).void
 
@@ -102,19 +102,19 @@ private[pages] final class ProgressWriter private (
     }
 
 private[pages] object ProgressWriter:
-  private final case class Write(position: Int, keepalive: Boolean, force: Boolean = false)
-  private final case class State(
+  final private case class Write(position: Int, keepalive: Boolean, force: Boolean = false)
+  final private case class State(
       pending: Option[Write]            = None,
       acknowledged: Option[Int]         = None,
       flushes: List[Deferred[IO, Unit]] = Nil,
-      closed: Boolean                   = false
+      closed: Boolean                   = false,
   )
 
   def resource(
       persist: (Int, Boolean) => IO[Unit],
       report: Option[Throwable] => IO[Unit],
       runInBackground: IO[Unit] => IO[Unit],
-      runWriter: IO[Unit] => IO[Unit]
+      runWriter: IO[Unit] => IO[Unit],
   ): Resource[IO, ProgressWriter] =
     for
       state    <- Ref.of[IO, State](State()).toResource
@@ -122,6 +122,6 @@ private[pages] object ProgressWriter:
       finished <- Deferred[IO, Unit].toResource
       writer    = new ProgressWriter(state, wake, finished, persist, report, runInBackground)
       _        <- Resource.make(runWriter(writer.drain.guarantee(finished.complete(()).void)))(_ =>
-             writer.close()
+             writer.close(),
            )
     yield writer

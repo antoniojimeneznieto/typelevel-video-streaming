@@ -18,14 +18,14 @@ trait AccessTokenIssuer:
 
 final case class IssuedAccessToken(
     accessToken: AccessToken,
-    expiresIn: ExpiresInSeconds
+    expiresIn: ExpiresInSeconds,
 )
 
 final class AccessTokenIssuerImpl private[service] (
     privateKey: RSAPrivateKey,
     expiresIn: ExpiresInSeconds,
     currentInstant: IO[Instant],
-    newJwtId: IO[UUID]
+    newJwtId: IO[UUID],
 ) extends AccessTokenIssuer:
 
   private val algorithm = Algorithm.RSA256(privateKey)
@@ -55,11 +55,11 @@ object AccessTokenIssuerImpl:
 
   def apply(
       privateKey: RSAPrivateKey,
-      expiresIn: ExpiresInSeconds
+      expiresIn: ExpiresInSeconds,
   ): AccessTokenIssuerImpl =
     new AccessTokenIssuerImpl(
       privateKey     = privateKey,
       expiresIn      = expiresIn,
       currentInstant = Clock[IO].realTimeInstant,
-      newJwtId       = IO(UUID.randomUUID())
+      newJwtId       = IO(UUID.randomUUID()),
     )

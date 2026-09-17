@@ -10,7 +10,7 @@ import org.typelevel.video.streaming.backend.identity.api.*
 import org.typelevel.video.streaming.backend.identity.domain.*
 import org.typelevel.video.streaming.backend.runtime.auth.{
   BearerAuthenticationMiddleware,
-  BearerTokenVerifier
+  BearerTokenVerifier,
 }
 import org.typelevel.video.streaming.backend.runtime.context.IOLocalRequestContext
 import smithy4s.Blob
@@ -28,7 +28,7 @@ object RoutesSuite extends SimpleIOSuite:
     UserId(UUID.fromString("550e8400-e29b-41d4-a716-446655440000")),
     email,
     displayName,
-    Role.STUDENT
+    Role.STUDENT,
   )
 
   test("POST /users is public, decodes registration, and returns its modeled 201 response") {
@@ -42,7 +42,7 @@ object RoutesSuite extends SimpleIOSuite:
                   yield expect.all(
                     response.status == Status.Created,
                     Json.read[UserResponse](Blob(body)) == Right(user),
-                    actual.contains(input)
+                    actual.contains(input),
                   )
                 }
     yield result
@@ -56,7 +56,7 @@ object RoutesSuite extends SimpleIOSuite:
         response.as[String].map { body =>
           expect.all(
             response.status == Status.Conflict,
-            Json.read[ConflictError](Blob(body)) == Right(conflict)
+            Json.read[ConflictError](Blob(body)) == Right(conflict),
           )
         }
       }
@@ -69,7 +69,7 @@ object RoutesSuite extends SimpleIOSuite:
         override def register(
             email: Email,
             password: NewPassword,
-            displayName: DisplayName
+            displayName: DisplayName,
         ): IO[UserResponse] =
           registerF(RegisterInput(email, password, displayName))
         override def login(email: Email, password: Password): IO[LoginResponse] =

@@ -1,7 +1,6 @@
 package org.typelevel.video.streaming.backend.catalog.repository
 
 import cats.effect.{IO, Resource}
-import cats.syntax.all.*
 import org.typelevel.video.streaming.backend.catalog.domain.*
 import skunk.codec.all.*
 import skunk.implicits.*
@@ -15,7 +14,7 @@ trait CatalogRepository:
   def listLearningPaths(filter: LearningPathFilter): IO[LearningPathPage]
 
 final class CatalogRepositoryImpl(
-    sessions: Resource[IO, Session[IO]]
+    sessions: Resource[IO, Session[IO]],
 ) extends CatalogRepository:
 
   override def listCourses(filter: CourseFilter): IO[CoursePage] =
@@ -36,7 +35,7 @@ final class CatalogRepositoryImpl(
 
 object CatalogRepositoryImpl:
 
-  private final case class CourseRow(
+  final private case class CourseRow(
       id: CourseId,
       slug: CourseSlug,
       title: CourseTitle,
@@ -48,7 +47,7 @@ object CatalogRepositoryImpl:
       instructorRole: Option[InstructorRole],
       durationSeconds: Option[DurationSeconds],
       lessonCount: Option[LessonCount],
-      technology: Option[Technology]
+      technology: Option[Technology],
   ):
 
     def toCourse: Course =
@@ -63,17 +62,17 @@ object CatalogRepositoryImpl:
         technologies    = technology.toList,
         instructor      = Instructor(instructorName, instructorRole),
         durationSeconds = durationSeconds,
-        lessonCount     = lessonCount
+        lessonCount     = lessonCount,
       )
 
-  private final case class LearningPathRow(
+  final private case class LearningPathRow(
       id: LearningPathId,
       title: LearningPathTitle,
       description: LearningPathDescription,
       timeLabel: TimeLabel,
       level: CourseLevel,
       tone: LearningPathTone,
-      courseId: Option[CourseId]
+      courseId: Option[CourseId],
   ):
 
     def toLearningPath: LearningPath =
@@ -84,7 +83,7 @@ object CatalogRepositoryImpl:
         timeLabel   = timeLabel,
         level       = level,
         tone        = tone,
-        courseIds   = courseId.toList
+        courseIds   = courseId.toList,
       )
 
   private def toCourses(rows: List[CourseRow]): List[Course] =
@@ -121,12 +120,12 @@ object CatalogRepositoryImpl:
 
   private val courseLevel: Codec[CourseLevel] =
     text.eimap(value => enumValue("course level", value, CourseLevel.values))(
-      _.stringValue
+      _.stringValue,
     )
 
   private val courseKind: Codec[CourseKind] =
     text.eimap(value => enumValue("course kind", value, CourseKind.values))(
-      _.stringValue
+      _.stringValue,
     )
 
   private val topic: Codec[Topic] =
@@ -200,7 +199,7 @@ object CatalogRepositoryImpl:
 
   private val learningPathTone: Codec[LearningPathTone] =
     text.eimap(value => enumValue("learning path tone", value, LearningPathTone.values))(
-      _.stringValue
+      _.stringValue,
     )
 
   private val learningPathRow: Decoder[LearningPathRow] =
@@ -423,7 +422,7 @@ object CatalogRepositoryImpl:
   private def enumValue[A <: smithy4s.Enumeration.Value](
       name: String,
       value: String,
-      values: List[A]
+      values: List[A],
   ): Either[String, A] =
     values
       .find(_.stringValue == value)

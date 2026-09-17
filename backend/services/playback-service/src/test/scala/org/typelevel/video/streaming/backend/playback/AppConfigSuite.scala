@@ -18,12 +18,12 @@ object AppConfigSuite extends SimpleIOSuite:
       "http://localhost:65536",
       "https://example.com/bucket",
       "https://example.com?key=value",
-      "https://example.com#fragment"
+      "https://example.com#fragment",
     )
 
     expect.all(
       valid.forall(AppConfig.endpointDecoder.decode(None, _).isRight),
-      invalid.forall(AppConfig.endpointDecoder.decode(None, _).isLeft)
+      invalid.forall(AppConfig.endpointDecoder.decode(None, _).isLeft),
     )
   }
 
@@ -31,6 +31,6 @@ object AppConfigSuite extends SimpleIOSuite:
     expect.all(
       List("1", "900", "3600").forall(AppConfig.expiresInDecoder.decode(None, _).isRight),
       List("0", "-1", "3601", "604800", "nope")
-        .forall(AppConfig.expiresInDecoder.decode(None, _).isLeft)
+        .forall(AppConfig.expiresInDecoder.decode(None, _).isLeft),
     )
   }

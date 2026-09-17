@@ -44,13 +44,13 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
         _.withIssuedAt(now.plusSeconds(120)),
         _.withIssuedAt(Instant.ofEpochSecond(-1)),
         _.withExpiresAt(now.minusSeconds(120)),
-        _.withClaim("exp", "not-a-number")
+        _.withClaim("exp", "not-a-number"),
       )
       val nullClaims = List("sub", "iat", "exp", "jti").map {
         name => (builder: JWTCreator.Builder) => builder.withNullClaim(name)
       }
       val tokens = (invalidClaims ++ nullClaims).map(change =>
-        change(claims(now)).sign(algorithm(pair))
+        change(claims(now)).sign(algorithm(pair)),
       ) :+ JWT
         .create()
         .withIssuer("identity")
@@ -74,7 +74,7 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
         "not-a-jwt",
         claims(now).sign(algorithm(untrusted)),
         claims(now).sign(Algorithm.HMAC256("untrusted-secret")),
-        claims(now).sign(Algorithm.none())
+        claims(now).sign(Algorithm.none()),
       )
 
       tokens.traverse(AccessTokenVerifier.userId(publicKey(trusted), issuer, audience).verify).map {
@@ -92,7 +92,7 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
 
       Resource
         .make(IO.blocking(Files.createTempFile("runtime-public-key-", ".pem")))(path =>
-          IO.blocking(Files.deleteIfExists(path)).void
+          IO.blocking(Files.deleteIfExists(path)).void,
         )
         .use { path =>
           for
@@ -108,7 +108,7 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
   test("invalid public key configuration fails instead of becoming an authentication failure") {
     Resource
       .make(IO.blocking(Files.createTempFile("runtime-invalid-public-key-", ".pem")))(path =>
-        IO.blocking(Files.deleteIfExists(path)).void
+        IO.blocking(Files.deleteIfExists(path)).void,
       )
       .use { path =>
         RsaKeyLoader.publicKey(path).attempt.map(result => expect(result.isLeft))
@@ -126,7 +126,7 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
         claims(Instant.now()).withClaim("role", "student"),
         claims(Instant.now()).withClaim("role", "admin"),
         claims(Instant.now()).withClaim("role", "unsupported"),
-        claims(Instant.now()).withNullClaim("role")
+        claims(Instant.now()).withNullClaim("role"),
       ).map(_.sign(algorithm(pair)))
 
       tokens.traverse(verifier.verify).map { results =>
@@ -135,8 +135,8 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
             Some(Principal(userId, "student")),
             Some(Principal(userId, "admin")),
             None,
-            None
-          )
+            None,
+          ),
         )
       }
     }
@@ -156,7 +156,7 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
         claims(now).withIssuer("unexpected").sign(algorithm(trusted)),
         claims(now).withSubject("1-1-1-1-1").sign(algorithm(trusted)),
         claims(now).withJWTId("not-a-uuid").sign(algorithm(trusted)),
-        claims(now).withExpiresAt(now.minusSeconds(120)).sign(algorithm(trusted))
+        claims(now).withExpiresAt(now.minusSeconds(120)).sign(algorithm(trusted)),
       )
 
       tokens.traverse(verifier.verify).map { results =>
@@ -178,7 +178,7 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
     }
   }
 
-  private final case class Principal(userId: UUID, role: String)
+  final private case class Principal(userId: UUID, role: String)
 
   private def claims(now: Instant): JWTCreator.Builder =
     JWT

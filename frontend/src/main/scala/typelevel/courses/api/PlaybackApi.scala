@@ -14,12 +14,12 @@ final class PlaybackApi(baseUri: Uri, client: Client[IO]):
   def playbackUrl(
       accessToken: String,
       courseId: String,
-      lessonId: String
+      lessonId: String,
   ): IO[PlaybackUrlResponse] =
     HttpClient.json[PlaybackUrlResponse](
       client,
       Request[IO](uri = lessonUri(courseId, lessonId) / "playback")
-        .putHeaders(bearer(accessToken))
+        .putHeaders(bearer(accessToken)),
     )
 
   def putProgress(
@@ -27,22 +27,22 @@ final class PlaybackApi(baseUri: Uri, client: Client[IO]):
       courseId: String,
       lessonId: String,
       positionSeconds: Int,
-      keepalive: Boolean = false
+      keepalive: Boolean = false,
   ): IO[PlaybackProgress] =
     HttpClient.json[PlaybackProgress](
       client,
       Request[IO](
         Method.PUT,
-        lessonUri(courseId, lessonId) / "progress"
+        lessonUri(courseId, lessonId) / "progress",
       )
         .putHeaders(bearer(accessToken))
         .withEntity(PositionRequest(positionSeconds))
-        .withAttribute(FetchOptions.Key, FetchOptions.default.withKeepAlive(keepalive))
+        .withAttribute(FetchOptions.Key, FetchOptions.default.withKeepAlive(keepalive)),
     )
 
   def listProgress(
       accessToken: String,
-      query: ProgressQuery = ProgressQuery()
+      query: ProgressQuery = ProgressQuery(),
   ): IO[Page[PlaybackProgress]] =
     HttpClient.json[Page[PlaybackProgress]](
       client,
@@ -51,8 +51,8 @@ final class PlaybackApi(baseUri: Uri, client: Client[IO]):
           .withOptionQueryParam("courseId", query.courseId.filter(_.nonEmpty))
           .withOptionQueryParam("completed", query.completed)
           .withOptionQueryParam("limit", query.limit)
-          .withOptionQueryParam("offset", query.offset)
-      ).putHeaders(bearer(accessToken))
+          .withOptionQueryParam("offset", query.offset),
+      ).putHeaders(bearer(accessToken)),
     )
 
   def putFavorite(accessToken: String, courseId: String): IO[Favorite] =
@@ -60,9 +60,9 @@ final class PlaybackApi(baseUri: Uri, client: Client[IO]):
       client,
       Request[IO](
         Method.PUT,
-        baseUri / "favorites" / courseId
+        baseUri / "favorites" / courseId,
       )
-        .putHeaders(bearer(accessToken))
+        .putHeaders(bearer(accessToken)),
     )
 
   def deleteFavorite(accessToken: String, courseId: String): IO[Unit] =
@@ -70,22 +70,22 @@ final class PlaybackApi(baseUri: Uri, client: Client[IO]):
       client,
       Request[IO](
         Method.DELETE,
-        baseUri / "favorites" / courseId
+        baseUri / "favorites" / courseId,
       )
-        .putHeaders(bearer(accessToken))
+        .putHeaders(bearer(accessToken)),
     )
 
   def listFavorites(
       accessToken: String,
-      query: FavoritesQuery = FavoritesQuery()
+      query: FavoritesQuery = FavoritesQuery(),
   ): IO[Page[Favorite]] =
     HttpClient.json[Page[Favorite]](
       client,
       Request[IO](
         uri = (baseUri / "favorites")
           .withOptionQueryParam("limit", query.limit)
-          .withOptionQueryParam("offset", query.offset)
-      ).putHeaders(bearer(accessToken))
+          .withOptionQueryParam("offset", query.offset),
+      ).putHeaders(bearer(accessToken)),
     )
 
   private def lessonUri(courseId: String, lessonId: String): Uri =

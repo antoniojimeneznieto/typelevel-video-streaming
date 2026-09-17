@@ -8,7 +8,7 @@ services:
       dockerfile: frontend/Dockerfile
     pull_policy: never
     ports:
-      - "127.0.0.1:${FRONTEND_PORT:-3000}:8080"
+      - "127.0.0.1:${FRONTEND_PORT:-8000}:8080"
     depends_on:
       - identity-service
       - catalog-service
@@ -21,8 +21,14 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "8080"
+      OTEL_SERVICE_NAME: status-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
     ports:
       - "${STATUS_SERVICE_PORT:-8080}:8080"
+    depends_on:
+      lgtm:
+        condition: service_started
     restart: unless-stopped
 
   identity-service:
@@ -31,6 +37,9 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "8081"
+      OTEL_SERVICE_NAME: identity-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_USER: identity
@@ -48,6 +57,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      lgtm:
+        condition: service_started
     restart: unless-stopped
 
   catalog-service:
@@ -56,6 +67,9 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "8082"
+      OTEL_SERVICE_NAME: catalog-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_USER: catalog
@@ -67,6 +81,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      lgtm:
+        condition: service_started
     restart: unless-stopped
 
   playback-service:
@@ -75,6 +91,9 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "8083"
+      OTEL_SERVICE_NAME: playback-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_USER: playback
@@ -102,6 +121,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      lgtm:
+        condition: service_started
       kafka-init:
         condition: service_completed_successfully
       minio:
@@ -314,7 +335,7 @@ services:
 
   minio-seed:
     profiles: ["seed"]
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     entrypoint: ["/bin/bash", "/seed/seed.sh"]
     environment:
       SEED_VIDEOS: ${SEED_VIDEOS:-true}
@@ -343,7 +364,7 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-catalogservice}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-catalogservice-local-secret}
-      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:${FRONTEND_PORT:-3000}
+      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:${FRONTEND_PORT:-8000}
     tmpfs:
       - /data:size=2g,mode=0700
     healthcheck:
@@ -354,4 +375,12 @@ services:
     ports:
       - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
       - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    restart: unless-stopped
+
+  lgtm:
+    image: grafana/otel-lgtm:0.32.1
+    ports:
+      - "${LGTM_OTLP_UI_PORT:-3000}:3000"
+      - "${LGTM_OTLP_GRPC_PORT:-4317}:4317"
+      - "${LGTM_OTLP_HTTP_PORT:-4318}:4318"
     restart: unless-stopped

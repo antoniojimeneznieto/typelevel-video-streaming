@@ -27,7 +27,7 @@ object MyLearningPage:
       saved: Vector[Course],
       completed: Vector[Course],
       status: RemoteStateStatus,
-      error: Option[String]
+      error: Option[String],
   ):
     def courses(tab: String): Vector[Course] = tab match
       case "saved" => saved
@@ -46,7 +46,7 @@ object MyLearningPage:
   private val tabs = Vector(
     "progress" -> "In progress",
     "saved" -> "Saved",
-    "completed" -> "Completed"
+    "completed" -> "Completed",
   )
 
   private def tabUri(value: String): Uri =
@@ -62,13 +62,13 @@ object MyLearningPage:
     div(
       cls := "app-page learning-page",
       SiteHeader.AppHeader(ctx),
-      content(ctx, model)
+      content(ctx, model),
     ).widen
 
   private def view(
       tab: String,
       state: AppState,
-      courses: Vector[Course]
+      courses: Vector[Course],
   ): LearningView =
     val coursesById   = courses.map(course => course.id -> course).toMap
     val recentCourses = state.recentCourseIds.flatMap(coursesById.get)
@@ -85,7 +85,7 @@ object MyLearningPage:
 
   private def content(
       ctx: AppContext,
-      model: Signal[IO, LearningView]
+      model: Signal[IO, LearningView],
   ): Resource[IO, HtmlElement[IO]] =
     val visible = model.map(_.visible).changes(using Eq.fromUniversalEquals)
 
@@ -95,25 +95,25 @@ object MyLearningPage:
         cls := "learning-heading",
         p(cls := "eyebrow", "Your library"),
         h1("My learning"),
-        p("Everything you started, saved, and finished.")
+        p("Everything you started, saved, and finished."),
       ),
       div(
         cls := "learning-summary",
         div(
           span(Icons(Icon.Play)),
           strong(model.map(_.inProgress.size.toString).changes),
-          small("In progress")
+          small("In progress"),
         ),
         div(
           span(Icons(Icon.Bookmark)),
           strong(model.map(_.saved.size.toString).changes),
-          small("Saved")
+          small("Saved"),
         ),
         div(
           span(Icons(Icon.Trophy)),
           strong(model.map(_.completed.size.toString).changes),
-          small("Completed")
-        )
+          small("Completed"),
+        ),
       ),
       div(
         cls := "learning-tabs",
@@ -128,9 +128,9 @@ object MyLearningPage:
             cls <-- selected.map(active => Option.when(active)("is-active").toList),
             onClick(ctx.navigator.go(tabUri(value))),
             label,
-            span(count)
+            span(count),
           )
-        }
+        },
       ),
       model.map(_.mode).changes(using Eq.fromUniversalEquals).map {
         case ContentMode.Loading =>
@@ -140,7 +140,7 @@ object MyLearningPage:
             aria.busy := true,
             span(i(cls := "session-check__spinner", aria.hidden := true)),
             h2("Syncing your learning…"),
-            p("Loading your latest progress and saved videos from the playback service.")
+            p("Loading your latest progress and saved videos from the playback service."),
           ).widen
         case ContentMode.Error =>
           div(
@@ -153,18 +153,18 @@ object MyLearningPage:
               typ := "button",
               cls := "button button--primary",
               onClick(ctx.store.refreshPlaybackState),
-              "Try again"
-            )
+              "Try again",
+            ),
           ).widen
         case ContentMode.Courses(showProgress) =>
           CourseCard.grid(
             ctx,
             visible,
             "course-grid course-grid--three learning-grid",
-            showProgress = showProgress
+            showProgress = showProgress,
           )
         case ContentMode.Empty(tab) => emptyState(ctx, tab)
-      }
+      },
     ).widen
 
   private def emptyState(ctx: AppContext, tab: String): Resource[IO, HtmlElement[IO]] =
@@ -173,19 +173,19 @@ object MyLearningPage:
         (
           Icon.Bookmark,
           "Save something for later.",
-          "Use the bookmark on any course to keep it close."
+          "Use the bookmark on any course to keep it close.",
         )
       case "completed" =>
         (
           Icon.Trophy,
           "Your first finish is ahead.",
-          "Choose a focused course and your progress will appear here."
+          "Choose a focused course and your progress will appear here.",
         )
       case _ =>
         (
           Icon.LibraryBig,
           "Ready when you are.",
-          "Choose a focused course and your progress will appear here."
+          "Choose a focused course and your progress will appear here.",
         )
 
     div(
@@ -198,7 +198,7 @@ object MyLearningPage:
           cls := "button button--primary",
           href := ctx.navigator.href(AppRoute.Browse),
           ctx.navigator.intercept(self, AppRoute.Browse),
-          "Browse the library"
+          "Browse the library",
         )
-      }
+      },
     ).widen

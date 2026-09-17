@@ -44,11 +44,11 @@ final class CatalogSuite extends FunSuite:
           description = "Explore the ecosystem, its community, and its core ideas.",
           courseIds   = Vector(
             "00000000-0000-0000-0000-000000000101",
-            "00000000-0000-0000-0000-000000000102"
+            "00000000-0000-0000-0000-000000000102",
           ),
           time  = "1 hour 15 minutes",
           level = CourseLevel.Beginner,
-          tone  = PathTone.Yellow
+          tone  = PathTone.Yellow,
         ),
         LearningPath(
           id          = "inside-typelevel",
@@ -58,13 +58,13 @@ final class CatalogSuite extends FunSuite:
           courseIds = Vector(
             "00000000-0000-0000-0000-000000000104",
             "00000000-0000-0000-0000-000000000105",
-            "00000000-0000-0000-0000-000000000106"
+            "00000000-0000-0000-0000-000000000106",
           ),
           time  = "1 hour 52 minutes",
           level = CourseLevel.Intermediate,
-          tone  = PathTone.Purple
-        )
-      )
+          tone  = PathTone.Purple,
+        ),
+      ),
     )
     assertEquals(Catalog.topics, "All topics" +: Catalog.courses.map(_.topic).distinct)
   }
@@ -73,7 +73,7 @@ final class CatalogSuite extends FunSuite:
     val ids = Catalog.courses.map(_.id).toSet
     assertEquals(
       ids,
-      Vector(101, 102, 104, 105, 106).map(index => f"00000000-0000-0000-0000-$index%012d").toSet
+      Vector(101, 102, 104, 105, 106).map(index => f"00000000-0000-0000-0000-$index%012d").toSet,
     )
     assert(Catalog.learningPaths.flatMap(_.courseIds).forall(ids.contains))
   }

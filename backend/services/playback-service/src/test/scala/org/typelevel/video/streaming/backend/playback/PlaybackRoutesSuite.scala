@@ -10,7 +10,7 @@ import org.http4s.{HttpApp, MediaType, Method, Request, Status, Uri}
 import org.typelevel.video.streaming.backend.playback.api.{
   ListPlaybackProgressInput,
   PlaybackService,
-  PlaybackServiceGen
+  PlaybackServiceGen,
 }
 import org.typelevel.video.streaming.backend.playback.domain.*
 import smithy4s.Blob
@@ -33,7 +33,7 @@ object PlaybackRoutesSuite extends SimpleIOSuite:
       override def updatePlaybackProgress(
           courseId: CourseId,
           lessonId: LessonId,
-          positionSeconds: PositionSeconds
+          positionSeconds: PositionSeconds,
       ): IO[PlaybackProgress] =
         IO.pure(PlaybackProgress(courseId, lessonId, positionSeconds, true, now))
 
@@ -45,7 +45,7 @@ object PlaybackRoutesSuite extends SimpleIOSuite:
         response.status == Status.Ok,
         Json.read[PlaybackProgress](Blob(body)) ==
           Right(PlaybackProgress(courseId, lessonId, valid(PositionSeconds(125)), true, now)),
-        body.contains("\"updatedAt\":\"2026-09-07T10:00:00Z\"")
+        body.contains("\"updatedAt\":\"2026-09-07T10:00:00Z\""),
       )
     }
   }
@@ -57,14 +57,14 @@ object PlaybackRoutesSuite extends SimpleIOSuite:
             limit: PageLimit,
             offset: PageOffset,
             courseId: Option[CourseId],
-            completed: Option[Boolean]
+            completed: Option[Boolean],
         ): IO[PlaybackProgressPage] =
           calls.update(_ :+ ListPlaybackProgressInput(limit, offset, courseId, completed)) *>
             IO.pure(PlaybackProgressPage(Nil, zero, limit, offset))
 
       val expected = List(
         ListPlaybackProgressInput(courseId = Some(courseId), completed = Some(false)),
-        ListPlaybackProgressInput(valid(PageLimit(2)), valid(PageOffset(3)), None, Some(true))
+        ListPlaybackProgressInput(valid(PageLimit(2)), valid(PageOffset(3)), None, Some(true)),
       )
 
       routes(service).use { app =>
@@ -81,7 +81,7 @@ object PlaybackRoutesSuite extends SimpleIOSuite:
           Json.read[PlaybackProgressPage](Blob(firstBody)) ==
             Right(PlaybackProgressPage(Nil, zero, expected.head.limit, expected.head.offset)),
           Json.read[PlaybackProgressPage](Blob(secondBody)) ==
-            Right(PlaybackProgressPage(Nil, zero, expected.last.limit, expected.last.offset))
+            Right(PlaybackProgressPage(Nil, zero, expected.last.limit, expected.last.offset)),
         )
       }
     }
@@ -109,7 +109,7 @@ object PlaybackRoutesSuite extends SimpleIOSuite:
           addedBody.contains("\"createdAt\":\"2026-09-07T10:00:00Z\""),
           deleted.status == Status.NoContent,
           deletedBody.isEmpty,
-          removedCourse.contains(courseId)
+          removedCourse.contains(courseId),
         )
       }
     }
@@ -133,9 +133,9 @@ object PlaybackRoutesSuite extends SimpleIOSuite:
                 List(Favorite(courseId, now)),
                 valid(TotalCount(1)),
                 valid(PageLimit(limit)),
-                valid(PageOffset(offset))
-              )
-            )
+                valid(PageOffset(offset)),
+              ),
+            ),
           )
         }
         .map(_.reduce(_ and _))
@@ -146,7 +146,7 @@ object PlaybackRoutesSuite extends SimpleIOSuite:
     Ref.of[IO, Int](0).flatMap { calls =>
       val service = new PlaybackServiceGen.Default[IO](
         calls.update(_ + 1) *> IO
-          .raiseError(new AssertionError("Invalid input reached the service"))
+          .raiseError(new AssertionError("Invalid input reached the service")),
       )
       val invalidRequests = progressRequest(-1) :: (for
         path  <- List("/progress", "/favorites")
@@ -164,7 +164,7 @@ object PlaybackRoutesSuite extends SimpleIOSuite:
 
   private class Stub
       extends PlaybackServiceGen.Default[IO](
-        IO.raiseError(new AssertionError("Unexpected operation"))
+        IO.raiseError(new AssertionError("Unexpected operation")),
       )
 
   private def routes(service: PlaybackService[IO]): Resource[IO, HttpApp[IO]] =

@@ -42,7 +42,7 @@ final class ApiClientsSuite extends CatsEffectSuite:
     val config = ApiConfig(
       identityBaseUrl = uri"/api/identity/",
       catalogBaseUrl  = uri"https://example.test/platform/api/catalog/",
-      playbackBaseUrl = uri"/api/playback"
+      playbackBaseUrl = uri"/api/playback",
     )
 
     for
@@ -60,7 +60,7 @@ final class ApiClientsSuite extends CatsEffectSuite:
       assertEquals(identityRequests.head.request.uri, uri"/api/identity/users/me")
       assertEquals(
         catalogRequests.head.request.uri,
-        uri"https://example.test/platform/api/catalog/courses"
+        uri"https://example.test/platform/api/catalog/courses",
       )
       assertEquals(playbackRequests.head.request.uri, uri"/api/playback/favorites")
   }
@@ -76,13 +76,13 @@ final class ApiClientsSuite extends CatsEffectSuite:
                topic      = Some("Effects & Concurrency"),
                technology = Some("Cats Effect"),
                limit      = Some(20),
-               offset     = Some(40)
-             )
+               offset     = Some(40),
+             ),
            )
       requests <- http.requests.get
     yield assertEquals(
       requests.head.request.uri.renderString,
-      "http://localhost:8082/courses?q=effect%20systems&level=intermediate&kind=talk&topic=Effects%20%26%20Concurrency&technology=Cats%20Effect&limit=20&offset=40"
+      "http://localhost:8082/courses?q=effect%20systems&level=intermediate&kind=talk&topic=Effects%20%26%20Concurrency&technology=Cats%20Effect&limit=20&offset=40",
     )
   }
 
@@ -95,13 +95,13 @@ final class ApiClientsSuite extends CatsEffectSuite:
                level  = Some(ApiCourseLevel.Beginner),
                tone   = Some(ApiLearningPathTone.Yellow),
                limit  = Some(10),
-               offset = Some(20)
-             )
+               offset = Some(20),
+             ),
            )
       requests <- http.requests.get
     yield assertEquals(
       requests.head.request.uri.renderString,
-      "/api/catalog/learning-paths?q=typelevel&level=beginner&tone=yellow&limit=10&offset=20"
+      "/api/catalog/learning-paths?q=typelevel&level=beginner&tone=yellow&limit=10&offset=20",
     )
   }
 
@@ -132,8 +132,8 @@ final class ApiClientsSuite extends CatsEffectSuite:
                topic      = Some(""),
                technology = Some(""),
                limit      = Some(20),
-               offset     = Some(0)
-             )
+               offset     = Some(0),
+             ),
            )
       _        <- api.listLearningPaths(ListLearningPathsParams(query = Some("")))
       requests <- http.requests.get
@@ -147,14 +147,14 @@ final class ApiClientsSuite extends CatsEffectSuite:
     for
       registerHttp <- recordingClient(userJson, Status.Created)
       loginHttp    <- recordingClient(
-                     """{"accessToken":"token","tokenType":"Bearer","expiresIn":1800}"""
+                     """{"accessToken":"token","tokenType":"Bearer","expiresIn":1800}""",
                    )
       currentHttp <- recordingClient(userJson)
       _           <- IdentityApi(uri"http://localhost:8081", registerHttp.client).register(
-             RegisterRequest("alice@example.com", "workshop-secret-123", "Alice")
+             RegisterRequest("alice@example.com", "workshop-secret-123", "Alice"),
            )
       login <- IdentityApi(uri"http://localhost:8081", loginHttp.client).login(
-                 LoginRequest("alice@example.com", "workshop-secret-123")
+                 LoginRequest("alice@example.com", "workshop-secret-123"),
                )
       _          <- IdentityApi(uri"http://localhost:8081", currentHttp.client).currentUser("token")
       registered <- registerHttp.requests.get
@@ -166,7 +166,7 @@ final class ApiClientsSuite extends CatsEffectSuite:
       assertEquals(header(register.request, "Content-Type"), Some("application/json"))
       assertEquals(
         parse(register.body).toOption.flatMap(_.hcursor.get[String]("displayName").toOption),
-        Some("Alice")
+        Some("Alice"),
       )
       assertEquals(authenticated.head.request.uri.path.renderString, "/auth/login")
       assertEquals(authenticated.head.request.method, Method.POST)
@@ -182,7 +182,7 @@ final class ApiClientsSuite extends CatsEffectSuite:
       requests <- http.requests.get
     yield assertEquals(
       requests.head.request.uri.renderString,
-      "https://example.test/platform/identity/users/me"
+      "https://example.test/platform/identity/users/me",
     )
   }
 
@@ -192,11 +192,11 @@ final class ApiClientsSuite extends CatsEffectSuite:
     for
       playbackHttp <-
         recordingClient(
-          """{"url":"http://localhost:9000/video.mp4?signature=a%2Bb","expiresIn":900}"""
+          """{"url":"http://localhost:9000/video.mp4?signature=a%2Bb","expiresIn":900}""",
         )
       progressHttp <-
         recordingClient(
-          """{"courseId":"course/id","lessonId":"lesson/id","positionSeconds":120,"completed":false,"updatedAt":"2026-09-08T00:00:00Z"}"""
+          """{"courseId":"course/id","lessonId":"lesson/id","positionSeconds":120,"completed":false,"updatedAt":"2026-09-08T00:00:00Z"}""",
         )
       deleteHttp <- recordingClient("", Status.NoContent)
       playback   <-
@@ -211,18 +211,18 @@ final class ApiClientsSuite extends CatsEffectSuite:
       assertEquals(playback.url, "http://localhost:9000/video.mp4?signature=a%2Bb")
       assertEquals(
         playbackRequests.head.request.uri.renderString,
-        s"$base/courses/course%2Fid/lessons/lesson%2Fid/playback"
+        s"$base/courses/course%2Fid/lessons/lesson%2Fid/playback",
       )
       val progress = progressRequests.head
       assertEquals(progress.request.method, Method.PUT)
       assertEquals(
         progress.request.attributes.lookup(FetchOptions.Key).flatMap(_.keepAlive),
-        Some(true)
+        Some(true),
       )
       assertEquals(header(progress.request, "Authorization"), Some("Bearer token"))
       assertEquals(
         parse(progress.body).toOption.flatMap(_.hcursor.get[Int]("positionSeconds").toOption),
-        Some(120)
+        Some(120),
       )
       assertEquals(deleteRequests.size, 1)
       assertEquals(deleteRequests.head.request.method, Method.DELETE)
@@ -251,8 +251,8 @@ final class ApiClientsSuite extends CatsEffectSuite:
           courseId,
           "lessons",
           lessonId,
-          "playback"
-        )
+          "playback",
+        ),
       )
       assert(uri.path.renderString.startsWith("/platform%20demo/api/playback/courses/"))
       assert(uri.path.renderString.contains("%252F"))
@@ -268,7 +268,7 @@ final class ApiClientsSuite extends CatsEffectSuite:
       api   = PlaybackApi(uri"/api/playback/", http.client)
       _    <- api.listProgress(
              "token",
-             ProgressQuery(courseId = Some(courseId), completed = Some(false), offset = Some(0))
+             ProgressQuery(courseId = Some(courseId), completed = Some(false), offset = Some(0)),
            )
       _        <- api.listProgress("token", ProgressQuery(courseId = Some("")))
       _        <- api.listFavorites("token", FavoritesQuery(limit = Some(10), offset = Some(0)))
@@ -277,19 +277,19 @@ final class ApiClientsSuite extends CatsEffectSuite:
       assertEquals(requests.head.request.uri.path.renderString, "/api/playback/progress")
       assertEquals(
         Uri.unsafeFromString(requests.head.request.uri.renderString).query.params,
-        Map("courseId" -> courseId, "completed" -> "false", "offset" -> "0")
+        Map("courseId" -> courseId, "completed" -> "false", "offset" -> "0"),
       )
       assertEquals(requests(1).request.uri.renderString, "/api/playback/progress")
       assertEquals(
         requests(2).request.uri.renderString,
-        "/api/playback/favorites?limit=10&offset=0"
+        "/api/playback/favorites?limit=10&offset=0",
       )
   }
 
   List(
     (Status.Unauthorized, "INVALID_CREDENTIALS"),
     (Status.Conflict, "EMAIL_ALREADY_EXISTS"),
-    (Status.ServiceUnavailable, "PLAYBACK_UNAVAILABLE")
+    (Status.ServiceUnavailable, "PLAYBACK_UNAVAILABLE"),
   ).foreach { (status, code) =>
     test(s"HTTP ${status.code} preserves the modeled error code before the message") {
       for
@@ -317,7 +317,7 @@ final class ApiClientsSuite extends CatsEffectSuite:
         result <- IdentityApi(uri"/api/identity", http.client).currentUser("token").attempt
       yield assertEquals(
         result,
-        Left(ApiRequestError("The API returned an invalid JSON response.", 200))
+        Left(ApiRequestError("The API returned an invalid JSON response.", 200)),
       )
     }
   }
@@ -336,7 +336,7 @@ final class ApiClientsSuite extends CatsEffectSuite:
     for
       released <- Ref.of[IO, Boolean](false)
       response  = jsonResponse("", Status.Ok).withBodyStream(
-                   Stream.raiseError[IO](new RuntimeException("Private body detail"))
+                   Stream.raiseError[IO](new RuntimeException("Private body detail")),
                  )
       client       = Client[IO](_ => Resource.make(IO.pure(response))(_ => released.set(true)))
       result      <- HttpClient.json[Json](client, Request[IO]()).attempt
@@ -351,7 +351,7 @@ final class ApiClientsSuite extends CatsEffectSuite:
       reading  <- Deferred[IO, Unit]
       released <- Deferred[IO, Unit]
       response  = jsonResponse("", Status.Ok).withBodyStream(
-                   Stream.eval(reading.complete(())).drain ++ Stream.never[IO]
+                   Stream.eval(reading.complete(())).drain ++ Stream.never[IO],
                  )
       client = Client[IO](_ => Resource.make(IO.pure(response))(_ => released.complete(()).void))
       _     <- Resource.make(HttpClient.json[Json](client, Request[IO]()).start)(_.cancel).use {
@@ -362,16 +362,16 @@ final class ApiClientsSuite extends CatsEffectSuite:
     yield ()
   }
 
-  private final case class RecordedRequest(request: Request[IO], body: String)
+  final private case class RecordedRequest(request: Request[IO], body: String)
 
-  private final case class RecordingClient(
+  final private case class RecordingClient(
       client: Client[IO],
-      requests: Ref[IO, Vector[RecordedRequest]]
+      requests: Ref[IO, Vector[RecordedRequest]],
   )
 
   private def recordingClient(
       body: String,
-      status: Status = Status.Ok
+      status: Status = Status.Ok,
   ): IO[RecordingClient] =
     Ref.of[IO, Vector[RecordedRequest]](Vector.empty).map { requests =>
       val client = Client[IO] { request =>
@@ -380,7 +380,7 @@ final class ApiClientsSuite extends CatsEffectSuite:
             .flatMap { body =>
               requests.update(_ :+ RecordedRequest(request, body))
             }
-            .as(jsonResponse(body, status))
+            .as(jsonResponse(body, status)),
         )
       }
       RecordingClient(client, requests)

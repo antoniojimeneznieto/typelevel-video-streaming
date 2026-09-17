@@ -9,7 +9,7 @@ final class NavigatorSuite extends FunSuite:
       ctrlKey: Boolean          = false,
       shiftKey: Boolean         = false,
       altKey: Boolean           = false,
-      defaultPrevented: Boolean = false
+      defaultPrevented: Boolean = false,
   ): Boolean =
     Navigator.shouldIntercept(
       button,
@@ -17,7 +17,7 @@ final class NavigatorSuite extends FunSuite:
       ctrlKey,
       shiftKey,
       altKey,
-      defaultPrevented
+      defaultPrevented,
     )
 
   test("intercepts an unmodified primary click") {

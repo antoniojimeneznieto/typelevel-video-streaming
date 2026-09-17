@@ -61,11 +61,15 @@ echo "Stopping their containers clears runtime data; this script does not reset 
 
 stage="building backend images"
 echo "$stage"
-sbt \
-  statusService/Docker/publishLocal \
-  identityService/Docker/publishLocal \
-  catalogService/Docker/publishLocal \
-  playbackService/Docker/publishLocal
+sbt 'statusService/Docker/publishLocal; identityService/Docker/publishLocal; catalogService/Docker/publishLocal; playbackService/Docker/publishLocal'
+
+stage="validating backend image entrypoints"
+echo "$stage"
+for service_name in status identity catalog playback; do
+  docker run --rm --network none \
+    "typelevel-video-streaming/$service_name-service:local" \
+    -J--dry-run
+done
 
 stage="preparing Identity signing keys"
 echo "$stage"

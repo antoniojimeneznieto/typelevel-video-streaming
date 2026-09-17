@@ -30,7 +30,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite:
       created   <- Ref.of[IO, Option[User]](None)
       context   <- IOLocalRequestContext.create[AccessTokenClaims]
       repository = repositoryStub(
-                     createF = user => created.set(Some(user)).as(Some(user))
+                     createF = user => created.set(Some(user)).as(Some(user)),
                    )
       service   = serviceWith(repository, context)
       response <- service.register(email, newPassword, displayName)
@@ -44,7 +44,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite:
         user.role == Role.STUDENT &&
         user.status == UserStatus.ACTIVE &&
         user.createdAt == user.updatedAt
-      }
+      },
     ) and expect(response.email == normalizedEmail)
   }
 
@@ -52,12 +52,12 @@ object IdentityServiceImplSuite extends SimpleIOSuite:
     for
       context   <- IOLocalRequestContext.create[AccessTokenClaims]
       repository = repositoryStub(
-                     createF = _ => IO.pure(None)
+                     createF = _ => IO.pure(None),
                    )
       service = serviceWith(repository, context)
       result <- service.register(email, newPassword, displayName).attempt
     yield expect(
-      result == Left(ConflictError(ConflictErrorCode.EMAIL_ALREADY_EXISTS))
+      result == Left(ConflictError(ConflictErrorCode.EMAIL_ALREADY_EXISTS)),
     )
   }
 
@@ -68,7 +68,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite:
       service    = serviceWith(repository, context)
       response  <- service.login(normalizedEmail, password)
     yield expect(
-      response == LoginResponse(accessToken, TokenType.BEARER, expiresIn)
+      response == LoginResponse(accessToken, TokenType.BEARER, expiresIn),
     )
   }
 
@@ -80,14 +80,14 @@ object IdentityServiceImplSuite extends SimpleIOSuite:
                    .attempt
       disabled <- serviceWith(
                     repositoryStub(findByEmailF =
-                      _ => IO.pure(Some(activeUser.copy(status = UserStatus.DISABLED)))
+                      _ => IO.pure(Some(activeUser.copy(status = UserStatus.DISABLED))),
                     ),
-                    context
+                    context,
                   ).login(normalizedEmail, password).attempt
       invalidPassword <- serviceWith(
                            repositoryStub(findByEmailF = _ => IO.pure(Some(activeUser))),
                            context,
-                           passwordMatches = false
+                           passwordMatches = false,
                          ).login(normalizedEmail, password).attempt
       expected = Left(InvalidCredentialsError(AuthenticationErrorCode.INVALID_CREDENTIALS))
     yield expect(missing == expected) and
@@ -102,7 +102,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite:
       service    = serviceWith(repository, context)
       response  <- context.scope(claims)(service.getCurrentUser())
     yield expect(
-      response == UserResponse(id, normalizedEmail, displayName, Role.STUDENT)
+      response == UserResponse(id, normalizedEmail, displayName, Role.STUDENT),
     )
   }
 
@@ -114,7 +114,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite:
     role         = Role.STUDENT,
     status       = UserStatus.ACTIVE,
     createdAt    = now,
-    updatedAt    = now
+    updatedAt    = now,
   )
 
   private val claims = AccessTokenClaims(
@@ -124,13 +124,13 @@ object IdentityServiceImplSuite extends SimpleIOSuite:
     role = Role.STUDENT,
     iat  = valid(JwtNumericDate(1786200000L)),
     exp  = valid(JwtNumericDate(1786201800L)),
-    jti  = JwtId(UUID.fromString("978c2e02-d49f-4c0a-a76d-72448a47e88d"))
+    jti  = JwtId(UUID.fromString("978c2e02-d49f-4c0a-a76d-72448a47e88d")),
   )
 
   private def serviceWith(
       repository: IdentityRepository,
       context: IOLocalRequestContext[AccessTokenClaims],
-      passwordMatches: Boolean = true
+      passwordMatches: Boolean = true,
   ): IdentityServiceImpl =
     new IdentityServiceImpl(
       repository     = repository,
@@ -143,13 +143,13 @@ object IdentityServiceImplSuite extends SimpleIOSuite:
         override def issue(userId: UserId, role: Role): IO[IssuedAccessToken] =
           IO.pure(issuedToken)
       ,
-      requestContext = context
+      requestContext = context,
     )
 
   private def repositoryStub(
       createF: User => IO[Option[User]]       = user => IO.pure(Some(user)),
       findByIdF: UserId => IO[Option[User]]   = _ => IO.pure(None),
-      findByEmailF: Email => IO[Option[User]] = _ => IO.pure(None)
+      findByEmailF: Email => IO[Option[User]] = _ => IO.pure(None),
   ): IdentityRepository =
     new IdentityRepository:
       override def create(user: User): IO[Option[User]]        = createF(user)

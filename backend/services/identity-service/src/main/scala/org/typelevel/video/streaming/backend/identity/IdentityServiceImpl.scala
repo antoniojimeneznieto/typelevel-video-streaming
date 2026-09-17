@@ -15,13 +15,13 @@ final class IdentityServiceImpl(
     repository: IdentityRepository,
     passwordHasher: PasswordHasher,
     accessTokenIssuer: AccessTokenIssuer,
-    requestContext: RequestContext[IO, AccessTokenClaims]
+    requestContext: RequestContext[IO, AccessTokenClaims],
 ) extends IdentityService[IO]:
 
   override def register(
       email: Email,
       password: NewPassword,
-      displayName: DisplayName
+      displayName: DisplayName,
   ): IO[UserResponse] =
     for
       normalizedEmail <- normalize(email)
@@ -36,7 +36,7 @@ final class IdentityServiceImpl(
                role         = Role.STUDENT,
                status       = UserStatus.ACTIVE,
                createdAt    = now,
-               updatedAt    = now
+               updatedAt    = now,
              )
       created  <- repository.create(user)
       response <- created match
@@ -54,13 +54,13 @@ final class IdentityServiceImpl(
                 case None => IO.raiseError(invalidCredentials)
       passwordMatches <- passwordHasher.verify(password, user.passwordHash)
       _               <- IO.raiseUnless(passwordMatches && user.status == UserStatus.ACTIVE)(
-             invalidCredentials
+             invalidCredentials,
            )
       issued <- accessTokenIssuer.issue(user.id, user.role)
     yield LoginResponse(
       accessToken = issued.accessToken,
       tokenType   = TokenType.BEARER,
-      expiresIn   = issued.expiresIn
+      expiresIn   = issued.expiresIn,
     )
 
   override def getCurrentUser(): IO[UserResponse] =
@@ -69,7 +69,7 @@ final class IdentityServiceImpl(
                   case Some(claims) => IO.pure(claims)
                   case None =>
                     IO.raiseError(
-                      new IllegalStateException("Authenticated request context is missing")
+                      new IllegalStateException("Authenticated request context is missing"),
                     )
                 }
       user <- repository.findById(claims.sub).flatMap {
@@ -89,7 +89,7 @@ final class IdentityServiceImpl(
       id          = user.id,
       email       = user.email,
       displayName = user.displayName,
-      role        = user.role
+      role        = user.role,
     )
 
   private def invalidCredentials: InvalidCredentialsError =

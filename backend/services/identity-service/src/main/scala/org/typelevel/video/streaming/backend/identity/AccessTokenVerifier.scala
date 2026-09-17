@@ -10,13 +10,13 @@ import org.typelevel.video.streaming.backend.identity.domain.{Role, UserId}
 import org.typelevel.video.streaming.backend.runtime.auth.{AccessTokenVerifier, BearerTokenVerifier}
 
 final class AccessTokenVerifierImpl private (
-    publicKey: RSAPublicKey
+    publicKey: RSAPublicKey,
 ) extends BearerTokenVerifier[IO, AccessTokenClaims]:
 
   private val verifier = AccessTokenVerifier(
     publicKey,
     TokenIssuer.IDENTITY.stringValue,
-    TokenAudience.COURSE_PLATFORM.stringValue
+    TokenAudience.COURSE_PLATFORM.stringValue,
   )(readClaims)
 
   override def verify(token: String): IO[Option[AccessTokenClaims]] =
@@ -35,7 +35,7 @@ final class AccessTokenVerifierImpl private (
       role = role,
       iat  = issuedAt,
       exp  = expiresAt,
-      jti  = JwtId(UUID.fromString(jwt.getId))
+      jti  = JwtId(UUID.fromString(jwt.getId)),
     )
 
 object AccessTokenVerifierImpl:

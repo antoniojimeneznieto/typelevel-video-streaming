@@ -22,7 +22,7 @@ object CatalogServiceImplSuite extends SimpleIOSuite:
         output.items.isEmpty,
         TotalCount.value(output.total) == 8,
         PageLimit.value(output.limit) == 20,
-        PageOffset.value(output.offset) == 0
+        PageOffset.value(output.offset) == 0,
       )
     }
   }
@@ -35,7 +35,7 @@ object CatalogServiceImplSuite extends SimpleIOSuite:
           output.items.isEmpty,
           TotalCount.value(output.total) == 3,
           PageLimit.value(output.limit) == 2,
-          PageOffset.value(output.offset) == 1
+          PageOffset.value(output.offset) == 1,
         )
       }
   }

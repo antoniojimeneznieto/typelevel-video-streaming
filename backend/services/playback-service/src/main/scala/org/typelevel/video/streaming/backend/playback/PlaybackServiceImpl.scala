@@ -13,7 +13,7 @@ import smithy4s.time.Timestamp
 final class PlaybackServiceImpl(
     repository: PlaybackRepository,
     videoStorage: S3VideoStorage,
-    requestContext: RequestContext[IO, UUID]
+    requestContext: RequestContext[IO, UUID],
 ) extends PlaybackService[IO]:
 
   override def getPlaybackUrl(courseId: CourseId, lessonId: LessonId): IO[PlaybackUrlResponse] =
@@ -26,13 +26,13 @@ final class PlaybackServiceImpl(
   override def updatePlaybackProgress(
       courseId: CourseId,
       lessonId: LessonId,
-      positionSeconds: PositionSeconds
+      positionSeconds: PositionSeconds,
   ): IO[PlaybackProgress] =
     for
       userId <- currentUser
       lesson <- findLesson(courseId, lessonId)
       _      <- IO.raiseWhen(positionSeconds.value > lesson.durationSeconds.value)(
-             InvalidPlaybackProgressError("Position must not exceed the video duration")
+             InvalidPlaybackProgressError("Position must not exceed the video duration"),
            )
       now     <- Clock[IO].realTimeInstant.map(Timestamp.fromInstant)
       progress = PlaybackProgress(
@@ -40,7 +40,7 @@ final class PlaybackServiceImpl(
                    lessonId        = lessonId,
                    positionSeconds = positionSeconds,
                    completed       = positionSeconds.value == lesson.durationSeconds.value,
-                   updatedAt       = now
+                   updatedAt       = now,
                  )
       saved <- repository.saveProgress(userId, progress)
     yield saved
@@ -49,7 +49,7 @@ final class PlaybackServiceImpl(
       limit: PageLimit,
       offset: PageOffset,
       courseId: Option[CourseId],
-      completed: Option[Boolean]
+      completed: Option[Boolean],
   ): IO[PlaybackProgressPage] =
     currentUser.flatMap { userId =>
       repository.listProgress(userId, limit, offset, courseId, completed)
