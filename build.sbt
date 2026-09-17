@@ -107,6 +107,7 @@ lazy val backend = project
     runtime,
     events,
     statusService,
+    gatewayService,
     identityService,
     catalogService,
     playbackService,
@@ -171,6 +172,30 @@ lazy val statusService = project
       "org.typelevel" %% "cats-effect" % CatsEffectVersion,
       "com.comcast" %% "ip4s-core" % Ip4sVersion,
       "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
+      "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
+  )
+
+lazy val gatewayService = project
+  .in(file("backend/services/gateway-service"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
+  .settings(noPublishSettings)
+  .dependsOn(runtime)
+  .settings(
+    serviceSettings(
+      serviceName   = "gateway-service",
+      mainClassName = "org.typelevel.video.streaming.backend.gateway.Main",
+      exposedPort   = 8084,
+    ),
+  )
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "org.http4s" %% "http4s-ember-client" % Http4sStableVersion,
+      "org.http4s" %% "http4s-server" % Http4sStableVersion,
+      "org.http4s" %% "http4s-otel4s-middleware-trace-client" % Http4sOtel4sVersion,
       "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),

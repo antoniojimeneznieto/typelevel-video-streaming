@@ -61,11 +61,11 @@ echo "Stopping their containers clears runtime data; this script does not reset 
 
 stage="building backend images"
 echo "$stage"
-sbt 'statusService/Docker/publishLocal; identityService/Docker/publishLocal; catalogService/Docker/publishLocal; playbackService/Docker/publishLocal'
+sbt 'statusService/Docker/publishLocal; gatewayService/Docker/publishLocal; identityService/Docker/publishLocal; catalogService/Docker/publishLocal; playbackService/Docker/publishLocal'
 
 stage="validating backend image entrypoints"
 echo "$stage"
-for service_name in status identity catalog playback; do
+for service_name in status gateway identity catalog playback; do
   docker run --rm --network none \
     "typelevel-video-streaming/$service_name-service:local" \
     -J--dry-run
@@ -102,8 +102,9 @@ stage="waiting for the Catalog outbox connector"
 bash "$script_directory/wait-outbox.sh" catalog
 stage="waiting for Playback projections"
 docker compose run --rm --no-deps playback-ready
-stage="waiting for the frontend"
-docker compose up --detach --no-deps --wait frontend
+stage="waiting for application services"
+docker compose up --detach --no-deps --wait \
+  identity-service catalog-service playback-service gateway-service frontend
 docker compose ps
 
 echo "Application startup completed successfully."
