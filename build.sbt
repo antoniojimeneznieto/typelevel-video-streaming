@@ -1,25 +1,26 @@
 import com.typesafe.sbt.packager.docker.DockerAlias
 import org.scalajs.linker.interface.{ModuleKind, ModuleSplitStyle}
 
-val ScalaLtsVersion       = "3.3.8"
-val CatsEffectVersion     = "3.7.0"
-val Fs2Version            = "3.13.0"
-val Http4sStableVersion   = "0.23.34"
-val Http4sOtel4sVersion   = "0.18.0"
-val Ip4sVersion           = "3.8.0"
-val WeaverVersion         = "0.13.0"
-val LogbackVersion        = "1.5.35"
-val Log4catsVersion       = "2.8.0"
-val SkunkVersion          = "2.0.0-RC3"
-val Smithy4sVersion       = "0.19.11"
-val Fs2KafkaVersion       = "4.1.0"
-val Fs2KafkaOtel4sVersion = "0.2.0"
-val Otel4sVersion         = "1.1.0"
-val OpenTelemetryVersion = "1.64.0"
-val CirisVersion         = "3.9.0"
-val AwsSdkVersion        = "2.49.2"
-val Password4jVersion    = "1.8.4"
-val JavaJwtVersion       = "4.6.0"
+val ScalaLtsVersion            = "3.3.8"
+val CatsEffectVersion          = "3.7.0"
+val Fs2Version                 = "3.13.0"
+val Http4sStableVersion        = "0.23.34"
+val Http4sOtel4sVersion        = "0.18.0"
+val Ip4sVersion                = "3.8.0"
+val WeaverVersion              = "0.13.0"
+val LogbackVersion             = "1.5.35"
+val Log4catsVersion            = "2.8.0"
+val SkunkVersion               = "2.0.0-RC3"
+val Smithy4sVersion            = "0.19.11"
+val Fs2KafkaVersion            = "4.1.0"
+val Fs2KafkaOtel4sVersion      = "0.2.0"
+val Otel4sVersion              = "1.1.0"
+val OpenTelemetryVersion       = "1.64.0"
+val CirisVersion               = "3.9.0"
+val AwsSdkVersion              = "2.49.2"
+val Password4jVersion          = "1.8.4"
+val JavaJwtVersion             = "4.6.0"
+val OtelInstrumentationVersion = "2.31.1-alpha"
 
 organization := "org.typelevel.video.streaming"
 scalaVersion := ScalaLtsVersion
@@ -126,6 +127,7 @@ lazy val runtime = project
       "org.typelevel" %% "cats-effect" % CatsEffectVersion,
       "org.typelevel" %% "otel4s-oteljava" % Otel4sVersion,
       "io.opentelemetry" % "opentelemetry-exporter-otlp" % OpenTelemetryVersion % Runtime,
+      "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api-incubator" % OtelInstrumentationVersion,
       "org.typelevel" %% "log4cats-core" % Log4catsVersion,
       "com.comcast" %% "ip4s-core" % Ip4sVersion,
       "co.fs2" %% "fs2-io" % Fs2Version,
