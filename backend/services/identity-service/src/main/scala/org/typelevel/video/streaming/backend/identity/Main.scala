@@ -26,7 +26,7 @@ import smithy4s.http4s.SimpleRestJsonBuilder
 object Main extends IOApp.Simple:
 
   override val run: IO[Unit] =
-    Telemetry.resource("identity-service").use { otel =>
+    Telemetry.resource("identity-service", runtime.metrics).use { otel =>
       given MeterProvider[IO]  = otel.meterProvider
       given TracerProvider[IO] = otel.tracerProvider
 

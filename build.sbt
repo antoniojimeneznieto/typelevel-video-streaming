@@ -126,9 +126,10 @@ lazy val runtime = project
     Compile / exportJars := true,
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "org.typelevel" %% "otel4s-instrumentation-metrics" % Otel4sVersion,
       "org.typelevel" %% "otel4s-oteljava" % Otel4sVersion,
       "io.opentelemetry" % "opentelemetry-exporter-otlp" % OpenTelemetryVersion % Runtime,
-      "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api-incubator" % OtelInstrumentationVersion,
+      "io.opentelemetry.instrumentation" % "opentelemetry-runtime-telemetry" % OtelInstrumentationVersion,
       "org.typelevel" %% "log4cats-core" % Log4catsVersion,
       "com.comcast" %% "ip4s-core" % Ip4sVersion,
       "co.fs2" %% "fs2-io" % Fs2Version,
