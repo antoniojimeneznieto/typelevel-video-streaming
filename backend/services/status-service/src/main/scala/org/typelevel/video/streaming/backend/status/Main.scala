@@ -2,6 +2,7 @@ package org.typelevel.video.streaming.backend.status
 
 import cats.effect.{IO, IOApp}
 import com.comcast.ip4s.port
+import org.http4s.otel4s.middleware.server.RouteClassifier
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.runtime.config.HttpServerConfig
@@ -16,6 +17,6 @@ object Main extends IOApp.Simple:
       given TracerProvider[IO] = otel.tracerProvider
 
       HttpServerConfig.load[IO](port"8080").flatMap { config =>
-        HttpServer.run(config, Routes.health.orNotFound)
+        HttpServer.run(config, Routes.health.orNotFound, RouteClassifier.indeterminate)
       }
     }

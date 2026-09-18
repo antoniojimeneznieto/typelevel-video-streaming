@@ -33,7 +33,7 @@ final class PlaybackEventWorker(
       .stream(settings)
       .subscribeTo(config.lessonPublishedTopic, config.userCreatedTopic)
       .traced(KafkaTracer.Config.default)
-      .recordsWithProcessTraced {committable =>
+      .recordsWithProcessTraced { committable =>
         val record = committable.record
         process(
           record.topic,

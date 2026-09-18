@@ -1,6 +1,7 @@
 package org.typelevel.video.streaming.backend.gateway
 
 import cats.effect.{IO, IOApp}
+import org.http4s.otel4s.middleware.server.RouteClassifier
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.runtime.http.HttpServer
@@ -15,7 +16,18 @@ object Main extends IOApp.Simple:
 
       AppConfig.load[IO].flatMap { config =>
         GatewayClient.resource.use { client =>
-          HttpServer.run(config.server, GatewayRoutes(client, config.upstreams))
+          val routeClassifier: RouteClassifier = req => {
+            req.uri.path.segments.map(_.encoded) match {
+              case Vector("api", service, _*) => Some(s"/api/$service/{}")
+              case _ => None
+            }
+          }
+
+          HttpServer.run(
+            config.server,
+            GatewayRoutes(client, config.upstreams),
+            routeClassifier,
+          )
         }
       }
     }
