@@ -9,7 +9,7 @@ import org.typelevel.video.streaming.backend.runtime.telemetry.Telemetry
 object Main extends IOApp.Simple:
 
   override val run: IO[Unit] =
-    Telemetry.resource("gateway-service").use { otel =>
+    Telemetry.resource("gateway-service", runtime.metrics).use { otel =>
       given MeterProvider[IO]  = otel.meterProvider
       given TracerProvider[IO] = otel.tracerProvider
 
