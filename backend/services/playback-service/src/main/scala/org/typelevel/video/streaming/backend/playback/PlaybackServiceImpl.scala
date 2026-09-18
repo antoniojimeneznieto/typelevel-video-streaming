@@ -3,6 +3,7 @@ package org.typelevel.video.streaming.backend.playback.service
 import java.util.UUID
 
 import cats.effect.{Clock, IO}
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.video.streaming.backend.playback.api.*
 import org.typelevel.video.streaming.backend.playback.domain.*
 import org.typelevel.video.streaming.backend.playback.repository.PlaybackRepository
@@ -14,7 +15,10 @@ final class PlaybackServiceImpl(
     repository: PlaybackRepository,
     videoStorage: S3VideoStorage,
     requestContext: RequestContext[IO, UUID],
-) extends PlaybackService[IO]:
+)(using Slf4jFactory[IO])
+    extends PlaybackService[IO]:
+
+  private val logger = Slf4jFactory[IO].getLogger
 
   override def getPlaybackUrl(courseId: CourseId, lessonId: LessonId): IO[PlaybackUrlResponse] =
     for
@@ -31,7 +35,10 @@ final class PlaybackServiceImpl(
     for
       userId <- currentUser
       lesson <- findLesson(courseId, lessonId)
-      _      <- IO.raiseWhen(positionSeconds.value > lesson.durationSeconds.value)(
+      _ <- logger.info(Map("course.id" -> courseId.toString, "lesson.id" -> lessonId.toString))(
+             s"Updating playback progress to $positionSeconds",
+           )
+      _ <- IO.raiseWhen(positionSeconds.value > lesson.durationSeconds.value)(
              InvalidPlaybackProgressError("Position must not exceed the video duration"),
            )
       now     <- Clock[IO].realTimeInstant.map(Timestamp.fromInstant)
