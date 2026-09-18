@@ -8,6 +8,7 @@ import cats.syntax.all.*
 import org.http4s.headers.`Content-Type`
 import org.http4s.{Header, HttpApp, MediaType, Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.video.streaming.backend.playback.api.{
   ListPlaybackProgressInput,
   PlaybackUrlResponse,
@@ -28,6 +29,8 @@ import smithy4s.time.Timestamp
 import weaver.SimpleIOSuite
 
 object PlaybackServiceRoutesSuite extends SimpleIOSuite:
+
+  private given Slf4jFactory[IO] = Slf4jFactory.create[IO]
 
   private val userId   = UUID.fromString("550e8400-e29b-41d4-a716-446655440000")
   private val courseId = CourseId(UUID.fromString("00000000-0000-0000-0000-000000000104"))
