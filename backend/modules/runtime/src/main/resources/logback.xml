@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE"
+              class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>
+                %date{ISO8601} %-5level [%thread] %logger{36} - %msg%n%ex
+            </pattern>
+        </encoder>
+    </appender>
+
+    <appender name="OTEL"
+              class="io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender">
+        <captureTemplate>true</captureTemplate>
+
+        <!-- SLF4J 2 fluent key/value fields -->
+        <keyValuePairAttributesIncluded>*</keyValuePairAttributesIncluded>
+
+        <!-- Fields passed by log4cats StructuredLogger -->
+        <mdcAttributesIncluded>
+            otel.event.name,request.id,user.id,course.id,lesson.id,video.id,kafka.topic,kafka.partition,kafka.offset
+        </mdcAttributesIncluded>
+    </appender>
+
+    <root level="${LOG_LEVEL:-INFO}">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="OTEL"/>
+    </root>
+</configuration>

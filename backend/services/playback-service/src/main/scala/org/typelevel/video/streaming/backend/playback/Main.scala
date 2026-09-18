@@ -6,6 +6,7 @@ import cats.effect.{IO, IOApp, Resource}
 import cats.syntax.all.*
 import org.http4s.Header
 import org.typelevel.ci.CIString
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.playback.config.AppConfig
@@ -28,6 +29,8 @@ import org.typelevel.video.streaming.backend.runtime.telemetry.Telemetry
 import smithy4s.http4s.SimpleRestJsonBuilder
 
 object Main extends IOApp.Simple:
+
+  private given Slf4jFactory[IO] = Slf4jFactory.create[IO]
 
   override val run: IO[Unit] =
     Telemetry.resource("playback-service", runtime.metrics).use { otel =>

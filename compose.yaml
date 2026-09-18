@@ -23,6 +23,9 @@ services:
       OTEL_SERVICE_NAME: status-service
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_LOGS_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: otlp
     ports:
       - "${STATUS_SERVICE_PORT:-8080}:8080"
     depends_on:
@@ -39,6 +42,9 @@ services:
       OTEL_SERVICE_NAME: gateway-service
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_LOGS_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: otlp
       IDENTITY_BASE_URL: http://identity-service:8081
       CATALOG_BASE_URL: http://catalog-service:8082
       PLAYBACK_BASE_URL: http://playback-service:8083
@@ -70,6 +76,9 @@ services:
       OTEL_SERVICE_NAME: identity-service
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_LOGS_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: otlp
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_USER: identity
@@ -104,6 +113,9 @@ services:
       OTEL_SERVICE_NAME: catalog-service
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_LOGS_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: otlp
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_USER: catalog
@@ -132,6 +144,9 @@ services:
       OTEL_SERVICE_NAME: playback-service
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_LOGS_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: otlp
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_USER: playback
