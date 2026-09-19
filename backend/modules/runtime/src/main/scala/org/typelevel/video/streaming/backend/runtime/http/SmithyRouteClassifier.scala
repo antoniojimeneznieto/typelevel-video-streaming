@@ -1,6 +1,7 @@
 package org.typelevel.video.streaming.backend.runtime.http
 
 import org.http4s.{RequestPrelude, Uri}
+import org.http4s.otel4s.middleware.client.UriTemplateClassifier
 import org.http4s.otel4s.middleware.server.RouteClassifier
 import smithy.api.Http
 import smithy4s.Service
@@ -37,6 +38,33 @@ object SmithyRouteClassifier:
       service: Service[Alg],
   ): RouteClassifier =
     classifier(service, matchMountPath = normalizedMountPath(basePath), routePrefix = "")
+
+  /** Derives a client URL-template classifier from a Smithy service. */
+  def urlTemplatesBelowBasePath[Alg[_[_, _, _, _, _]]](
+      basePath: String,
+      service: Service[Alg],
+  ): UriTemplateClassifier =
+    val entries = service.endpoints.toList.flatMap { endpoint =>
+      for
+        http         <- endpoint.hints.get(using Http)
+        httpEndpoint <- HttpEndpoint.cast(endpoint.schema).toOption
+      yield Entry(httpEndpoint, http.uri.value.takeWhile(_ != '?'))
+    }
+    val matchMountPath = normalizedMountPath(basePath)
+
+    new UriTemplateClassifier:
+      override def classify(uri: Uri): Option[String] =
+        val smithyUri = toSmithy4sHttpUri(stripMountPath(uri, matchMountPath))
+
+        entries
+          .find { entry =>
+            entry.endpoint.matches(smithyUri.path).isDefined &&
+            staticQueriesMatch(
+              actual   = smithyUri.queryParamsAsMap,
+              required = entry.endpoint.staticQueryParams,
+            )
+          }
+          .map(_.routeTemplate)
 
   def firstMatch(classifiers: RouteClassifier*): RouteClassifier =
     request =>

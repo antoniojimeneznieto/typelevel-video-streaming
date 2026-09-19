@@ -23,7 +23,11 @@ private[gateway] object GatewayClient:
     for {
       metricsOps <- OtelMetrics.clientMetricsOps[IO]()
       tracing    <- ClientMiddleware
-                   .builder[IO](ClientSpanDataProvider.openTelemetry(redactor))
+                   .builder[IO](
+                     ClientSpanDataProvider
+                       .openTelemetry(redactor)
+                       .withUrlTemplateClassifier(GatewayClientRouteClassifier.urlTemplates(config)),
+                   )
                    .build
     } yield tracing.wrapClient(
       Metrics(metricsOps, classifierF = GatewayClientRouteClassifier(config))(client),

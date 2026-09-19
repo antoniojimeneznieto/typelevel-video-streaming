@@ -25,17 +25,20 @@ object HttpTelemetry:
       app: HttpApp[F],
       routeClassifier: RouteClassifier,
   ): F[HttpApp[F]] =
+    val boundedClassifier: RouteClassifier =
+      request => routeClassifier.classify(request).orElse(Some("unmatched"))
+
     for
       tracing <-
         ServerMiddleware
           .builder[F](
-            ServerSpanDataProvider.openTelemetry(redactor).withRouteClassifier(routeClassifier),
+            ServerSpanDataProvider.openTelemetry(redactor).withRouteClassifier(boundedClassifier),
           )
           .build
       metrics <- OtelMetrics.serverMetricsOps[F]()
       routes   = HttpRoutes[F](request => OptionT.liftF(app(request)))
     yield tracing.wrapHttpApp(
-      Metrics(metrics, classifierF = req => routeClassifier.classify(req.requestPrelude))(
+      Metrics(metrics, classifierF = req => boundedClassifier.classify(req.requestPrelude))(
         routes,
       ).orNotFound,
     )

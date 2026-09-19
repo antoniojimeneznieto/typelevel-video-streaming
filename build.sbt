@@ -141,6 +141,7 @@ lazy val runtime = project
       "is.cir" %% "ciris" % CirisVersion,
       "org.http4s" %% "http4s-ember-server" % Http4sStableVersion,
       "org.http4s" %% "http4s-otel4s-middleware-metrics" % Http4sOtel4sVersion,
+      "org.http4s" %% "http4s-otel4s-middleware-core-client" % Http4sOtel4sVersion,
       "org.http4s" %% "http4s-otel4s-middleware-trace-server" % Http4sOtel4sVersion,
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % Smithy4sVersion,
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
