@@ -34,4 +34,8 @@ object HttpTelemetry:
           .build
       metrics <- OtelMetrics.serverMetricsOps[F]()
       routes   = HttpRoutes[F](request => OptionT.liftF(app(request)))
-    yield tracing.wrapHttpApp(Metrics(metrics)(routes).orNotFound)
+    yield tracing.wrapHttpApp(
+      Metrics(metrics, classifierF = req => routeClassifier.classify(req.requestPrelude))(
+        routes,
+      ).orNotFound,
+    )
