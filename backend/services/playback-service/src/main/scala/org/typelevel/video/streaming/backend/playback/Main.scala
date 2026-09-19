@@ -17,13 +17,14 @@ import org.typelevel.video.streaming.backend.playback.repository.{
 import org.typelevel.video.streaming.backend.playback.service.PlaybackServiceImpl
 import org.typelevel.video.streaming.backend.playback.storage.S3VideoStorageImpl
 import org.typelevel.video.streaming.backend.playback.worker.PlaybackEventWorker
+import org.typelevel.video.streaming.backend.playback.api.PlaybackService
 import org.typelevel.video.streaming.backend.runtime.auth.{
   AccessTokenVerifier,
   BearerAuthenticationMiddleware,
   RsaKeyLoader,
 }
 import org.typelevel.video.streaming.backend.runtime.context.IOLocalRequestContext
-import org.typelevel.video.streaming.backend.runtime.http.HttpServer
+import org.typelevel.video.streaming.backend.runtime.http.{HttpServer, SmithyRouteClassifier}
 import org.typelevel.video.streaming.backend.runtime.postgres.Postgres
 import org.typelevel.video.streaming.backend.runtime.telemetry.Telemetry
 import smithy4s.http4s.SimpleRestJsonBuilder
@@ -57,7 +58,9 @@ object Main extends IOApp.Simple:
             _.putHeaders(Header.Raw(CIString("Cache-Control"), "no-store")),
           )
 
-          (HttpServer.run(config.server, app), worker.run).parTupled.void
+          val routeClassifier = SmithyRouteClassifier(PlaybackService)
+
+          (HttpServer.run(config.server, app, routeClassifier), worker.run).parTupled.void
         }
       }
     }

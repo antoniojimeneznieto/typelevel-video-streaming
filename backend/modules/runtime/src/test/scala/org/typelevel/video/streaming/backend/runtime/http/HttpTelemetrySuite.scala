@@ -10,6 +10,7 @@ import io.opentelemetry.sdk.common.CompletableResultCode
 import io.opentelemetry.sdk.trace.SdkTracerProvider
 import io.opentelemetry.sdk.trace.data.SpanData
 import io.opentelemetry.sdk.trace.`export`.{SimpleSpanProcessor, SpanExporter}
+import org.http4s.otel4s.middleware.server.RouteClassifier
 import org.http4s.{Header, HttpApp, Method, Request, Response, Status, Uri}
 import org.http4s.server.middleware.CORS
 import org.typelevel.ci.CIString
@@ -29,7 +30,7 @@ object HttpTelemetrySuite extends SimpleIOSuite:
       HttpApp[IO](request => IO.pure(Response[IO](Status.Ok).withEntity(request.uri.renderString)))
 
     for
-      instrumented <- HttpTelemetry(app)
+      instrumented <- HttpTelemetry(app, RouteClassifier.indeterminate)
       response     <- instrumented(Request[IO](uri = uri))
       body         <- response.as[String]
     yield expect(response.status == Status.Ok) and expect(body == uri.renderString)
@@ -44,7 +45,7 @@ object HttpTelemetrySuite extends SimpleIOSuite:
     )
 
     for
-      instrumented <- HttpTelemetry(app)
+      instrumented <- HttpTelemetry(app, RouteClassifier.indeterminate)
       response     <- instrumented(Request[IO]())
       _            <- response.body.compile.drain
     yield expect(response.status == Status.Unauthorized) and
@@ -56,7 +57,7 @@ object HttpTelemetrySuite extends SimpleIOSuite:
     val app     = HttpApp[IO](_ => IO.raiseError[Response[IO]](failure))
 
     for
-      instrumented <- HttpTelemetry(app)
+      instrumented <- HttpTelemetry(app, RouteClassifier.indeterminate)
       response     <- instrumented(Request[IO]()).attempt
     yield expect(response == Left(failure))
   }
@@ -72,7 +73,7 @@ object HttpTelemetrySuite extends SimpleIOSuite:
       )
 
     for
-      instrumented <- HttpTelemetry(app)
+      instrumented <- HttpTelemetry(app, RouteClassifier.indeterminate)
       response     <- instrumented(request)
       _            <- response.body.compile.drain
     yield expect(response.status.isSuccess) and
@@ -97,7 +98,7 @@ object HttpTelemetrySuite extends SimpleIOSuite:
         app     = HttpApp[IO](_ =>
                 tracer.span("database-operation").surround(IO.pure(Response[IO](Status.Ok))),
               )
-        instrumented <- HttpTelemetry(app)
+        instrumented <- HttpTelemetry(app, RouteClassifier.indeterminate)
         response     <- instrumented(request)
         _            <- response.body.compile.drain
         recorded     <- IO(spans.iterator().asScala.toList)

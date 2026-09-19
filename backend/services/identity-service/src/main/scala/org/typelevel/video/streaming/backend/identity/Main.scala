@@ -4,6 +4,7 @@ import cats.effect.{IO, IOApp}
 import org.http4s.HttpApp
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.TracerProvider
+import org.typelevel.video.streaming.backend.identity.api.IdentityService
 import org.typelevel.video.streaming.backend.identity.auth.AccessTokenClaims
 import org.typelevel.video.streaming.backend.identity.config.AppConfig
 import org.typelevel.video.streaming.backend.identity.repository.IdentityRepositoryImpl
@@ -18,7 +19,7 @@ import org.typelevel.video.streaming.backend.runtime.auth.{
   RsaKeyLoader,
 }
 import org.typelevel.video.streaming.backend.runtime.context.IOLocalRequestContext
-import org.typelevel.video.streaming.backend.runtime.http.HttpServer
+import org.typelevel.video.streaming.backend.runtime.http.{HttpServer, SmithyRouteClassifier}
 import org.typelevel.video.streaming.backend.runtime.postgres.Postgres
 import org.typelevel.video.streaming.backend.runtime.telemetry.Telemetry
 import smithy4s.http4s.SimpleRestJsonBuilder
@@ -59,8 +60,9 @@ object Main extends IOApp.Simple:
                    .resource
                    .use { identityRoutes =>
                      val app: HttpApp[IO] = identityRoutes.orNotFound
+                     val routeClassifier  = SmithyRouteClassifier(IdentityService)
 
-                     HttpServer.run(config.server, app)
+                     HttpServer.run(config.server, app, routeClassifier)
                    }
           yield ()
         }

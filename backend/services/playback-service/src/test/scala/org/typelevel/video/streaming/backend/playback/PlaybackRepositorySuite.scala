@@ -6,6 +6,7 @@ import java.util.UUID
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.events as event
@@ -26,6 +27,7 @@ import weaver.{Expectations, SimpleIOSuite}
 
 object PlaybackRepositorySuite extends SimpleIOSuite:
 
+  private given Slf4jFactory[IO]   = Slf4jFactory.create[IO]
   private given MeterProvider[IO]  = MeterProvider.noop[IO]
   private given TracerProvider[IO] = TracerProvider.noop[IO]
 

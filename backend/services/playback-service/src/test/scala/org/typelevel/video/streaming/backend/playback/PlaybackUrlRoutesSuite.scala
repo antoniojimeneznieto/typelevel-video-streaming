@@ -6,6 +6,7 @@ import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
 import org.http4s.{Header, HttpApp, Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.video.streaming.backend.playback.api.{
   PlaybackUnavailableError,
   PlaybackUrlResponse,
@@ -35,6 +36,8 @@ import smithy4s.json.Json
 import weaver.SimpleIOSuite
 
 object PlaybackUrlRoutesSuite extends SimpleIOSuite:
+
+  private given Slf4jFactory[IO] = Slf4jFactory.create[IO]
 
   private val userId    = UUID.fromString("550e8400-e29b-41d4-a716-446655440000")
   private val courseId  = CourseId(UUID.fromString("00000000-0000-0000-0000-000000000104"))

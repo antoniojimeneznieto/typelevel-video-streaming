@@ -7,7 +7,11 @@ import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.runtime.config.PostgresConfig
 import skunk.Session
-import io.opentelemetry.instrumentation.api.incubator.semconv.db.{SqlDialect, SqlQuery, SqlQueryAnalyzer}
+import io.opentelemetry.instrumentation.api.incubator.semconv.db.{
+  SqlDialect,
+  SqlQuery,
+  SqlQueryAnalyzer,
+}
 import skunk.telemetry.{QueryAnalyzer, TelemetryConfig}
 
 object Postgres:
@@ -24,20 +28,19 @@ object Postgres:
       .withTelemetryConfig(
         TelemetryConfig.default
           .withProtocolSpans(TelemetryConfig.ProtocolSpans.Disabled)
-          .withQueryAnalyzer(queryAnalyzer)
+          .withQueryAnalyzer(queryAnalyzer),
       )
       .pooled(config.maxConnections)
 
   private def queryAnalyzer: QueryAnalyzer =
-    val dialect = SqlDialect.DOUBLE_QUOTES_ARE_IDENTIFIERS
+    val dialect  = SqlDialect.DOUBLE_QUOTES_ARE_IDENTIFIERS
     val delegate = SqlQueryAnalyzer.create(true)
     QueryAnalyzer { sql =>
       Option(delegate.analyzeWithSummary(sql, dialect)).map { (q: SqlQuery) =>
         QueryAnalyzer.Analysis(
-          queryText = Option(q.getQueryText),
+          queryText           = Option(q.getQueryText),
           storedProcedureName = Option(q.getStoredProcedureName),
-          querySummary = Option(q.getQuerySummary)
+          querySummary        = Option(q.getQuerySummary),
         )
       }
     }
-

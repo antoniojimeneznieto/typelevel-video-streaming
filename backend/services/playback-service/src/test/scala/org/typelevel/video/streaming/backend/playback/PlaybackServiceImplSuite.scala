@@ -5,6 +5,7 @@ import java.util.UUID
 
 import cats.effect.{Clock, IO, Ref}
 import cats.syntax.all.*
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.video.streaming.backend.playback.api.*
 import org.typelevel.video.streaming.backend.playback.domain.*
 import org.typelevel.video.streaming.backend.playback.repository.PlaybackRepository
@@ -15,6 +16,8 @@ import smithy4s.time.Timestamp
 import weaver.SimpleIOSuite
 
 object PlaybackServiceImplSuite extends SimpleIOSuite:
+
+  private given Slf4jFactory[IO] = Slf4jFactory.create[IO]
 
   private val alice           = UUID.fromString("00000000-0000-0000-0000-000000000001")
   private val bob             = UUID.fromString("00000000-0000-0000-0000-000000000002")
