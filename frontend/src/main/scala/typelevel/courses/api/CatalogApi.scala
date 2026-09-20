@@ -1,8 +1,8 @@
 package typelevel.courses.api
 
 import cats.effect.IO
-import org.http4s.{Request, Uri}
 import org.http4s.client.Client
+import org.http4s.{Request, Uri}
 
 final class CatalogApi(baseUri: Uri, client: Client[IO]):
 

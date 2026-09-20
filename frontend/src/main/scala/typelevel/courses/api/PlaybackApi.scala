@@ -3,11 +3,11 @@ package typelevel.courses.api
 import scala.concurrent.duration.*
 
 import cats.effect.{IO, Temporal}
-import org.http4s.{AuthScheme, Credentials, Method, Request, Uri}
 import org.http4s.circe.CirceEntityCodec.*
 import org.http4s.client.Client
 import org.http4s.dom.FetchOptions
 import org.http4s.headers.Authorization
+import org.http4s.{AuthScheme, Credentials, Method, Request, Uri}
 
 final class PlaybackApi(baseUri: Uri, client: Client[IO]):
 

@@ -1,7 +1,7 @@
 package typelevel.courses.pages
 
-import cats.effect.{Deferred, IO, Ref, Resource}
 import cats.effect.std.Queue
+import cats.effect.{Deferred, IO, Ref, Resource}
 import cats.syntax.all.*
 
 /** A view owns the queue's lifetime; the application owns draining it after the view closes. */

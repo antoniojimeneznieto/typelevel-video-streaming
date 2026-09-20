@@ -2,8 +2,8 @@ package typelevel.courses.pages
 
 import scala.concurrent.duration.*
 
-import cats.effect.{Deferred, IO, Ref}
 import cats.effect.std.{Queue, Supervisor}
+import cats.effect.{Deferred, IO, Ref}
 import munit.CatsEffectSuite
 
 final class ProgressWriterSuite extends CatsEffectSuite:

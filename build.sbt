@@ -21,6 +21,7 @@ val AwsSdkVersion              = "2.49.2"
 val Password4jVersion          = "1.8.4"
 val JavaJwtVersion             = "4.6.0"
 val OtelInstrumentationVersion = "2.31.1-alpha"
+val TestcontainersVersion      = "2.0.5"
 
 organization := "org.typelevel.video.streaming"
 scalaVersion := ScalaLtsVersion
@@ -32,6 +33,8 @@ semanticdbVersion := scalafixSemanticdb.revision
 
 addCommandAlias("fix", "; scalafixAll; scalafmtAll; scalafmtSbt")
 addCommandAlias("lint", "; scalafixAll --check; scalafmtCheckAll; scalafmtSbtCheck")
+
+Global / lintUnusedKeysOnLoad := false
 
 val serviceMainClass = settingKey[String]("Main class for this service's application launcher")
 
@@ -147,6 +150,7 @@ lazy val runtime = project
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
       "ch.qos.logback" % "logback-classic" % LogbackVersion,
       "com.auth0" % "java-jwt" % JavaJwtVersion,
+      "org.testcontainers" % "testcontainers-postgresql" % TestcontainersVersion % Test,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
     testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
@@ -172,7 +176,7 @@ lazy val apiContracts = project
     Compile / exportJars := true,
     libraryDependencies +=
       "com.disneystreaming.smithy4s" %% "smithy4s-core" % Smithy4sVersion,
-    Compile / scalacOptions += "-Wconf:id=E230&src=.*/src_managed/.*:s"
+    Compile / scalacOptions += "-Wconf:id=E230&src=.*/src_managed/.*:s",
   )
 
 lazy val statusService = project
@@ -224,7 +228,7 @@ lazy val identityService = project
   .in(file("backend/services/identity-service"))
   .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(noPublishSettings)
-  .dependsOn(runtime, events, apiContracts)
+  .dependsOn(runtime % "compile->compile;test->test", events, apiContracts)
   .settings(
     serviceSettings(
       serviceName   = "identity-service",
@@ -249,7 +253,7 @@ lazy val catalogService = project
   .in(file("backend/services/catalog-service"))
   .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(noPublishSettings)
-  .dependsOn(runtime, apiContracts)
+  .dependsOn(runtime % "compile->compile;test->test", apiContracts)
   .settings(
     serviceSettings(
       serviceName   = "catalog-service",
@@ -273,7 +277,7 @@ lazy val playbackService = project
   .in(file("backend/services/playback-service"))
   .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(noPublishSettings)
-  .dependsOn(runtime, events, apiContracts)
+  .dependsOn(runtime % "compile->compile;test->test", events, apiContracts)
   .settings(
     serviceSettings(
       serviceName   = "playback-service",

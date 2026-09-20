@@ -1,12 +1,12 @@
 package org.typelevel.video.streaming.backend.runtime.http
 
-import org.http4s.{RequestPrelude, Uri}
 import org.http4s.otel4s.middleware.client.UriTemplateClassifier
 import org.http4s.otel4s.middleware.server.RouteClassifier
+import org.http4s.{RequestPrelude, Uri}
 import smithy.api.Http
-import smithy4s.Service
 import smithy4s.http.{HttpEndpoint, HttpMethod}
 import smithy4s.http4s.kernel.toSmithy4sHttpUri
+import smithy4s.Service
 
 object SmithyRouteClassifier:
 

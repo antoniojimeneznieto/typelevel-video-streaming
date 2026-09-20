@@ -3,15 +3,15 @@ package org.typelevel.video.streaming.backend.runtime.postgres
 import cats.effect.std.Console
 import cats.effect.{Resource, Temporal}
 import fs2.io.net.Network
-import org.typelevel.otel4s.metrics.MeterProvider
-import org.typelevel.otel4s.trace.TracerProvider
-import org.typelevel.video.streaming.backend.runtime.config.PostgresConfig
-import skunk.Session
 import io.opentelemetry.instrumentation.api.incubator.semconv.db.{
   SqlDialect,
   SqlQuery,
   SqlQueryAnalyzer,
 }
+import org.typelevel.otel4s.metrics.MeterProvider
+import org.typelevel.otel4s.trace.TracerProvider
+import org.typelevel.video.streaming.backend.runtime.config.PostgresConfig
+import skunk.Session
 import skunk.telemetry.{QueryAnalyzer, TelemetryConfig}
 
 object Postgres:
