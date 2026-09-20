@@ -26,5 +26,6 @@ object HttpServer:
           .withPort(config.port)
           .withHttpApp(instrumented)
           .build
-          .use(_ => Async[F].never[Unit])
+          .useForever
+          .void
       }
