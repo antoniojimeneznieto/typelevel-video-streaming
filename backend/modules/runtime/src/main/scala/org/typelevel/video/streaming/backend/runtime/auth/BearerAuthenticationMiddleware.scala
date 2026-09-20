@@ -1,6 +1,5 @@
 package org.typelevel.video.streaming.backend.runtime.auth
 
-import cats.data.Kleisli
 import cats.Monad
 import cats.syntax.all.*
 import org.http4s.headers.Authorization
@@ -24,14 +23,14 @@ final class BearerAuthenticationMiddleware[F[_]: Monad, Principal](
     else identity
 
   private def authenticate(http: HttpApp[F]): HttpApp[F] =
-    Kleisli { request =>
-      bearerToken(request) match
-        case Some(token) =>
-          verifier.verify(token).flatMap {
-            case Some(principal) => context.scope(principal)(http(request))
-            case None => unauthorized
+    HttpApp[F] { request =>
+      bearerToken(request).fold(unauthorized) { token =>
+        verifier.verify(token).flatMap {
+          _.fold(unauthorized) { principal =>
+            context.scope(principal)(http(request))
           }
-        case None => unauthorized
+        }
+      }
     }
 
   private def bearerToken(request: Request[F]): Option[String] =
