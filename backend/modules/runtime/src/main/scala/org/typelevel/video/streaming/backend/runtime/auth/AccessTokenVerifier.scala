@@ -44,10 +44,8 @@ final class AccessTokenVerifier[Principal] private (
     }.recover { case _: JWTVerificationException => None }
 
   private def parseUuid(value: String): Option[UUID] =
-    try
-      val parsed = UUID.fromString(value)
-      Option.when(parsed.toString.equalsIgnoreCase(value))(parsed)
-    catch case _: IllegalArgumentException => None
+    Try(UUID.fromString(value)).toOption
+      .filter(_.toString.equalsIgnoreCase(value))
 
 object AccessTokenVerifier:
 
