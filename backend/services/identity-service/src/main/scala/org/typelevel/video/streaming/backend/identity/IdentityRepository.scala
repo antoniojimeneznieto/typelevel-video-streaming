@@ -28,8 +28,8 @@ final class IdentityRepositoryImpl(
   override def create(user: User): IO[Option[User]] =
     sessions.use { session =>
       session.transaction.use { _ =>
-        session.option(insertUser)(user).flatMap {
-          case Some(created) =>
+        session.option(insertUser)(user).flatMap(
+          _.traverse { created =>
             for
               id          <- IO(UUID.randomUUID())
               createdEvent = event.UserCreated(
@@ -38,9 +38,9 @@ final class IdentityRepositoryImpl(
                                userId     = event.UserId(created.id.value),
                              )
               _ <- session.execute(insertUserCreated)(createdEvent)
-            yield Some(created)
-          case None => IO.pure(None)
-        }
+            yield created
+          },
+        )
       }
     }
 
