@@ -2,24 +2,24 @@ import com.typesafe.sbt.packager.docker.DockerAlias
 import org.scalajs.linker.interface.{ModuleKind, ModuleSplitStyle}
 
 val ScalaLtsVersion            = "3.9.0"
-val CatsEffectVersion          = "3.7.0"
+val CatsEffectVersion          = "3.7.1"
 val Fs2Version                 = "3.14.0"
-val Http4sStableVersion        = "0.23.34"
+val Http4sStableVersion        = "0.23.37"
 val Http4sOtel4sVersion        = "0.18.0"
 val Ip4sVersion                = "3.8.0"
 val WeaverVersion              = "0.13.0"
-val LogbackVersion             = "1.5.35"
+val LogbackVersion             = "1.5.38"
 val Log4catsVersion            = "2.8.0"
 val SkunkVersion               = "2.0.0-RC3"
-val Smithy4sVersion            = "0.19.11"
+val Smithy4sVersion            = "0.19.12"
 val Fs2KafkaVersion            = "4.1.0"
 val Fs2KafkaOtel4sVersion      = "0.2.0"
 val Otel4sVersion              = "1.1.0"
-val OpenTelemetryVersion       = "1.64.0"
+val OpenTelemetryVersion       = "1.66.0"
 val CirisVersion               = "3.9.0"
-val AwsSdkVersion              = "2.49.2"
+val AwsSdkVersion              = "2.49.6"
 val Password4jVersion          = "1.8.4"
-val JavaJwtVersion             = "4.6.0"
+val JavaJwtVersion             = "4.6.1"
 val OtelInstrumentationVersion = "2.31.1-alpha"
 val TestcontainersVersion      = "2.0.5"
 
@@ -102,7 +102,7 @@ lazy val frontend = project
       "org.typelevel" %% "cats-effect" % CatsEffectVersion,
       "io.circe" %% "circe-core" % "0.14.16",
       "io.circe" %% "circe-parser" % "0.14.16",
-      "org.typelevel" %% "munit-cats-effect" % "2.2.0" % Test,
+      "org.typelevel" %% "munit-cats-effect" % "2.2.1" % Test,
     ),
   )
 
