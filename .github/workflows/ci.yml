@@ -18,25 +18,6 @@ jobs:
     name: Backend and frontend tests
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      IDENTITY_REPOSITORY_TESTS: 'true'
-      PLAYBACK_REPOSITORY_TESTS: 'true'
-      IDENTITY_TEST_POSTGRES_HOST: 127.0.0.1
-      PLAYBACK_TEST_POSTGRES_HOST: 127.0.0.1
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
