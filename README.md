@@ -9,7 +9,7 @@ A demo video streaming platform for the Scala Days 2026 interactive lab:
   [http4s](https://http4s.org/), [Skunk](https://tpolecat.github.io/skunk/),
   and [Smithy4s](https://disneystreaming.github.io/smithy4s/).
 - Frontend: [Calico](https://www.armanbilge.com/calico/) on Scala.js.
-- Telemetry: [otel4s](https://typelevel.org/otel4s/)
+- Telemetry: [otel4s](https://typelevel.org/otel4s/) with Grafana's OpenTelemetry LGTM stack.
 
 ## Requirements
 
@@ -36,7 +36,10 @@ From the repository root:
 The script builds the images, initializes the databases, uploads the bundled demo videos to MinIO,
 and starts the frontend, backend services, and infrastructure. The first run can take several minutes.
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:8000](http://localhost:8000).
+
+Grafana is available at [http://localhost:3000](http://localhost:3000) (login: `admin` / `admin`).
+The four backend services export HTTP traces and metrics to the bundled collector over the Docker network.
 
 The stack runs in the background. To stop it:
 

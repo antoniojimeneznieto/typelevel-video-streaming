@@ -37,7 +37,7 @@ object AppRoutes:
                       requireAuth(ctx) {
                         (IO.cede *>
                           slug.get.flatMap(value =>
-                            ctx.navigator.replace(AppRoute.Watch(value, "lesson-1"))
+                            ctx.navigator.replace(AppRoute.Watch(value, "lesson-1")),
                           )).background.void *>
                           div(cls := "route-redirect").widen
                       }
@@ -49,14 +49,14 @@ object AppRoutes:
     course |+| watch |+| watchDefault |+| notFound
 
   private def staticRoute(
-      expected: AppRoute
+      expected: AppRoute,
   )(page: => Resource[IO, HtmlElement[IO]]): IO[Routes[IO]] =
     Routes.one[IO] { case uri if sameTemplate(AppRoute.parse(uri), expected) => () }(_ => page)
 
   private def authRoute(
       ctx: AppContext,
       expected: AppRoute,
-      mode: AuthPage.Mode
+      mode: AuthPage.Mode,
   ): IO[Routes[IO]] =
     Routes.one[IO] { case uri if sameTemplate(AppRoute.parse(uri), expected) => uri } { location =>
       AuthPage(ctx, mode, location)
@@ -64,7 +64,7 @@ object AppRoutes:
 
   private def protectedStatic(
       ctx: AppContext,
-      expected: AppRoute
+      expected: AppRoute,
   )(page: => Resource[IO, HtmlElement[IO]]): IO[Routes[IO]] =
     staticRoute(expected)(requireAuth(ctx)(page))
 
@@ -74,12 +74,12 @@ object AppRoutes:
       case _ => actual == expected
 
   private def routeView[A](
-      value: Signal[IO, A]
+      value: Signal[IO, A],
   )(page: A => Resource[IO, HtmlElement[IO]]): Resource[IO, HtmlElement[IO]] =
     div(cls := "route-view", value.map(page)).widen
 
   private def requireAuth(
-      ctx: AppContext
+      ctx: AppContext,
   )(page: => Resource[IO, HtmlElement[IO]]): Resource[IO, HtmlElement[IO]] =
     div(
       styleAttr := "display: contents",
@@ -91,12 +91,12 @@ object AppRoutes:
               aria.live := "polite",
               aria.busy := true,
               span(cls := "session-check__spinner", aria.hidden := true),
-              "Checking your session…"
-            )
+              "Checking your session…",
+            ),
           )
         case AuthStatus.Authenticated => List(page)
         case AuthStatus.Anonymous => List(redirectToLogin(ctx))
-      }
+      },
     ).widen
 
   private def redirectToLogin(ctx: AppContext): Resource[IO, HtmlElement[IO]] =

@@ -11,18 +11,18 @@ final class IdentityApi(baseUri: Uri, client: Client[IO]):
   def register(request: RegisterRequest): IO[User] =
     HttpClient.json[User](
       client,
-      Request[IO](Method.POST, baseUri / "users").withEntity(request)
+      Request[IO](Method.POST, baseUri / "users").withEntity(request),
     )
 
   def login(request: LoginRequest): IO[LoginResponse] =
     HttpClient.json[LoginResponse](
       client,
-      Request[IO](Method.POST, baseUri / "auth" / "login").withEntity(request)
+      Request[IO](Method.POST, baseUri / "auth" / "login").withEntity(request),
     )
 
   def currentUser(accessToken: String): IO[User] =
     HttpClient.json[User](
       client,
       Request[IO](uri = baseUri / "users" / "me")
-        .putHeaders(Authorization(Credentials.Token(AuthScheme.Bearer, accessToken)))
+        .putHeaders(Authorization(Credentials.Token(AuthScheme.Bearer, accessToken))),
     )

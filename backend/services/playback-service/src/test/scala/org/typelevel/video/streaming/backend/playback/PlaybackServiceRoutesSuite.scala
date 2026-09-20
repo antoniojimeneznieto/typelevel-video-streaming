@@ -8,9 +8,10 @@ import cats.syntax.all.*
 import org.http4s.headers.`Content-Type`
 import org.http4s.{Header, HttpApp, MediaType, Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.video.streaming.backend.playback.api.{
   ListPlaybackProgressInput,
-  PlaybackUrlResponse
+  PlaybackUrlResponse,
 }
 import org.typelevel.video.streaming.backend.playback.domain.*
 import org.typelevel.video.streaming.backend.playback.repository.PlaybackRepository
@@ -18,7 +19,7 @@ import org.typelevel.video.streaming.backend.playback.service.PlaybackServiceImp
 import org.typelevel.video.streaming.backend.playback.storage.S3VideoStorage
 import org.typelevel.video.streaming.backend.runtime.auth.{
   BearerAuthenticationMiddleware,
-  BearerTokenVerifier
+  BearerTokenVerifier,
 }
 import org.typelevel.video.streaming.backend.runtime.context.IOLocalRequestContext
 import smithy4s.Blob
@@ -29,6 +30,8 @@ import weaver.SimpleIOSuite
 
 object PlaybackServiceRoutesSuite extends SimpleIOSuite:
 
+  private given Slf4jFactory[IO] = Slf4jFactory.create[IO]
+
   private val userId   = UUID.fromString("550e8400-e29b-41d4-a716-446655440000")
   private val courseId = CourseId(UUID.fromString("00000000-0000-0000-0000-000000000104"))
   private val lessonId = valid(LessonId("lesson-1"))
@@ -38,7 +41,7 @@ object PlaybackServiceRoutesSuite extends SimpleIOSuite:
     valid(LessonTitle("Threads at Scale")),
     valid(DurationSeconds(120)),
     true,
-    valid(ObjectKey("published/threads-at-scale.mp4"))
+    valid(ObjectKey("published/threads-at-scale.mp4")),
   )
   private val now          = Timestamp.fromInstant(Instant.parse("2026-09-07T10:00:00Z"))
   private val progressPath = s"/courses/${courseId.value}/lessons/${lessonId.value}/progress"
@@ -51,7 +54,7 @@ object PlaybackServiceRoutesSuite extends SimpleIOSuite:
       request(Method.GET, "/progress", false),
       request(Method.PUT, favoritePath, false),
       request(Method.DELETE, favoritePath, false),
-      request(Method.GET, "/favorites", false)
+      request(Method.GET, "/favorites", false),
     )
 
     routes(new PlaybackRepositoryStub {}).use { app =>
@@ -91,7 +94,7 @@ object PlaybackServiceRoutesSuite extends SimpleIOSuite:
           actual.map(_._2.completed) == List(true, false),
           Json.read[PlaybackProgress](Blob(completedBody)).toOption == actual.headOption.map(_._2),
           Json.read[PlaybackProgress](Blob(rewoundBody)).toOption == actual.lastOption.map(_._2),
-          completedBody.contains("\"updatedAt\":\"")
+          completedBody.contains("\"updatedAt\":\""),
         )
       }
     }
@@ -106,7 +109,7 @@ object PlaybackServiceRoutesSuite extends SimpleIOSuite:
             limit: PageLimit,
             offset: PageOffset,
             courseId: Option[CourseId],
-            completed: Option[Boolean]
+            completed: Option[Boolean],
         ): IO[PlaybackProgressPage] =
           calls.update(_ :+ (id, ListPlaybackProgressInput(limit, offset, courseId, completed))) *>
             IO.pure(PlaybackProgressPage(List(item), valid(TotalCount(4)), limit, offset))
@@ -116,8 +119,8 @@ object PlaybackServiceRoutesSuite extends SimpleIOSuite:
           response <- app(
                         request(
                           Method.GET,
-                          s"/progress?courseId=${courseId.value}&completed=true&limit=2&offset=3"
-                        )
+                          s"/progress?courseId=${courseId.value}&completed=true&limit=2&offset=3",
+                        ),
                       )
           body   <- response.as[String]
           actual <- calls.get
@@ -130,18 +133,18 @@ object PlaybackServiceRoutesSuite extends SimpleIOSuite:
                 valid(PageLimit(2)),
                 valid(PageOffset(3)),
                 Some(courseId),
-                Some(true)
-              )
-            )
+                Some(true),
+              ),
+            ),
           ),
           Json.read[PlaybackProgressPage](Blob(body)) == Right(
             PlaybackProgressPage(
               List(item),
               valid(TotalCount(4)),
               valid(PageLimit(2)),
-              valid(PageOffset(3))
-            )
-          )
+              valid(PageOffset(3)),
+            ),
+          ),
         )
       }
     }
@@ -155,7 +158,7 @@ object PlaybackServiceRoutesSuite extends SimpleIOSuite:
                      override def addFavorite(
                          id: UUID,
                          courseId: CourseId,
-                         createdAt: Timestamp
+                         createdAt: Timestamp,
                      ): IO[Option[Favorite]] =
                        calls.update(_ :+ ("add", id, courseId)).as(Some(item))
 
@@ -165,12 +168,12 @@ object PlaybackServiceRoutesSuite extends SimpleIOSuite:
                      override def listFavorites(
                          id: UUID,
                          limit: PageLimit,
-                         offset: PageOffset
+                         offset: PageOffset,
                      ): IO[FavoritePage] =
                        calls
                          .update(_ :+ ("list", id, courseId))
                          .as(
-                           FavoritePage(List(item), valid(TotalCount(1)), limit, offset)
+                           FavoritePage(List(item), valid(TotalCount(1)), limit, offset),
                          )
       result <- routes(repository).use { app =>
                   for
@@ -190,16 +193,16 @@ object PlaybackServiceRoutesSuite extends SimpleIOSuite:
                         List(item),
                         valid(TotalCount(1)),
                         valid(PageLimit(10)),
-                        valid(PageOffset(0))
-                      )
+                        valid(PageOffset(0)),
+                      ),
                     ),
                     removed.status == Status.NoContent,
                     removedBody.isEmpty,
                     actual == List(
                       ("add", userId, courseId),
                       ("list", userId, courseId),
-                      ("remove", userId, courseId)
-                    )
+                      ("remove", userId, courseId),
+                    ),
                   )
                 }
     yield result
@@ -210,7 +213,7 @@ object PlaybackServiceRoutesSuite extends SimpleIOSuite:
       override def addFavorite(
           id: UUID,
           courseId: CourseId,
-          createdAt: Timestamp
+          createdAt: Timestamp,
       ): IO[Option[Favorite]] = IO.pure(None)
 
     for

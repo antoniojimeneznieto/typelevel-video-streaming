@@ -13,13 +13,13 @@ import org.typelevel.video.streaming.backend.runtime.config.{HttpServerConfig, P
 final case class JwtConfig(
     privateKeyPath: Path,
     publicKeyPath: Path,
-    accessTokenExpiresIn: ExpiresInSeconds
+    accessTokenExpiresIn: ExpiresInSeconds,
 )
 
 final case class AppConfig(
     server: HttpServerConfig,
     postgres: PostgresConfig,
-    jwt: JwtConfig
+    jwt: JwtConfig,
 )
 
 object AppConfig:
@@ -45,7 +45,7 @@ object AppConfig:
         .default(Paths.get("infrastructure/identity/keys/public-key.pem")),
       env("JWT_ACCESS_TOKEN_EXPIRES_IN_SECONDS")
         .as[ExpiresInSeconds]
-        .default(defaultTokenLifetime)
+        .default(defaultTokenLifetime),
     ).parMapN(JwtConfig.apply)
 
   private val config: ConfigValue[Effect, AppConfig] =
@@ -53,9 +53,9 @@ object AppConfig:
       HttpServerConfig.config(port"8081"),
       PostgresConfig.config(
         defaultDatabase = "identity",
-        defaultPassword = "identity-local-secret"
+        defaultPassword = "identity-local-secret",
       ),
-      jwtConfig
+      jwtConfig,
     ).parMapN(AppConfig.apply)
 
   def load[F[_]: Async]: F[AppConfig] =

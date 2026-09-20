@@ -20,7 +20,7 @@ final class ProgressWriterSuite extends CatsEffectSuite:
                      IO.whenA(position == 10)(gate.get),
                  _ => IO.unit,
                  effect => supervisor.supervise(effect).void,
-                 effect => supervisor.supervise(effect).void
+                 effect => supervisor.supervise(effect).void,
                )
                .use { writer =>
                  for
@@ -57,7 +57,7 @@ final class ProgressWriterSuite extends CatsEffectSuite:
                    },
                  reports.offer,
                  effect => supervisor.supervise(effect).void,
-                 effect => supervisor.supervise(effect).void
+                 effect => supervisor.supervise(effect).void,
                )
                .use { writer =>
                  for
@@ -78,7 +78,7 @@ final class ProgressWriterSuite extends CatsEffectSuite:
   }
 
   test(
-    "close is non-blocking and preserves final completion while discarding intermediate positions"
+    "close is non-blocking and preserves final completion while discarding intermediate positions",
   ) {
     Supervisor[IO].use { supervisor =>
       for
@@ -92,7 +92,7 @@ final class ProgressWriterSuite extends CatsEffectSuite:
                              IO.whenA(position == 10)(started.complete(()).void *> gate.get),
                          _ => IO.unit,
                          effect => supervisor.supervise(effect).void,
-                         effect => supervisor.supervise(effect).void
+                         effect => supervisor.supervise(effect).void,
                        )
                        .allocated
         (writer, release) = allocated
@@ -124,7 +124,7 @@ final class ProgressWriterSuite extends CatsEffectSuite:
                  (_, keepalive) => started.offer(keepalive) *> IO.unlessA(keepalive)(gate.get),
                  _ => IO.unit,
                  effect => supervisor.supervise(effect).void,
-                 effect => supervisor.supervise(effect).void
+                 effect => supervisor.supervise(effect).void,
                )
                .use { writer =>
                  (for
@@ -155,7 +155,7 @@ final class ProgressWriterSuite extends CatsEffectSuite:
                    started.offer(position -> keepalive) *> IO.whenA(position == 20)(gate.get),
                  _ => acknowledged.complete(()).void,
                  effect => supervisor.supervise(effect).void,
-                 effect => supervisor.supervise(effect).void
+                 effect => supervisor.supervise(effect).void,
                )
                .use { writer =>
                  (for
@@ -194,7 +194,7 @@ final class ProgressWriterSuite extends CatsEffectSuite:
                      IO.whenA(position == 200)(savedLatest.complete(()).void),
                  _ => IO.unit,
                  effect => supervisor.supervise(effect).void,
-                 effect => supervisor.supervise(effect).void
+                 effect => supervisor.supervise(effect).void,
                )
                .use { writer =>
                  (for
@@ -218,7 +218,7 @@ final class ProgressWriterSuite extends CatsEffectSuite:
   }
 
   test(
-    "out-of-order urgent flushes reassert the latest position even when previously acknowledged"
+    "out-of-order urgent flushes reassert the latest position even when previously acknowledged",
   ) {
     Supervisor[IO].use { supervisor =>
       for
@@ -242,13 +242,13 @@ final class ProgressWriterSuite extends CatsEffectSuite:
                            keepalive && (
                              (position == 100 && previous == 0) ||
                                (position == 200 && previous == 1)
-                           )
+                           ),
                          )(if position == 100 then firstGate.get else secondGate.get) *>
                          persisted.offer(position)
                      },
                  _ => acknowledged.complete(()).void,
                  effect => supervisor.supervise(effect).void,
-                 effect => supervisor.supervise(effect).void
+                 effect => supervisor.supervise(effect).void,
                )
                .use { writer =>
                  (for
@@ -293,7 +293,7 @@ final class ProgressWriterSuite extends CatsEffectSuite:
                           tail.getAndSet(done.get).flatMap { previous =>
                             supervisor
                               .supervise(
-                                (previous *> effect).guarantee(done.complete(()).void)
+                                (previous *> effect).guarantee(done.complete(()).void),
                               )
                               .void
                           }
@@ -306,7 +306,7 @@ final class ProgressWriterSuite extends CatsEffectSuite:
                          IO.whenA(position == 200)(latestPersisted.complete(()).void),
                      _ => IO.unit,
                      effect => supervisor.supervise(effect).void,
-                     runWriter
+                     runWriter,
                    )
         oldAllocated           <- resource.allocated
         (oldWriter, releaseOld) = oldAllocated

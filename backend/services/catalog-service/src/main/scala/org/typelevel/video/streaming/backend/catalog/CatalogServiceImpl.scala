@@ -6,7 +6,7 @@ import org.typelevel.video.streaming.backend.catalog.domain.*
 import org.typelevel.video.streaming.backend.catalog.repository.CatalogRepository
 
 final class CatalogServiceImpl(
-    repository: CatalogRepository
+    repository: CatalogRepository,
 ) extends CatalogService[IO]:
 
   override def listCourses(
@@ -16,7 +16,7 @@ final class CatalogServiceImpl(
       level: Option[CourseLevel],
       kind: Option[CourseKind],
       topic: Option[Topic],
-      technology: Option[Technology]
+      technology: Option[Technology],
   ): IO[CoursePage] =
     repository.listCourses(
       CourseFilter(
@@ -26,8 +26,8 @@ final class CatalogServiceImpl(
         level      = level,
         kind       = kind,
         topic      = topic,
-        technology = technology
-      )
+        technology = technology,
+      ),
     )
 
   override def listLearningPaths(
@@ -35,7 +35,7 @@ final class CatalogServiceImpl(
       offset: PageOffset,
       query: Option[SearchQuery],
       level: Option[CourseLevel],
-      tone: Option[LearningPathTone]
+      tone: Option[LearningPathTone],
   ): IO[LearningPathPage] =
     repository.listLearningPaths(
       LearningPathFilter(
@@ -43,6 +43,6 @@ final class CatalogServiceImpl(
         offset = offset,
         query  = query,
         level  = level,
-        tone   = tone
-      )
+        tone   = tone,
+      ),
     )

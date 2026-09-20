@@ -13,12 +13,12 @@ import smithy4s.http4s.ServerEndpointMiddleware
 
 final class BearerAuthenticationMiddleware[F[_]: Monad, Principal](
     verifier: BearerTokenVerifier[F, Principal],
-    context: RequestContext[F, Principal]
+    context: RequestContext[F, Principal],
 ) extends ServerEndpointMiddleware.Simple[F]:
 
   override def prepareWithHints(
       serviceHints: Hints,
-      endpointHints: Hints
+      endpointHints: Hints,
   ): HttpApp[F] => HttpApp[F] =
     if requiresBearerAuthentication(serviceHints, endpointHints) then authenticate
     else identity
@@ -46,7 +46,7 @@ final class BearerAuthenticationMiddleware[F[_]: Monad, Principal](
 
   private def requiresBearerAuthentication(
       serviceHints: Hints,
-      endpointHints: Hints
+      endpointHints: Hints,
   ): Boolean =
     endpointHints.get(Auth) match
       case Some(auth) =>

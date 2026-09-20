@@ -11,7 +11,7 @@ import typelevel.courses.ui.{Icon, Icons}
 object NotFoundPage:
   def apply(
       ctx: AppContext,
-      embedded: Boolean = false
+      embedded: Boolean = false,
   ): Resource[IO, HtmlElement[IO]] =
     mainTag(
       cls := s"not-found${Option.when(embedded)(" not-found--embedded").getOrElse("")}",
@@ -27,7 +27,7 @@ object NotFoundPage:
           href := ctx.navigator.href(AppRoute.Browse),
           ctx.navigator.intercept(self, AppRoute.Browse),
           Icons(Icon.ArrowLeft),
-          " Browse courses"
+          " Browse courses",
         )
-      }
+      },
     )

@@ -32,7 +32,7 @@ final class Navigator(private val router: Router[IO]):
 
   def intercept(
       anchor: HtmlAnchorElement[IO],
-      destination: IO[Uri]
+      destination: IO[Uri],
   ): Resource[IO, Unit] =
     fs2.dom
       .events[IO, dom.MouseEvent](anchor.asInstanceOf[dom.EventTarget], "click")
@@ -43,7 +43,7 @@ final class Navigator(private val router: Router[IO]):
       .void
 
   private def clickNativeDestination(
-      destination: IO[Uri]
+      destination: IO[Uri],
   )(event: dom.MouseEvent): IO[Unit] =
     if Navigator.shouldIntercept(event) then
       IO(event.preventDefault()) *> destination.flatMap(router.navigate)
@@ -56,7 +56,7 @@ object Navigator:
       ctrlKey: Boolean,
       shiftKey: Boolean,
       altKey: Boolean,
-      defaultPrevented: Boolean
+      defaultPrevented: Boolean,
   ): Boolean =
     button == 0 &&
       !metaKey &&
@@ -72,5 +72,5 @@ object Navigator:
       ctrlKey          = event.ctrlKey,
       shiftKey         = event.shiftKey,
       altKey           = event.altKey,
-      defaultPrevented = event.defaultPrevented
+      defaultPrevented = event.defaultPrevented,
     )

@@ -6,13 +6,13 @@ import java.util.UUID
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
-import org.typelevel.otel4s.metrics.Meter
-import org.typelevel.otel4s.trace.Tracer
+import org.typelevel.otel4s.metrics.MeterProvider
+import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.events.UserCreated
 import org.typelevel.video.streaming.backend.identity.domain.*
 import org.typelevel.video.streaming.backend.identity.repository.{
   IdentityRepository,
-  IdentityRepositoryImpl
+  IdentityRepositoryImpl,
 }
 import skunk.codec.all.*
 import skunk.implicits.*
@@ -25,8 +25,8 @@ import weaver.{Expectations, SimpleIOSuite}
 
 object IdentityRepositorySuite extends SimpleIOSuite:
 
-  private given Meter[IO]  = Meter.noop[IO]
-  private given Tracer[IO] = Tracer.noop[IO]
+  private given MeterProvider[IO]  = MeterProvider.noop[IO]
+  private given TracerProvider[IO] = TracerProvider.noop[IO]
 
   private val createdAt = Timestamp.fromInstant(Instant.parse("2026-09-07T12:00:00Z"))
   private val alice     = user(1L, "alice@example.com")
@@ -39,8 +39,8 @@ object IdentityRepositorySuite extends SimpleIOSuite:
         events      <- database.outbox
         payloadKeys <- database.sessions.use(
                          _.execute(
-                           sql"SELECT jsonb_object_keys(payload) FROM outbox".query(text)
-                         )
+                           sql"SELECT jsonb_object_keys(payload) FROM outbox".query(text),
+                         ),
                        )
         count <- database.userCount
       yield expect.all(
@@ -61,8 +61,8 @@ object IdentityRepositorySuite extends SimpleIOSuite:
         events.forall(row =>
           !row.payload.contains(alice.email.value) &&
             !row.payload.contains(alice.passwordHash.value) &&
-            !row.payload.contains(alice.displayName.value)
-        )
+            !row.payload.contains(alice.displayName.value),
+        ),
       )
     }
   }
@@ -84,7 +84,7 @@ object IdentityRepositorySuite extends SimpleIOSuite:
         currentEvents == initialEvents,
         currentEvents.size == 1,
         stored.contains(alice),
-        count == 1L
+        count == 1L,
       )
     }
   }
@@ -112,9 +112,9 @@ object IdentityRepositorySuite extends SimpleIOSuite:
             .read[UserCreated](Blob(row.payload))
             .exists(event =>
               winners.exists(winner => event.userId.value == winner.id.value) &&
-                event.eventId.value == row.id
+                event.eventId.value == row.id,
             )
-        }
+        },
       )
     }
   }
@@ -140,13 +140,13 @@ object IdentityRepositorySuite extends SimpleIOSuite:
         rejectedEvents.isEmpty,
         retried.contains(alice),
         finalCount == 1L,
-        finalEvents.size == 1
+        finalEvents.size == 1,
       )
     }
   }
 
   test(
-    "find-by-ID and case-insensitive find-by-email preserve user data without publishing events"
+    "find-by-ID and case-insensitive find-by-email preserve user data without publishing events",
   ) {
     withDatabase { database =>
       val bob = user(2L, "Bob@Example.com").copy(role = Role.ADMIN, status = UserStatus.DISABLED)
@@ -166,26 +166,26 @@ object IdentityRepositorySuite extends SimpleIOSuite:
         missingId.isEmpty,
         missingEmail.isEmpty,
         finalEvents == initialEvents,
-        finalEvents.size == 2
+        finalEvents.size == 2,
       )
     }
   }
 
-  private final case class OutboxRow(
+  final private case class OutboxRow(
       id: UUID,
       aggregateType: String,
       aggregateId: String,
       eventType: String,
-      payload: String
+      payload: String,
   )
 
   private val selectOutbox: Query[Void, OutboxRow] =
     sql"SELECT id, aggregatetype, aggregateid, type, payload::text FROM outbox ORDER BY id"
       .query((uuid *: text *: text *: text *: text).to[OutboxRow])
 
-  private final case class Database(
+  final private case class Database(
       repository: IdentityRepository,
-      sessions: Resource[IO, Session[IO]]
+      sessions: Resource[IO, Session[IO]],
   ):
     def outbox: IO[List[OutboxRow]] = sessions.use(_.execute(selectOutbox))
     def userCount: IO[Long] = sessions.use(_.unique(sql"SELECT count(*) FROM users".query(int8)))
@@ -196,7 +196,7 @@ object IdentityRepositorySuite extends SimpleIOSuite:
     else
       ignore[IO](
         "Postgres integration test: enable with IDENTITY_REPOSITORY_TESTS=true " +
-          "sbt 'identityService/testOnly *IdentityRepositorySuite'"
+          "sbt 'identityService/testOnly *IdentityRepositorySuite'",
       )
 
   private def isolatedDatabase: Resource[IO, Database] =
@@ -205,7 +205,7 @@ object IdentityRepositorySuite extends SimpleIOSuite:
       schema     <- Resource.make(
                   IO(UUID.randomUUID())
                     .map(id => s"identity_repository_test_${id.toString.replace("-", "")}")
-                    .flatTap(name => adminCommand(s"CREATE SCHEMA ${schemaIdentifier(name)}"))
+                    .flatTap(name => adminCommand(s"CREATE SCHEMA ${schemaIdentifier(name)}")),
                 )(name => adminCommand(s"DROP SCHEMA ${schemaIdentifier(name)} CASCADE"))
       sessions <-
         connection
@@ -222,7 +222,7 @@ object IdentityRepositorySuite extends SimpleIOSuite:
       .withPort(sys.env.getOrElse("IDENTITY_TEST_POSTGRES_PORT", "5432").toInt)
       .withUserAndPassword(
         sys.env.getOrElse("IDENTITY_TEST_POSTGRES_USER", "postgres"),
-        sys.env.getOrElse("IDENTITY_TEST_POSTGRES_PASSWORD", "postgres")
+        sys.env.getOrElse("IDENTITY_TEST_POSTGRES_PASSWORD", "postgres"),
       )
       .withDatabase(sys.env.getOrElse("IDENTITY_TEST_POSTGRES_DATABASE", "postgres"))
 
@@ -244,7 +244,7 @@ object IdentityRepositorySuite extends SimpleIOSuite:
       .map(_.resolve(relative))
       .find(path => Files.isRegularFile(path))
       .getOrElse(
-        throw new IllegalStateException("Cannot locate the repository's Postgres init SQL")
+        throw new IllegalStateException("Cannot locate the repository's Postgres init SQL"),
       )
     val sql         = Files.readString(source)
     val usersStart  = sql.indexOf("CREATE TABLE users (")
@@ -252,7 +252,7 @@ object IdentityRepositorySuite extends SimpleIOSuite:
     val outboxEnd   = sql.indexOf("-- End Identity outbox", outboxStart)
     require(
       usersStart >= 0 && outboxStart > usersStart && outboxEnd > outboxStart,
-      "Cannot locate the isolated Identity users/outbox schema sections"
+      "Cannot locate the isolated Identity users/outbox schema sections",
     )
     val ddl = sql
       .substring(usersStart, outboxEnd)
@@ -267,9 +267,9 @@ object IdentityRepositorySuite extends SimpleIOSuite:
     require(
       ddl.nonEmpty && ddl.forall(statement =>
         statement.startsWith("CREATE TABLE ") || statement.startsWith("CREATE UNIQUE INDEX ") ||
-          statement.startsWith("CREATE INDEX ")
+          statement.startsWith("CREATE INDEX "),
       ),
-      "Expected Identity table/index DDL only; refusing role or publication changes"
+      "Expected Identity table/index DDL only; refusing role or publication changes",
     )
     ddl
   }
@@ -282,7 +282,7 @@ object IdentityRepositorySuite extends SimpleIOSuite:
     role         = Role.STUDENT,
     status       = UserStatus.ACTIVE,
     createdAt    = createdAt,
-    updatedAt    = createdAt
+    updatedAt    = createdAt,
   )
 
   private def valid[A](value: Either[String, A]): A =

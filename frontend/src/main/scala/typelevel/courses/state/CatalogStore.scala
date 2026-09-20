@@ -15,7 +15,7 @@ final case class CatalogState(
     courses: Vector[Course],
     learningPaths: Vector[LearningPath],
     status: CatalogStatus,
-    error: Option[String]
+    error: Option[String],
 ):
   def topics: Vector[String] = "All topics" +: courses.map(_.topic).distinct
 
@@ -24,12 +24,12 @@ object CatalogState:
     courses       = Catalog.courses,
     learningPaths = Catalog.learningPaths,
     status        = CatalogStatus.Loading,
-    error         = None
+    error         = None,
   )
 
 final class CatalogStore private (
     private val ref: SignallingRef[IO, CatalogState],
-    private val api: CatalogApi
+    private val api: CatalogApi,
 ):
   val signal: Signal[IO, CatalogState]    = ref.changes(using Eq.fromUniversalEquals)
   val courses: Signal[IO, Vector[Course]] =
@@ -57,18 +57,18 @@ final class CatalogStore private (
   private[state] def loadInitial: IO[Unit] =
     (
       api.listCourses(ListCoursesParams(limit = Some(100), offset = Some(0))).attempt,
-      api.listLearningPaths().attempt
+      api.listLearningPaths().attempt,
     ).parTupled.flatMap { (coursesResult, pathsResult) =>
       ref.update { current =>
         val nextCourses =
           coursesResult.fold(_ => current.courses, page => CatalogHydration.courses(page.items))
         val nextPaths = pathsResult.fold(
           _ => current.learningPaths,
-          page => CatalogHydration.learningPaths(page.items)
+          page => CatalogHydration.learningPaths(page.items),
         )
         val failures = Vector(
           Option.when(coursesResult.isLeft)("courses"),
-          Option.when(pathsResult.isLeft)("learning paths")
+          Option.when(pathsResult.isLeft)("learning paths"),
         ).flatten
 
         current.copy(
@@ -76,8 +76,8 @@ final class CatalogStore private (
           learningPaths = nextPaths,
           status        = if failures.isEmpty then CatalogStatus.Ready else CatalogStatus.Error,
           error         = Option.when(failures.nonEmpty)(
-            s"Could not load ${failures.mkString(" or ")} from the catalog API."
-          )
+            s"Could not load ${failures.mkString(" or ")} from the catalog API.",
+          ),
         )
       }
     }
@@ -96,17 +96,17 @@ private[state] object CatalogHydration:
   private val levels = Map(
     ApiCourseLevel.Beginner -> CourseLevel.Beginner,
     ApiCourseLevel.Intermediate -> CourseLevel.Intermediate,
-    ApiCourseLevel.Advanced -> CourseLevel.Advanced
+    ApiCourseLevel.Advanced -> CourseLevel.Advanced,
   )
   private val formats = Map(
     ApiCourseKind.Course -> CourseFormat.Course,
     ApiCourseKind.Workshop -> CourseFormat.Workshop,
-    ApiCourseKind.Talk -> CourseFormat.Talk
+    ApiCourseKind.Talk -> CourseFormat.Talk,
   )
   private val tones = Map(
     ApiLearningPathTone.Yellow -> PathTone.Yellow,
     ApiLearningPathTone.Purple -> PathTone.Purple,
-    ApiLearningPathTone.Coral -> PathTone.Coral
+    ApiLearningPathTone.Coral -> PathTone.Coral,
   )
   private val artworkFallbacks = ArtworkVariant.values.toVector
 
@@ -128,7 +128,7 @@ private[state] object CatalogHydration:
       case Some(video) =>
         video.copy(
           id              = course.id,
-          durationSeconds = video.durationSeconds.orElse(course.durationSeconds)
+          durationSeconds = video.durationSeconds.orElse(course.durationSeconds),
         )
       case None => backendCourse(course, index, seed)
 
@@ -158,7 +158,7 @@ private[state] object CatalogHydration:
       artwork         = seed
         .map(_.artwork)
         .getOrElse(
-          artworkFallbacks(index % artworkFallbacks.size)
+          artworkFallbacks(index % artworkFallbacks.size),
         ),
       artLabel   = seed.map(_.artLabel).getOrElse(artLabel(course.title)),
       thumbnail  = seed.flatMap(_.thumbnail),
@@ -168,11 +168,11 @@ private[state] object CatalogHydration:
         role = course.instructor.role
           .orElse(seed.map(_.instructor.role))
           .getOrElse(""),
-        initials = initials(course.instructor.name)
+        initials = initials(course.instructor.name),
       ),
       outcomes      = seed.fold(Vector.empty[String])(_.outcomes),
       prerequisites = seed.fold(Vector.empty[String])(_.prerequisites),
-      lessons       = seed.fold(Vector.empty[Lesson])(_.lessons)
+      lessons       = seed.fold(Vector.empty[Lesson])(_.lessons),
     )
 
   private def pathFromApi(path: ApiLearningPath): LearningPath = LearningPath(
@@ -182,7 +182,7 @@ private[state] object CatalogHydration:
     courseIds   = path.courseIds,
     time        = path.timeLabel,
     level       = levels(path.level),
-    tone        = tones(path.tone)
+    tone        = tones(path.tone),
   )
 
   private def formatDuration(seconds: Int): String =

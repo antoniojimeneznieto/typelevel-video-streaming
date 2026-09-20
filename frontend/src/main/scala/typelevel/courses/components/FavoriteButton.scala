@@ -21,11 +21,11 @@ object FavoriteButton:
       case Featured => List("button", "button--glass", "button--square")
       case Detail => List("button", "button--outline", "button--large")
 
-  private final case class State(
+  final private case class State(
       saved: Boolean,
       saving: Boolean,
       canSave: Boolean,
-      anonymous: Boolean
+      anonymous: Boolean,
   )
 
   def card(ctx: AppContext, course: Signal[IO, Course]): Resource[IO, HtmlElement[IO]] =
@@ -40,14 +40,14 @@ object FavoriteButton:
   private def render(
       ctx: AppContext,
       course: Signal[IO, Course],
-      variant: Variant
+      variant: Variant,
   ): Resource[IO, HtmlElement[IO]] =
     val state = (
       course,
       ctx.store.user,
       ctx.store.saved,
       ctx.store.favoritesStatus,
-      ctx.store.pendingFavoriteIds
+      ctx.store.pendingFavoriteIds,
     ).mapN { (course, user, saved, status, pending) =>
       val saving = pending.contains(course.id)
       State(
@@ -55,7 +55,7 @@ object FavoriteButton:
         saving  = saving,
         canSave = status == RemoteStateStatus.Ready && !saving &&
           (variant != Variant.Card || user.nonEmpty),
-        anonymous = user.isEmpty
+        anonymous = user.isEmpty,
       )
     }.changes(using Eq.fromUniversalEquals)
     val saved     = state.map(_.saved).changes
@@ -89,5 +89,5 @@ object FavoriteButton:
         if state.saving then " Saving…"
         else if state.saved then " Saved to my learning"
         else " Save for later"
-      }.changes)
+      }.changes),
     ).widen

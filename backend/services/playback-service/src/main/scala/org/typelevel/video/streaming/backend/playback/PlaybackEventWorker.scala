@@ -1,7 +1,10 @@
 package org.typelevel.video.streaming.backend.playback.worker
 
 import cats.effect.IO
+import fs2.kafka.otel4s.trace.KafkaTracer
+import fs2.kafka.otel4s.trace.syntax.*
 import fs2.kafka.{AutoOffsetReset, CommitRecovery, ConsumerSettings, Deserializer, KafkaConsumer}
+import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.events.{LessonPublished, UserCreated}
 import org.typelevel.video.streaming.backend.playback.config.KafkaConfig
 import org.typelevel.video.streaming.backend.playback.repository.PlaybackProjectionRepository
@@ -10,14 +13,14 @@ import smithy4s.{Blob, Schema}
 
 final class PlaybackEventWorker(
     config: KafkaConfig,
-    repository: PlaybackProjectionRepository
-):
+    repository: PlaybackProjectionRepository,
+)(using TracerProvider[IO]):
 
   private val stringDeserializer = Deserializer[IO, String].option.map(_.orNull)
 
   private val settings = ConsumerSettings[IO, String, String](
     stringDeserializer,
-    stringDeserializer
+    stringDeserializer,
   )
     .withBootstrapServers(config.bootstrapServers)
     .withGroupId(config.groupId)
@@ -29,15 +32,15 @@ final class PlaybackEventWorker(
     KafkaConsumer
       .stream(settings)
       .subscribeTo(config.lessonPublishedTopic, config.userCreatedTopic)
-      .records
-      .evalMap { committable =>
+      .traced(KafkaTracer.Config.default)
+      .recordsWithProcessTraced { committable =>
         val record = committable.record
         process(
           record.topic,
           record.partition,
           record.offset,
           record.value,
-          committable.offset.commit
+          committable.offset.commit,
         )
       }
       .compile
@@ -48,11 +51,11 @@ final class PlaybackEventWorker(
       partition: Int,
       offset: Long,
       value: String,
-      commit: IO[Unit]
+      commit: IO[Unit],
   ): IO[Unit] = IO.defer {
     def invalidRecord: IllegalArgumentException =
       new IllegalArgumentException(
-        s"Invalid playback event at topic=$topic partition=$partition offset=$offset"
+        s"Invalid playback event at topic=$topic partition=$partition offset=$offset",
       )
 
     def decode[A: Schema]: IO[A] =

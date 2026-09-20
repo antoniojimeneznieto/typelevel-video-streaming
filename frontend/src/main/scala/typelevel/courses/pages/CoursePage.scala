@@ -24,14 +24,14 @@ object CoursePage:
           div(
             cls := "app-page detail-page",
             SiteHeader.AppHeader(ctx),
-            content(ctx, course)
+            content(ctx, course),
           ).widen
-      }
+      },
     ).widen
 
   private def content(
       ctx: AppContext,
-      course: Course
+      course: Course,
   ): Resource[IO, HtmlElement[IO]] =
     val isVideo        = course.format == CourseFormat.Video
     val courseProgress = ctx.store.progress.map(_.getOrElse(course.id, 0)).changes
@@ -53,7 +53,7 @@ object CoursePage:
           else
             math.min(
               course.lessons.size - 1,
-              math.floor(progress.toDouble / 100 * course.lessons.size).toInt
+              math.floor(progress.toDouble / 100 * course.lessons.size).toInt,
             )
         AppRoute.Watch(course.slug, course.lessons.lift(nextLessonIndex).fold("lesson-1")(_.id))
       }
@@ -77,7 +77,7 @@ object CoursePage:
               href := ctx.navigator.href(AppRoute.Browse),
               ctx.navigator.intercept(self, AppRoute.Browse),
               Icons(Icon.ArrowLeft),
-              " Back to browse"
+              " Back to browse",
             )
           },
           div(
@@ -88,7 +88,7 @@ object CoursePage:
                 cls := "detail-tags",
                 span(course.format.label),
                 Option.when(course.isNew)(span(cls := "is-new", "New")),
-                span(course.level.label)
+                span(course.level.label),
               ),
               p(cls := "eyebrow", course.topic),
               h1(course.title),
@@ -100,16 +100,16 @@ object CoursePage:
                     Icons(Icon.Star),
                     " ",
                     strong(rating.toString),
-                    s" ($students learners)"
+                    s" ($students learners)",
                   )
                 },
                 span(
                   Icons(Icon.ListVideo),
                   if course.lessonCount == 1 then " 1 video"
-                  else s" ${course.lessonCount} lessons"
+                  else s" ${course.lessonCount} lessons",
                 ),
                 span(Icons(Icon.Clock), s" ${course.duration}"),
-                span(Icons(Icon.Globe), " English")
+                span(Icons(Icon.Globe), " English"),
               ),
               div(
                 cls := "detail-instructor",
@@ -117,8 +117,8 @@ object CoursePage:
                 p(
                   small(if isVideo then "Presented by" else "Created and taught by"),
                   strong(course.instructor.name),
-                  em(course.instructor.role)
-                )
+                  em(course.instructor.role),
+                ),
               ),
               div(
                 cls := "hero-actions",
@@ -130,18 +130,18 @@ object CoursePage:
                       ctx.navigator.intercept(self, watch.get.map(_.uri)),
                       Icons(Icon.Play),
                       " ",
-                      startLabel
+                      startLabel,
                     )
                   }
                 else
                   span(
                     cls := "button button--primary button--large is-disabled",
                     aria.disabled := true,
-                    "Lessons coming soon"
+                    "Lessons coming soon",
                   )
                 ,
-                FavoriteButton.detail(ctx, course)
-              )
+                FavoriteButton.detail(ctx, course),
+              ),
             ),
             div(
               cls := "detail-hero__art-wrap",
@@ -153,55 +153,55 @@ object CoursePage:
                     href <-- watch.map(ctx.navigator.href),
                     ctx.navigator.intercept(self, watch.get.map(_.uri)),
                     aria.label := s"Play ${course.title}",
-                    Icons(Icon.Play)
+                    Icons(Icon.Play),
                   )
                 }
               },
               div(
                 cls := "detail-art-caption",
                 span(course.eyebrow),
-                strong(course.technologies.mkString(" · "))
-              )
-            )
-          )
-        )
+                strong(course.technologies.mkString(" · ")),
+              ),
+            ),
+          ),
+        ),
       ),
       sectionTag(
         cls := "detail-content app-shell",
         div(
           cls := "detail-content__main",
           outcomes(course, isVideo),
-          curriculum(ctx, course, isVideo)
+          curriculum(ctx, course, isVideo),
         ),
-        sidebar(course, isVideo)
+        sidebar(course, isVideo),
       ),
       related
         .map(_.nonEmpty)
         .changes
-        .map(nonEmpty => Option.when(nonEmpty)(relatedSection(ctx, related)))
+        .map(nonEmpty => Option.when(nonEmpty)(relatedSection(ctx, related))),
     ).widen
 
   private def outcomes(
       course: Course,
-      isVideo: Boolean
+      isVideo: Boolean,
   ): Resource[IO, HtmlElement[IO]] =
     sectionTag(
       cls := "outcomes-panel",
       p(cls := "eyebrow", if isVideo then "Ideas covered" else "What you will learn"),
       h2(
         if isVideo then "A focused perspective from the community."
-        else "Build the understanding behind the code."
+        else "Build the understanding behind the code.",
       ),
       div(
         cls := "outcomes-grid",
-        course.outcomes.toList.map(outcome => p(Icons(Icon.CircleCheck), s" $outcome"))
-      )
+        course.outcomes.toList.map(outcome => p(Icons(Icon.CircleCheck), s" $outcome")),
+      ),
     ).widen
 
   private def curriculum(
       ctx: AppContext,
       course: Course,
-      isVideo: Boolean
+      isVideo: Boolean,
   ): Resource[IO, HtmlElement[IO]] =
     sectionTag(
       cls := "curriculum-section",
@@ -211,10 +211,10 @@ object CoursePage:
           p(cls := "eyebrow", if isVideo then "Community video" else "Course curriculum"),
           h2(
             if isVideo then "One complete talk"
-            else s"${course.lessons.size} focused lessons"
-          )
+            else s"${course.lessons.size} focused lessons",
+          ),
         ),
-        span(s"${course.duration} total")
+        span(s"${course.duration} total"),
       ),
       div(
         cls := "curriculum-list",
@@ -226,24 +226,24 @@ object CoursePage:
           detailsTag.withSelf { self =>
             (
               Option.when(index == 0)(
-                Resource.eval(IO(self.asInstanceOf[dom.Element].setAttribute("open", "")))
+                Resource.eval(IO(self.asInstanceOf[dom.Element].setAttribute("open", ""))),
               ),
               summaryTag(
                 span(
                   cls <-- complete.map(done =>
-                    List("lesson-index") ++ Option.when(done)("is-complete")
+                    List("lesson-index") ++ Option.when(done)("is-complete"),
                   ),
                   complete.map(done => Option.when(done)(Icons(Icon.Check))),
-                  complete.map(done => Option.unless(done)(f"${index + 1}%02d"))
+                  complete.map(done => Option.unless(done)(f"${index + 1}%02d")),
                 ),
                 span(
                   cls := "curriculum-list__title",
                   strong(lesson.title),
-                  Option.unless(isVideo)(small(lesson.description))
+                  Option.unless(isVideo)(small(lesson.description)),
                 ),
                 Option.when(lesson.preview)(span(cls := "preview-tag", "Preview")),
                 span(cls := "curriculum-list__duration", lesson.duration),
-                Icons(Icon.ChevronDown, className = "curriculum-list__chevron")
+                Icons(Icon.ChevronDown, className = "curriculum-list__chevron"),
               ),
               div(
                 cls := "curriculum-list__details",
@@ -253,14 +253,14 @@ object CoursePage:
                     href := ctx.navigator.href(destination),
                     ctx.navigator.intercept(self, destination),
                     Icons(Icon.Play),
-                    s" Play ${if isVideo then "video" else "lesson"}"
+                    s" Play ${if isVideo then "video" else "lesson"}",
                   )
-                }
-              )
+                },
+              ),
             )
           }
-        }
-      )
+        },
+      ),
     ).widen
 
   private def sidebar(course: Course, isVideo: Boolean): Resource[IO, HtmlElement[IO]] =
@@ -269,13 +269,13 @@ object CoursePage:
       sectionTag(
         p(
           cls := "eyebrow eyebrow--small",
-          s"This ${if isVideo then "video" else "course"} includes"
+          s"This ${if isVideo then "video" else "course"} includes",
         ),
         ul(
           li(
             Icons(Icon.ListVideo),
             if course.lessonCount == 1 then " 1 on-demand video"
-            else s" ${course.lessonCount} on-demand lessons"
+            else s" ${course.lessonCount} on-demand lessons",
           ),
           Option.unless(isVideo)(li(Icons(Icon.Code), " Downloadable project code")),
           li(Icons(Icon.CircleCheck), " Progress tracking"),
@@ -288,28 +288,28 @@ object CoursePage:
                 href := source.url,
                 target := "_blank",
                 rel := List("noreferrer"),
-                s"Original on ${source.name}"
-              )
+                s"Original on ${source.name}",
+              ),
             )
-          }
-        )
+          },
+        ),
       ),
       sectionTag(
         p(cls := "eyebrow eyebrow--small", "Technologies"),
         div(
           cls := "technology-tags",
-          course.technologies.toList.map(technology => span(technology))
-        )
+          course.technologies.toList.map(technology => span(technology)),
+        ),
       ),
       sectionTag(
         p(cls := "eyebrow eyebrow--small", "Before you start"),
-        ul(cls := "prerequisite-list", course.prerequisites.toList.map(item => li(item)))
-      )
+        ul(cls := "prerequisite-list", course.prerequisites.toList.map(item => li(item))),
+      ),
     ).widen
 
   private def relatedSection(
       ctx: AppContext,
-      related: Signal[IO, Vector[Course]]
+      related: Signal[IO, Vector[Course]],
   ): Resource[IO, HtmlElement[IO]] =
     sectionTag(
       cls := "app-section app-section--lavender related-section",
@@ -317,8 +317,8 @@ object CoursePage:
         cls := "app-shell",
         div(
           cls := "app-section__heading",
-          div(p(cls := "eyebrow", "Keep going"), h2("You may also like"))
+          div(p(cls := "eyebrow", "Keep going"), h2("You may also like")),
         ),
-        CourseCard.grid(ctx, related, "course-grid course-grid--three")
-      )
+        CourseCard.grid(ctx, related, "course-grid course-grid--three"),
+      ),
     ).widen

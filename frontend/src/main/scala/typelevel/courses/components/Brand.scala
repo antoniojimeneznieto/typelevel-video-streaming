@@ -11,7 +11,7 @@ object Brand:
       ctx: AppContext,
       compact: Boolean = false,
       light: Boolean   = false,
-      to: AppRoute     = AppRoute.Landing
+      to: AppRoute     = AppRoute.Landing,
   ): Resource[IO, HtmlElement[IO]] =
     for
       anchor <- a(
@@ -23,18 +23,18 @@ object Brand:
                     img(
                       cls := "brand__official-logo",
                       src := "/typelevel-logo.svg",
-                      alt := "Typelevel"
+                      alt := "Typelevel",
                     ),
                     Option.when(light)(
                       img(
                         cls := "brand__official-logo brand__official-logo--light-word",
                         src := "/typelevel-logo.svg",
                         alt := "",
-                        aria.hidden := true
-                      )
-                    )
+                        aria.hidden := true,
+                      ),
+                    ),
                   ),
-                  Option.unless(compact)(span(cls := "brand__suffix", "learning center"))
+                  Option.unless(compact)(span(cls := "brand__suffix", "learning center")),
                 )
       _ <- ctx.navigator.intercept(anchor, to)
     yield anchor

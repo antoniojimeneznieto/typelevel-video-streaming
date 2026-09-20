@@ -19,13 +19,13 @@ object SiteHeader:
       ctx: AppContext,
       route: AppRoute,
       copy: String,
-      className: String = ""
+      className: String = "",
   ): Resource[IO, HtmlAnchorElement[IO]] =
     for
       anchor <- a(
                   cls := className,
                   href := ctx.navigator.href(route),
-                  copy
+                  copy,
                 )
       _ <- ctx.navigator.intercept(anchor, route)
     yield anchor
@@ -34,7 +34,7 @@ object SiteHeader:
       ctx: AppContext,
       path: String,
       copy: String,
-      className: String = ""
+      className: String = "",
   ): Resource[IO, HtmlAnchorElement[IO]] =
     for
       anchor <- a(cls := className, href := path, copy)
@@ -44,7 +44,7 @@ object SiteHeader:
   private def activeRouteLink(
       ctx: AppContext,
       route: AppRoute,
-      copy: String
+      copy: String,
   ): Resource[IO, HtmlAnchorElement[IO]] =
     val routePath = AppRoute.normalizedPath(route.uri)
     for
@@ -53,7 +53,7 @@ object SiteHeader:
                     if AppRoute.normalizedPath(current) == routePath then List("active") else Nil
                   },
                   href := ctx.navigator.href(route),
-                  copy
+                  copy,
                 )
       _ <- ctx.navigator.intercept(anchor, route)
     yield anchor
@@ -63,8 +63,8 @@ object SiteHeader:
       .events[IO, dom.KeyboardEvent](dom.window, "keydown")
       .evalMap { event =>
         val isTyping = event.target match
-          case input: dom.HTMLInputElement => true
-          case textArea: dom.HTMLTextAreaElement => true
+          case _: dom.HTMLInputElement => true
+          case _: dom.HTMLTextAreaElement => true
           case element: dom.HTMLElement => element.isContentEditable
           case _ => false
 
@@ -93,7 +93,7 @@ object SiteHeader:
           (Vector(
             course.title,
             course.shortDescription,
-            course.topic
+            course.topic,
           ) ++ course.technologies).mkString(" ").toLowerCase.contains(normalized)
         }
         .take(5)
@@ -101,7 +101,7 @@ object SiteHeader:
   private def quickResult(
       ctx: AppContext,
       course: Course,
-      close: IO[Unit]
+      close: IO[Unit],
   ): Resource[IO, HtmlAnchorElement[IO]] =
     val destination = AppRoute.Course(course.slug)
     for
@@ -111,9 +111,9 @@ object SiteHeader:
                   Artwork(course.artwork, course.artLabel, thumbnail = course.thumbnail),
                   span(
                     strong(course.title),
-                    small(s"${course.topic} · ${course.duration}")
+                    small(s"${course.topic} · ${course.duration}"),
                   ),
-                  Icons(Icon.ChevronRight)
+                  Icons(Icon.ChevronRight),
                 )
       _ <- ctx.navigator.intercept(anchor, close.as(destination.uri))
     yield anchor
@@ -121,7 +121,7 @@ object SiteHeader:
   final private case class DialogLifecycle(
       previousFocus: Option[dom.HTMLElement],
       previousOverflow: String,
-      focusTimer: Int
+      focusTimer: Int,
   )
 
   private def dialogLifecycle(inputElement: HtmlInputElement[IO]): Resource[IO, Unit] =
@@ -147,7 +147,7 @@ object SiteHeader:
   private def keepFocusInside(
       event: fs2.dom.KeyboardEvent[IO],
       panel: HtmlDivElement[IO],
-      close: IO[Unit]
+      close: IO[Unit],
   ): IO[Unit] =
     if event.key == "Escape" then close
     else if event.key != "Tab" then IO.unit
@@ -155,7 +155,7 @@ object SiteHeader:
       IO.delay {
         val panelElement = panel.asInstanceOf[dom.HTMLDivElement]
         val matches      = panelElement.querySelectorAll(
-          "a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex='-1'])"
+          "a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex='-1'])",
         )
         (0 until matches.length).toVector
           .map(index => matches.item(index).asInstanceOf[dom.HTMLElement])
@@ -170,24 +170,24 @@ object SiteHeader:
 
   private def SearchDialog(
       ctx: AppContext,
-      close: IO[Unit]
+      close: IO[Unit],
   ): Resource[IO, HtmlElement[IO]] =
     for
       query       <- SignallingRef[IO].of("").toResource
       searchInput <- input(
                        value <-- query,
                        placeholder := "Search courses, topics, or technology…",
-                       aria.label := "Search"
+                       aria.label := "Search",
                      )
       _ <- searchInput.modify(
-             onInput(_ => searchInput.value.get.flatMap(query.set))
+             onInput(_ => searchInput.value.get.flatMap(query.set)),
            )
       formElement <- form(
                        cls := "search-dialog__form",
                        onSubmit(event =>
                          event.preventDefault *> query.get.flatMap(value =>
-                           close *> ctx.navigator.go(searchUri(value))
-                         )
+                           close *> ctx.navigator.go(searchUri(value)),
+                         ),
                        ),
                        Icons(Icon.Search),
                        searchInput,
@@ -196,8 +196,8 @@ object SiteHeader:
                          onClick(close),
                          aria.label := "Close search",
                          Icons(Icon.X, className = "search-dialog__mobile-close"),
-                         kbd("Esc")
-                       )
+                         kbd("Esc"),
+                       ),
                      )
       titleRow <- div(
                     cls := "search-dialog__title-row",
@@ -206,16 +206,16 @@ object SiteHeader:
                       val matches    = quickCourses(current, courses)
                       List(
                         p(if normalized.nonEmpty then s"${matches.size} quick results"
-                        else "Popular now")
+                        else "Popular now"),
                       ) ++ Option.when(normalized.nonEmpty)(
                         button(
                           typ := "button",
                           onClick(close *> ctx.navigator.go(searchUri(current))),
                           "See all results ",
-                          Icons(Icon.ChevronRight)
-                        )
+                          Icons(Icon.ChevronRight),
+                        ),
                       )
-                    }
+                    },
                   )
       results <- div(
                    cls := "search-dialog__results",
@@ -228,10 +228,10 @@ object SiteHeader:
                          div(
                            cls := "search-dialog__empty",
                            p("No quick matches yet."),
-                           span("Try “effects”, “Scala”, or “http4s”.")
-                         )
+                           span("Try “effects”, “Scala”, or “http4s”."),
+                         ),
                        )
-                   }
+                   },
                  )
       panel <- div(
                  cls := "search-dialog__panel",
@@ -239,13 +239,13 @@ object SiteHeader:
                  div(
                    cls := "search-dialog__content",
                    titleRow,
-                   results
+                   results,
                  ),
                  div(
                    cls := "search-dialog__footer",
                    span(kbd("↵"), " select"),
-                   span(kbd("/"), " open search")
-                 )
+                   span(kbd("/"), " open search"),
+                 ),
                )
       root <- div(
                 cls := "search-dialog",
@@ -257,14 +257,14 @@ object SiteHeader:
                   cls := "search-dialog__backdrop",
                   onClick(close),
                   aria.label := "Close search",
-                  tabIndex := -1
+                  tabIndex := -1,
                 ),
-                panel
+                panel,
               )
       _ <- Resource.eval(
              IO.delay(
-               root.asInstanceOf[dom.HTMLDivElement].setAttribute("aria-modal", "true")
-             )
+               root.asInstanceOf[dom.HTMLDivElement].setAttribute("aria-modal", "true"),
+             ),
            )
       _ <- dialogLifecycle(searchInput)
     yield root
@@ -279,7 +279,7 @@ object SiteHeader:
                     Brand(ctx),
                     navTag(
                       cls <-- menuOpen.map(open =>
-                        List("site-nav") ++ Option.when(open)("is-open")
+                        List("site-nav") ++ Option.when(open)("is-open"),
                       ),
                       aria.label := "Main navigation",
                       onClick(menuOpen.set(false)),
@@ -291,8 +291,8 @@ object SiteHeader:
                         ctx,
                         AppRoute.Register,
                         "Start learning",
-                        "site-nav__mobile-auth site-nav__mobile-auth--primary"
-                      )
+                        "site-nav__mobile-auth site-nav__mobile-auth--primary",
+                      ),
                     ),
                     div(
                       cls := "site-header__actions",
@@ -301,20 +301,20 @@ object SiteHeader:
                         ctx,
                         AppRoute.Register,
                         "Start learning",
-                        "button button--primary register-link"
+                        "button button--primary register-link",
                       ),
                       button(
                         cls := "mobile-menu-button",
                         typ := "button",
                         aria.label <-- menuOpen.map(open =>
-                          if open then "Close menu" else "Open menu"
+                          if open then "Close menu" else "Open menu",
                         ),
                         aria.expanded <-- menuOpen,
                         onClick(menuOpen.update(!_)),
-                        menuOpen.map(open => Icons(if open then Icon.X else Icon.Menu))
-                      )
-                    )
-                  )
+                        menuOpen.map(open => Icons(if open then Icon.X else Icon.Menu)),
+                      ),
+                    ),
+                  ),
                 )
     yield header
 
@@ -331,7 +331,7 @@ object SiteHeader:
                      href := "/my-learning?tab=saved",
                      aria.label <-- savedCount.map(count => s"$count saved courses"),
                      Icons(Icon.Bookmark),
-                     savedCount.map(count => Option.when(count > 0)(span(count.toString)))
+                     savedCount.map(count => Option.when(count > 0)(span(count.toString))),
                    )
       _      <- ctx.navigator.intercept(savedLink, "/my-learning?tab=saved")
       header <- headerTag(
@@ -345,7 +345,7 @@ object SiteHeader:
                       onClick(menuOpen.set(false)),
                       activeRouteLink(ctx, AppRoute.Browse, "Browse"),
                       activeRouteLink(ctx, AppRoute.Paths, "Paths"),
-                      activeRouteLink(ctx, AppRoute.MyLearning, "My learning")
+                      activeRouteLink(ctx, AppRoute.MyLearning, "My learning"),
                     ),
                     div(
                       cls := "app-header__actions",
@@ -356,7 +356,7 @@ object SiteHeader:
                         aria.label := "Search the course library",
                         Icons(Icon.Search),
                         span("Search the library"),
-                        kbd("⌘ K")
+                        kbd("⌘ K"),
                       ),
                       savedLink,
                       detailsTag(
@@ -366,14 +366,14 @@ object SiteHeader:
                           user.map {
                             case Some(value) => span(value.displayName.take(1).toUpperCase)
                             case None => Icons(Icon.UserRound)
-                          }
+                          },
                         ),
                         div(
                           cls := "user-menu__panel",
                           div(
                             cls := "user-menu__identity",
                             strong(user.map(_.fold("Guest learner")(_.displayName))),
-                            span(user.map(_.fold("Learning synced to your account")(_.email)))
+                            span(user.map(_.fold("Learning synced to your account")(_.email))),
                           ),
                           user.map {
                             case None => routeLink(ctx, AppRoute.Login(), "Log in")
@@ -381,23 +381,23 @@ object SiteHeader:
                               button(
                                 typ := "button",
                                 onClick(ctx.store.signOut *> ctx.navigator.go(AppRoute.Landing)),
-                                "Log out"
+                                "Log out",
                               )
-                          }
-                        )
+                          },
+                        ),
                       ),
                       button(
                         cls := "mobile-menu-button",
                         typ := "button",
                         aria.label <-- menuOpen.map(open =>
-                          if open then "Close menu" else "Open menu"
+                          if open then "Close menu" else "Open menu",
                         ),
                         aria.expanded <-- menuOpen,
                         onClick(menuOpen.update(!_)),
-                        menuOpen.map(open => Icons(if open then Icon.X else Icon.Menu))
-                      )
-                    )
-                  )
+                        menuOpen.map(open => Icons(if open then Icon.X else Icon.Menu)),
+                      ),
+                    ),
+                  ),
                 )
       root <- div(
                 styleAttr := "display: contents",
@@ -408,7 +408,7 @@ object SiteHeader:
                       cls := "playback-service-alert",
                       role := List(
                         if state.playbackStatus == RemoteStateStatus.Error then "alert"
-                        else "status"
+                        else "status",
                       ),
                       div(
                         cls := "app-shell",
@@ -416,12 +416,12 @@ object SiteHeader:
                         button(
                           typ := "button",
                           onClick(ctx.store.refreshPlaybackState),
-                          "Check again"
-                        )
-                      )
+                          "Check again",
+                        ),
+                      ),
                     )
                   }
                 },
-                searchOpen.map(open => Option.when(open)(SearchDialog(ctx, searchOpen.set(false))))
+                searchOpen.map(open => Option.when(open)(SearchDialog(ctx, searchOpen.set(false)))),
               )
     yield root

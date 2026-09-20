@@ -1,7 +1,6 @@
 package org.typelevel.video.streaming.backend.playback.repository
 
 import cats.effect.{IO, Resource}
-import cats.syntax.all.*
 import org.typelevel.video.streaming.backend.events.{LessonPublished, UserCreated}
 import skunk.codec.all.*
 import skunk.implicits.*
@@ -15,7 +14,7 @@ trait PlaybackProjectionRepository:
   def lessonPublished(event: LessonPublished): IO[Unit]
 
 final class PlaybackProjectionRepositoryImpl(
-    sessions: Resource[IO, Session[IO]]
+    sessions: Resource[IO, Session[IO]],
 ) extends PlaybackProjectionRepository:
 
   override def userCreated(event: UserCreated): IO[Unit] =
@@ -41,7 +40,7 @@ object PlaybackProjectionRepositoryImpl:
         event.isPreview,
         event.objectKey.value,
         event.eventId.value,
-        event.occurredAt.toOffsetDateTime
+        event.occurredAt.toOffsetDateTime,
       )
     }
 

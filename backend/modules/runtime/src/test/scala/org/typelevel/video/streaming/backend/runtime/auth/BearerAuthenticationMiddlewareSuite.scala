@@ -34,7 +34,7 @@ object BearerAuthenticationMiddlewareSuite extends SimpleIOSuite:
       expect(
         response.headers
           .get(CIString("WWW-Authenticate"))
-          .exists(_.head.value == "Bearer")
+          .exists(_.head.value == "Bearer"),
       )
   }
 
@@ -54,7 +54,7 @@ object BearerAuthenticationMiddlewareSuite extends SimpleIOSuite:
       endpoint   = HttpApp[IO] { _ =>
                    context.get.map { principal =>
                      Response[IO](Status.Ok).putHeaders(
-                       Header.Raw(CIString("X-Test-Principal"), principal.getOrElse("missing"))
+                       Header.Raw(CIString("X-Test-Principal"), principal.getOrElse("missing")),
                      )
                    }
                  }
@@ -64,12 +64,12 @@ object BearerAuthenticationMiddlewareSuite extends SimpleIOSuite:
     yield expect(
       response.headers
         .get(CIString("X-Test-Principal"))
-        .exists(_.head.value == "alice")
+        .exists(_.head.value == "alice"),
     ) and expect(outside.isEmpty)
   }
 
   private def createMiddleware(
-      context: IOLocalRequestContext[String]
+      context: IOLocalRequestContext[String],
   ): BearerAuthenticationMiddleware[IO, String] =
     val verifier = new BearerTokenVerifier[IO, String]:
       override def verify(token: String): IO[Option[String]] =
@@ -82,5 +82,5 @@ object BearerAuthenticationMiddlewareSuite extends SimpleIOSuite:
 
   private def requestWithToken(token: String): Request[IO] =
     Request[IO]().putHeaders(
-      Authorization(Credentials.Token(AuthScheme.Bearer, token))
+      Authorization(Credentials.Token(AuthScheme.Bearer, token)),
     )

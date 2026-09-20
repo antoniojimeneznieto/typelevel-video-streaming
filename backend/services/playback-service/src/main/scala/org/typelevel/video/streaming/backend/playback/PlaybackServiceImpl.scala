@@ -3,6 +3,7 @@ package org.typelevel.video.streaming.backend.playback.service
 import java.util.UUID
 
 import cats.effect.{Clock, IO}
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.video.streaming.backend.playback.api.*
 import org.typelevel.video.streaming.backend.playback.domain.*
 import org.typelevel.video.streaming.backend.playback.repository.PlaybackRepository
@@ -13,8 +14,11 @@ import smithy4s.time.Timestamp
 final class PlaybackServiceImpl(
     repository: PlaybackRepository,
     videoStorage: S3VideoStorage,
-    requestContext: RequestContext[IO, UUID]
-) extends PlaybackService[IO]:
+    requestContext: RequestContext[IO, UUID],
+)(using Slf4jFactory[IO])
+    extends PlaybackService[IO]:
+
+  private val logger = Slf4jFactory[IO].getLogger
 
   override def getPlaybackUrl(courseId: CourseId, lessonId: LessonId): IO[PlaybackUrlResponse] =
     for
@@ -26,13 +30,16 @@ final class PlaybackServiceImpl(
   override def updatePlaybackProgress(
       courseId: CourseId,
       lessonId: LessonId,
-      positionSeconds: PositionSeconds
+      positionSeconds: PositionSeconds,
   ): IO[PlaybackProgress] =
     for
       userId <- currentUser
       lesson <- findLesson(courseId, lessonId)
-      _      <- IO.raiseWhen(positionSeconds.value > lesson.durationSeconds.value)(
-             InvalidPlaybackProgressError("Position must not exceed the video duration")
+      _ <- logger.info(Map("course.id" -> courseId.toString, "lesson.id" -> lessonId.toString))(
+             s"Updating playback progress to $positionSeconds",
+           )
+      _ <- IO.raiseWhen(positionSeconds.value > lesson.durationSeconds.value)(
+             InvalidPlaybackProgressError("Position must not exceed the video duration"),
            )
       now     <- Clock[IO].realTimeInstant.map(Timestamp.fromInstant)
       progress = PlaybackProgress(
@@ -40,7 +47,7 @@ final class PlaybackServiceImpl(
                    lessonId        = lessonId,
                    positionSeconds = positionSeconds,
                    completed       = positionSeconds.value == lesson.durationSeconds.value,
-                   updatedAt       = now
+                   updatedAt       = now,
                  )
       saved <- repository.saveProgress(userId, progress)
     yield saved
@@ -49,7 +56,7 @@ final class PlaybackServiceImpl(
       limit: PageLimit,
       offset: PageOffset,
       courseId: Option[CourseId],
-      completed: Option[Boolean]
+      completed: Option[Boolean],
   ): IO[PlaybackProgressPage] =
     currentUser.flatMap { userId =>
       repository.listProgress(userId, limit, offset, courseId, completed)

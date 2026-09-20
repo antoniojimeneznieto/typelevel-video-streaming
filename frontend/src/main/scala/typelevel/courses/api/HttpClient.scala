@@ -13,7 +13,7 @@ import org.http4s.dom.FetchClientBuilder
 final case class ApiRequestError(
     override val getMessage: String,
     status: Int,
-    code: Option[String] = None
+    code: Option[String] = None,
 ) extends RuntimeException(getMessage)
 
 object HttpClient:
@@ -31,7 +31,7 @@ object HttpClient:
         response.as[A].handleErrorWith {
           case _: DecodeFailure =>
             IO.raiseError(
-              ApiRequestError("The API returned an invalid JSON response.", response.status.code)
+              ApiRequestError("The API returned an invalid JSON response.", response.status.code),
             )
           case _ => IO.raiseError(unreadableResponse(response))
         }
@@ -45,22 +45,22 @@ object HttpClient:
     }
 
   private def withResponse[A](client: Client[IO], request: Request[IO])(
-      consume: Response[IO] => IO[A]
+      consume: Response[IO] => IO[A],
   ): IO[A] =
     client
       .run(request)
       .handleErrorWith(_ =>
         Resource.eval(
           IO.raiseError[Response[IO]](
-            ApiRequestError("The API could not be reached.", status = 0)
-          )
-        )
+            ApiRequestError("The API could not be reached.", status = 0),
+          ),
+        ),
       )
       .use(consume)
       // Bound body consumption as well as waiting for response headers.
       .timeoutTo(
         requestTimeout,
-        IO.raiseError(ApiRequestError("The API request timed out.", status = 0))
+        IO.raiseError(ApiRequestError("The API request timed out.", status = 0)),
       )
 
   private def failure[A](response: Response[IO]): IO[A] =

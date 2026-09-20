@@ -17,8 +17,8 @@ final class CatalogStoreSuite extends FunSuite:
         "typelevel-retrospective",
         "fs2-chunk",
         "cats-effect-3",
-        "rethinking-monad-transformers"
-      )
+        "rethinking-monad-transformers",
+      ),
     )
     assertEquals(initial.learningPaths.map(_.id), Vector("discover-typelevel", "inside-typelevel"))
   }
@@ -38,9 +38,9 @@ final class CatalogStoreSuite extends FunSuite:
             technologies    = Vector("Legacy"),
             instructor      = ApiInstructor("Legacy Speaker", Some("Legacy role")),
             durationSeconds = Some(10),
-            lessonCount     = Some(7)
-          )
-        )
+            lessonCount     = Some(7),
+          ),
+        ),
       )
       .head
 
@@ -61,8 +61,8 @@ final class CatalogStoreSuite extends FunSuite:
       Vector(
         course.copy(topic = "New topic"),
         course.copy(topic = "Another topic"),
-        course.copy(topic = "New topic")
-      )
+        course.copy(topic = "New topic"),
+      ),
     )
 
     assertEquals(updated.topics, Vector("All topics", "New topic", "Another topic"))
@@ -83,7 +83,7 @@ final class CatalogStoreSuite extends FunSuite:
       technologies    = Vector.empty,
       instructor      = ApiInstructor("Backend speaker", None),
       durationSeconds = None,
-      lessonCount     = None
+      lessonCount     = None,
     )
 
     assertEquals(CatalogHydration.courses(Vector(input)), Vector(expected.copy(id = apiId)))
@@ -104,9 +104,9 @@ final class CatalogStoreSuite extends FunSuite:
             technologies    = Vector("Scala"),
             instructor      = ApiInstructor("Ada Lovelace", None),
             durationSeconds = Some(3660),
-            lessonCount     = Some(1)
-          )
-        )
+            lessonCount     = Some(1),
+          ),
+        ),
       )
       .head
 

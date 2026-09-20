@@ -34,7 +34,7 @@ object AccessTokenIssuerSuite extends SimpleIOSuite:
         privateKey     = privateKey,
         expiresIn      = expiresIn,
         currentInstant = IO.pure(issuedAt),
-        newJwtId       = IO.pure(jwtId)
+        newJwtId       = IO.pure(jwtId),
       )
 
       issuer.issue(userId, Role.STUDENT).map { issued =>
@@ -68,7 +68,7 @@ object AccessTokenIssuerSuite extends SimpleIOSuite:
         privateKey     = privateKey,
         expiresIn      = expiresIn,
         currentInstant = IO.pure(now),
-        newJwtId       = IO.pure(jwtId)
+        newJwtId       = IO.pure(jwtId),
       )
       val verifier        = AccessTokenVerifierImpl(publicKey)
       val subjectVerifier = AccessTokenVerifier.userId(publicKey, "identity", "course-platform")
@@ -130,7 +130,7 @@ object AccessTokenIssuerSuite extends SimpleIOSuite:
         .map { results =>
           expect.all(
             results.take(2).forall(_.isEmpty),
-            results.last.exists(_.role == Role.ADMIN)
+            results.last.exists(_.role == Role.ADMIN),
           )
         }
     }

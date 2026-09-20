@@ -6,7 +6,7 @@ import cats.effect.{IO, Resource}
 import org.typelevel.video.streaming.backend.playback.api.{
   PlaybackUnavailableError,
   PlaybackUrlResponse,
-  VideoNotFoundError
+  VideoNotFoundError,
 }
 import org.typelevel.video.streaming.backend.playback.config.S3Config
 import org.typelevel.video.streaming.backend.playback.domain.{ObjectKey, PlaybackUrl}
@@ -19,7 +19,7 @@ import software.amazon.awssdk.services.s3.model.{
   GetObjectRequest,
   HeadObjectRequest,
   NoSuchBucketException,
-  S3Exception
+  S3Exception,
 }
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
@@ -88,14 +88,14 @@ object S3VideoStorageImpl:
                       UrlConnectionHttpClient
                         .builder()
                         .connectionTimeout(Duration.ofSeconds(3))
-                        .socketTimeout(Duration.ofSeconds(5))
+                        .socketTimeout(Duration.ofSeconds(5)),
                     )
                     .overrideConfiguration(
                       ClientOverrideConfiguration
                         .builder()
                         .apiCallTimeout(Duration.ofSeconds(10))
                         .apiCallAttemptTimeout(Duration.ofSeconds(5))
-                        .build()
+                        .build(),
                     )
                   config.endpoint.foreach(builder.endpointOverride)
                   builder.build()

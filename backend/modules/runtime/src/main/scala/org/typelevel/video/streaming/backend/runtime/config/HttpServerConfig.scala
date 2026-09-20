@@ -18,7 +18,7 @@ object HttpServerConfig:
   def config(defaultPort: Port): ConfigValue[Effect, HttpServerConfig] =
     (
       env("HOST").as[Host].default(host"127.0.0.1"),
-      env("PORT").as[Port].default(defaultPort)
+      env("PORT").as[Port].default(defaultPort),
     ).parMapN(HttpServerConfig.apply)
 
   def load[F[_]: Async](defaultPort: Port): F[HttpServerConfig] =
