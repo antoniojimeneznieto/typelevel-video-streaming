@@ -2,6 +2,7 @@ package org.typelevel.video.streaming.backend.runtime.auth
 
 import java.security.interfaces.RSAPublicKey
 import java.util.UUID
+import scala.util.Try
 
 import cats.effect.IO
 import com.auth0.jwt.algorithms.Algorithm
@@ -27,7 +28,7 @@ final class AccessTokenVerifier[Principal] private (
     .build()
 
   override def verify(token: String): IO[Option[Principal]] =
-    IO.blocking {
+    IO.delay {
       val jwt = verifier.verify(token)
 
       for
