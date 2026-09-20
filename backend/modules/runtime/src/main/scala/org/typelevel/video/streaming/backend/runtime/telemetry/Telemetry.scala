@@ -2,6 +2,7 @@ package org.typelevel.video.streaming.backend.runtime.telemetry
 
 import cats.effect.unsafe.metrics.IORuntimeMetrics as CEIORuntimeMetrics
 import cats.effect.{IO, Resource}
+import cats.effect.std.Env
 import cats.syntax.functor.*
 import org.typelevel.otel4s.oteljava.OtelJava
 import io.opentelemetry.api.OpenTelemetry as JOpenTelemetry
@@ -11,6 +12,7 @@ import org.typelevel.otel4s.context.LocalProvider
 import org.typelevel.otel4s.instrumentation.ce.IORuntimeMetrics
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.oteljava.context.{Context, IOLocalContextStorage}
+import org.typelevel.otel4s.semconv.attributes.ServiceAttributes
 
 object Telemetry:
 
@@ -21,8 +23,20 @@ object Telemetry:
       runtimeMetrics: => CEIORuntimeMetrics,
   ): Resource[IO, OtelJava[IO]] =
     for {
-      otel4s <- OtelJava.autoConfigured[IO](
-                  _.addPropertiesSupplier(() => java.util.Map.of("otel.service.name", serviceName)),
+      hostname <- Resource.eval(Env[IO].get("HOSTNAME"))
+      otel4s   <- OtelJava.autoConfigured[IO](
+                  _.addPropertiesSupplier(() =>
+                    hostname.fold(
+                      java.util.Map.of(ServiceAttributes.ServiceName.name, serviceName),
+                    )(instanceId =>
+                      java.util.Map.of(
+                        ServiceAttributes.ServiceName.name,
+                        serviceName,
+                        "otel.resource.attributes",
+                        s"service.instance.id=$instanceId",
+                      ),
+                    ),
+                  ),
                 )
 
       _ <- Resource.eval(IO.delay(OpenTelemetryAppender.install(otel4s.underlying)))

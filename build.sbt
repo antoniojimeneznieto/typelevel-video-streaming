@@ -1,7 +1,7 @@
 import com.typesafe.sbt.packager.docker.DockerAlias
 import org.scalajs.linker.interface.{ModuleKind, ModuleSplitStyle}
 
-val ScalaLtsVersion            = "3.3.8"
+val ScalaLtsVersion            = "3.9.0"
 val CatsEffectVersion          = "3.7.0"
 val Fs2Version                 = "3.13.0"
 val Http4sStableVersion        = "0.23.34"
@@ -108,6 +108,7 @@ lazy val backend = project
   .aggregate(
     runtime,
     events,
+    apiContracts,
     statusService,
     gatewayService,
     identityService,
@@ -140,6 +141,7 @@ lazy val runtime = project
       "is.cir" %% "ciris" % CirisVersion,
       "org.http4s" %% "http4s-ember-server" % Http4sStableVersion,
       "org.http4s" %% "http4s-otel4s-middleware-metrics" % Http4sOtel4sVersion,
+      "org.http4s" %% "http4s-otel4s-middleware-core-client" % Http4sOtel4sVersion,
       "org.http4s" %% "http4s-otel4s-middleware-trace-server" % Http4sOtel4sVersion,
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % Smithy4sVersion,
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
@@ -159,6 +161,18 @@ lazy val events = project
     Compile / exportJars := true,
     libraryDependencies +=
       "com.disneystreaming.smithy4s" %% "smithy4s-core" % Smithy4sVersion,
+  )
+
+lazy val apiContracts = project
+  .in(file("backend/modules/api-contracts"))
+  .enablePlugins(Smithy4sCodegenPlugin)
+  .settings(noPublishSettings)
+  .settings(
+    name := "api-contracts",
+    Compile / exportJars := true,
+    libraryDependencies +=
+      "com.disneystreaming.smithy4s" %% "smithy4s-core" % Smithy4sVersion,
+    Compile / scalacOptions += "-Wconf:id=E230&src=.*/src_managed/.*:s"
   )
 
 lazy val statusService = project
@@ -187,7 +201,7 @@ lazy val gatewayService = project
   .in(file("backend/services/gateway-service"))
   .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(noPublishSettings)
-  .dependsOn(runtime)
+  .dependsOn(runtime, apiContracts)
   .settings(
     serviceSettings(
       serviceName   = "gateway-service",
@@ -208,9 +222,9 @@ lazy val gatewayService = project
 
 lazy val identityService = project
   .in(file("backend/services/identity-service"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin, Smithy4sCodegenPlugin)
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(noPublishSettings)
-  .dependsOn(runtime, events)
+  .dependsOn(runtime, events, apiContracts)
   .settings(
     serviceSettings(
       serviceName   = "identity-service",
@@ -233,9 +247,9 @@ lazy val identityService = project
 
 lazy val catalogService = project
   .in(file("backend/services/catalog-service"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin, Smithy4sCodegenPlugin)
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(noPublishSettings)
-  .dependsOn(runtime)
+  .dependsOn(runtime, apiContracts)
   .settings(
     serviceSettings(
       serviceName   = "catalog-service",
@@ -257,9 +271,9 @@ lazy val catalogService = project
 
 lazy val playbackService = project
   .in(file("backend/services/playback-service"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin, Smithy4sCodegenPlugin)
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(noPublishSettings)
-  .dependsOn(runtime, events)
+  .dependsOn(runtime, events, apiContracts)
   .settings(
     serviceSettings(
       serviceName   = "playback-service",
