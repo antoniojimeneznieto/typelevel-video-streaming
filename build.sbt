@@ -102,7 +102,7 @@ lazy val frontend = project
       "org.typelevel" %% "cats-effect" % CatsEffectVersion,
       "io.circe" %% "circe-core" % "0.14.16",
       "io.circe" %% "circe-parser" % "0.14.16",
-      "org.typelevel" %% "munit-cats-effect" % "2.2.0" % Test,
+      "org.typelevel" %% "munit-cats-effect" % "2.2.1" % Test,
     ),
   )
 
