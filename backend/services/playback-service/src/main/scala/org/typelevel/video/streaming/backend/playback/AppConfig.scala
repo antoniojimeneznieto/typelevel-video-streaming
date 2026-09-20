@@ -39,7 +39,7 @@ final case class AppConfig(
 
 object AppConfig:
 
-  private[playback] val endpointDecoder: ConfigDecoder[String, URI] =
+  private val endpointDecoder: ConfigDecoder[String, URI] =
     ConfigDecoder[String]
       .mapOption(
         "HTTP(S) endpoint without credentials, path, query or fragment",
@@ -61,7 +61,7 @@ object AppConfig:
       Option.when(value.nonEmpty)(value).flatMap(path => Try(Paths.get(path)).toOption)
     }
 
-  private[playback] val expiresInDecoder: ConfigDecoder[String, ExpiresInSeconds] =
+  private val expiresInDecoder: ConfigDecoder[String, ExpiresInSeconds] =
     ConfigDecoder[String, Int].mapOption("URL lifetime between 1 and 3600 seconds") { value =>
       Option.when(value <= 3600)(value).flatMap(ExpiresInSeconds(_).toOption)
     }
