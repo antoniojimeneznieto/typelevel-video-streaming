@@ -15,10 +15,44 @@ import weaver.SimpleIOSuite
 
 object AccessTokenVerifierSuite extends SimpleIOSuite:
 
+  ///////////////////////////////////////////////////////////////////////////////
+  // preparation
+  ///////////////////////////////////////////////////////////////////////////////
+
   private val userId   = UUID.fromString("550e8400-e29b-41d4-a716-446655440000")
   private val jwtId    = "978c2e02-d49f-4c0a-a76d-72448a47e88d"
   private val issuer   = "identity"
   private val audience = "course-platform"
+
+  final private case class Principal(userId: UUID, role: String)
+
+  private def claims(now: Instant): JWTCreator.Builder =
+    JWT
+      .create()
+      .withIssuer("identity")
+      .withAudience("course-platform")
+      .withSubject(userId.toString)
+      .withClaim("role", "student")
+      .withIssuedAt(now.minusSeconds(60))
+      .withExpiresAt(now.plusSeconds(1800))
+      .withJWTId(jwtId)
+
+  private def keys: IO[KeyPair] =
+    IO.blocking {
+      val generator = KeyPairGenerator.getInstance("RSA")
+      generator.initialize(2048)
+      generator.generateKeyPair()
+    }
+
+  private def publicKey(pair: KeyPair): RSAPublicKey =
+    pair.getPublic.asInstanceOf[RSAPublicKey]
+
+  private def algorithm(pair: KeyPair): Algorithm =
+    Algorithm.RSA256(publicKey(pair), pair.getPrivate.asInstanceOf[RSAPrivateKey])
+
+  ///////////////////////////////////////////////////////////////////////////////
+  // tests
+  ///////////////////////////////////////////////////////////////////////////////
 
   test("a valid Identity RS256 access token yields its user ID") {
     keys.flatMap { pair =>
@@ -177,29 +211,3 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
         .map(result => expect(result == Left(failure)))
     }
   }
-
-  final private case class Principal(userId: UUID, role: String)
-
-  private def claims(now: Instant): JWTCreator.Builder =
-    JWT
-      .create()
-      .withIssuer("identity")
-      .withAudience("course-platform")
-      .withSubject(userId.toString)
-      .withClaim("role", "student")
-      .withIssuedAt(now.minusSeconds(60))
-      .withExpiresAt(now.plusSeconds(1800))
-      .withJWTId(jwtId)
-
-  private def keys: IO[KeyPair] =
-    IO.blocking {
-      val generator = KeyPairGenerator.getInstance("RSA")
-      generator.initialize(2048)
-      generator.generateKeyPair()
-    }
-
-  private def publicKey(pair: KeyPair): RSAPublicKey =
-    pair.getPublic.asInstanceOf[RSAPublicKey]
-
-  private def algorithm(pair: KeyPair): Algorithm =
-    Algorithm.RSA256(publicKey(pair), pair.getPrivate.asInstanceOf[RSAPrivateKey])
