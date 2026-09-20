@@ -34,6 +34,8 @@ semanticdbVersion := scalafixSemanticdb.revision
 addCommandAlias("fix", "; scalafixAll; scalafmtAll; scalafmtSbt")
 addCommandAlias("lint", "; scalafixAll --check; scalafmtCheckAll; scalafmtSbtCheck")
 
+Global / lintUnusedKeysOnLoad := false
+
 val serviceMainClass = settingKey[String]("Main class for this service's application launcher")
 
 def noPublishSettings =
