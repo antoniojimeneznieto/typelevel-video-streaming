@@ -13,7 +13,6 @@ import org.typelevel.video.streaming.backend.playback.domain.{ObjectKey, Playbac
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration
 import software.amazon.awssdk.core.exception.SdkException
-import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.model.{
   GetObjectRequest,
@@ -23,12 +22,12 @@ import software.amazon.awssdk.services.s3.model.{
 }
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
-import software.amazon.awssdk.services.s3.{S3Client, S3Configuration}
+import software.amazon.awssdk.services.s3.{S3AsyncClient, S3Configuration}
 
 trait S3VideoStorage:
   def getPlaybackUrl(objectKey: ObjectKey): IO[PlaybackUrlResponse]
 
-final class S3VideoStorageImpl(client: S3Client, presigner: S3Presigner, config: S3Config)
+final class S3VideoStorageImpl(client: S3AsyncClient, presigner: S3Presigner, config: S3Config)
     extends S3VideoStorage:
 
   override def getPlaybackUrl(objectKey: ObjectKey): IO[PlaybackUrlResponse] =
@@ -46,7 +45,7 @@ final class S3VideoStorageImpl(client: S3Client, presigner: S3Presigner, config:
       .signatureDuration(Duration.ofSeconds(config.urlExpiresIn.value.toLong))
       .build()
 
-    (IO.blocking(client.headObject(head)) *> IO.blocking {
+    (IO.fromCompletableFuture(IO(client.headObject(head))) *> IO.blocking {
       val signed = presigner.presignGetObject(request)
       if !signed.isBrowserExecutable then throw unavailable
       PlaybackUrl(signed.url().toExternalForm) match
@@ -79,17 +78,11 @@ object S3VideoStorageImpl:
       credentials <-
         Resource.fromAutoCloseable(IO.blocking(DefaultCredentialsProvider.builder().build()))
       client <- Resource.fromAutoCloseable(IO.blocking {
-                  val builder = S3Client
+                  val builder = S3AsyncClient
                     .builder()
                     .credentialsProvider(credentials)
                     .region(Region.of(config.region))
                     .serviceConfiguration(serviceConfiguration)
-                    .httpClientBuilder(
-                      UrlConnectionHttpClient
-                        .builder()
-                        .connectionTimeout(Duration.ofSeconds(3))
-                        .socketTimeout(Duration.ofSeconds(5)),
-                    )
                     .overrideConfiguration(
                       ClientOverrideConfiguration
                         .builder()
