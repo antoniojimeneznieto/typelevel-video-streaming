@@ -11,9 +11,34 @@ import weaver.SimpleIOSuite
 
 object BearerAuthenticationMiddlewareSuite extends SimpleIOSuite:
 
+  ///////////////////////////////////////////////////////////////////////////////
+  // preparation
+  ///////////////////////////////////////////////////////////////////////////////
+
   private val serviceHints           = Hints(HttpBearerAuth())
   private val protectedEndpointHints = Hints.empty
   private val publicEndpointHints    = Hints(Auth(Set.empty))
+
+  private def createMiddleware(
+      context: IOLocalRequestContext[String],
+  ): BearerAuthenticationMiddleware[IO, String] =
+    val verifier = new BearerTokenVerifier[IO, String]:
+      override def verify(token: String): IO[Option[String]] =
+        IO.pure(Option.when(token == "valid")("alice"))
+
+    BearerAuthenticationMiddleware(verifier, context)
+
+  private val okApp: HttpApp[IO] =
+    HttpApp[IO](_ => IO.pure(Response[IO](Status.Ok)))
+
+  private def requestWithToken(token: String): Request[IO] =
+    Request[IO]().putHeaders(
+      Authorization(Credentials.Token(AuthScheme.Bearer, token)),
+    )
+
+  ///////////////////////////////////////////////////////////////////////////////
+  // tests
+  ///////////////////////////////////////////////////////////////////////////////
 
   test("a public endpoint does not require a token") {
     for
@@ -67,20 +92,3 @@ object BearerAuthenticationMiddlewareSuite extends SimpleIOSuite:
         .exists(_.head.value == "alice"),
     ) and expect(outside.isEmpty)
   }
-
-  private def createMiddleware(
-      context: IOLocalRequestContext[String],
-  ): BearerAuthenticationMiddleware[IO, String] =
-    val verifier = new BearerTokenVerifier[IO, String]:
-      override def verify(token: String): IO[Option[String]] =
-        IO.pure(Option.when(token == "valid")("alice"))
-
-    BearerAuthenticationMiddleware(verifier, context)
-
-  private val okApp: HttpApp[IO] =
-    HttpApp[IO](_ => IO.pure(Response[IO](Status.Ok)))
-
-  private def requestWithToken(token: String): Request[IO] =
-    Request[IO]().putHeaders(
-      Authorization(Credentials.Token(AuthScheme.Bearer, token)),
-    )
