@@ -19,7 +19,7 @@ val OpenTelemetryVersion       = "1.64.0"
 val CirisVersion               = "3.9.0"
 val AwsSdkVersion              = "2.49.2"
 val Password4jVersion          = "1.8.4"
-val JavaJwtVersion             = "4.6.0"
+val JavaJwtVersion             = "4.6.1"
 val OtelInstrumentationVersion = "2.31.1-alpha"
 val TestcontainersVersion      = "2.0.5"
 
