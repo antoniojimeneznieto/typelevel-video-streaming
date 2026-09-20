@@ -8,9 +8,9 @@ import org.http4s.{DecodeResult, EntityDecoder, MalformedMessageBodyFailure, Med
 import org.typelevel.video.streaming.backend.playback.api.*
 import org.typelevel.video.streaming.backend.playback.domain.*
 import org.typelevel.video.streaming.backend.runtime.postgres.SkunkSpec
-import smithy4s.{Blob, Schema}
 import smithy4s.json.Json
 import smithy4s.time.Timestamp
+import smithy4s.{Blob, Schema}
 
 trait PlaybackFixture extends SkunkSpec:
 

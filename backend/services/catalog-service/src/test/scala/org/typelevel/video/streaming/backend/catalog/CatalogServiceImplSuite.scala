@@ -1,8 +1,8 @@
 package org.typelevel.video.streaming.backend.catalog.service
 
 import cats.effect.{IO, Resource}
-import org.typelevel.video.streaming.backend.catalog.CatalogFixture
 import org.typelevel.video.streaming.backend.catalog.api.CatalogService
+import org.typelevel.video.streaming.backend.catalog.CatalogFixture
 import org.typelevel.video.streaming.backend.catalog.domain.*
 import org.typelevel.video.streaming.backend.catalog.repository.CatalogRepositoryImpl
 import weaver.SimpleIOSuite

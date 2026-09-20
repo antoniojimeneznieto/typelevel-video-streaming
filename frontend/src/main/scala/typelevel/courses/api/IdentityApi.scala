@@ -1,10 +1,10 @@
 package typelevel.courses.api
 
 import cats.effect.IO
-import org.http4s.{AuthScheme, Credentials, Method, Request, Uri}
 import org.http4s.circe.CirceEntityCodec.*
 import org.http4s.client.Client
 import org.http4s.headers.Authorization
+import org.http4s.{AuthScheme, Credentials, Method, Request, Uri}
 
 final class IdentityApi(baseUri: Uri, client: Client[IO]):
 

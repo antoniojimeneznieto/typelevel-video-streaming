@@ -9,6 +9,7 @@ import org.typelevel.ci.CIString
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.TracerProvider
+import org.typelevel.video.streaming.backend.playback.api.PlaybackService
 import org.typelevel.video.streaming.backend.playback.config.AppConfig
 import org.typelevel.video.streaming.backend.playback.repository.{
   PlaybackProjectionRepositoryImpl,
@@ -17,7 +18,6 @@ import org.typelevel.video.streaming.backend.playback.repository.{
 import org.typelevel.video.streaming.backend.playback.service.PlaybackServiceImpl
 import org.typelevel.video.streaming.backend.playback.storage.S3VideoStorageImpl
 import org.typelevel.video.streaming.backend.playback.worker.PlaybackEventWorker
-import org.typelevel.video.streaming.backend.playback.api.PlaybackService
 import org.typelevel.video.streaming.backend.runtime.auth.{
   AccessTokenVerifier,
   BearerAuthenticationMiddleware,

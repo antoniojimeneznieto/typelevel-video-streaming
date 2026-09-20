@@ -5,10 +5,10 @@ import java.util.UUID
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import org.typelevel.video.streaming.backend.events.UserCreated
-import org.typelevel.video.streaming.backend.identity.IdentityFixture
 import org.typelevel.video.streaming.backend.identity.api.*
 import org.typelevel.video.streaming.backend.identity.auth.AccessTokenClaims
 import org.typelevel.video.streaming.backend.identity.domain.*
+import org.typelevel.video.streaming.backend.identity.IdentityFixture
 import org.typelevel.video.streaming.backend.identity.repository.{
   IdentityRepository,
   IdentityRepositoryImpl,

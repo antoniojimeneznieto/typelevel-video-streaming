@@ -2,10 +2,10 @@ package org.typelevel.video.streaming.backend.gateway
 
 import cats.effect.{IO, Resource}
 import org.http4s.client.Client
-import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.client.middleware.Metrics
-import org.http4s.otel4s.middleware.trace.client.*
+import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.otel4s.middleware.metrics.*
+import org.http4s.otel4s.middleware.trace.client.*
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.TracerProvider
 

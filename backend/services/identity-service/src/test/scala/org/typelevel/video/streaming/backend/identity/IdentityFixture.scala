@@ -12,9 +12,9 @@ import org.typelevel.video.streaming.backend.runtime.postgres.SkunkSpec
 import skunk.codec.all.*
 import skunk.implicits.*
 import skunk.{Query, Void}
-import smithy4s.{Blob, Schema}
 import smithy4s.json.Json
 import smithy4s.time.Timestamp
+import smithy4s.{Blob, Schema}
 
 trait IdentityFixture extends SkunkSpec:
 

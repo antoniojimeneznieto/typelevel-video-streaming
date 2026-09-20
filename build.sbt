@@ -174,7 +174,7 @@ lazy val apiContracts = project
     Compile / exportJars := true,
     libraryDependencies +=
       "com.disneystreaming.smithy4s" %% "smithy4s-core" % Smithy4sVersion,
-    Compile / scalacOptions += "-Wconf:id=E230&src=.*/src_managed/.*:s"
+    Compile / scalacOptions += "-Wconf:id=E230&src=.*/src_managed/.*:s",
   )
 
 lazy val statusService = project

@@ -6,8 +6,8 @@ import cats.effect.IO
 import org.http4s.{DecodeResult, EntityDecoder, MalformedMessageBodyFailure, MediaType}
 import org.typelevel.video.streaming.backend.catalog.domain.*
 import org.typelevel.video.streaming.backend.runtime.postgres.SkunkSpec
-import smithy4s.{Blob, Schema}
 import smithy4s.json.Json
+import smithy4s.{Blob, Schema}
 
 trait CatalogFixture extends SkunkSpec:
 

@@ -5,10 +5,10 @@ import scala.concurrent.duration.*
 import cats.effect.{IO, Resource}
 import io.circe.parser.parse
 import io.circe.{Decoder, Json}
-import org.http4s.{DecodeFailure, Request, Response}
 import org.http4s.circe.CirceEntityCodec.*
 import org.http4s.client.Client
 import org.http4s.dom.FetchClientBuilder
+import org.http4s.{DecodeFailure, Request, Response}
 
 final case class ApiRequestError(
     override val getMessage: String,

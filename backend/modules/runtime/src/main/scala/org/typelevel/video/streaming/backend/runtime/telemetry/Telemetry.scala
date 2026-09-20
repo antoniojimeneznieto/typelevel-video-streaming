@@ -1,10 +1,9 @@
 package org.typelevel.video.streaming.backend.runtime.telemetry
 
+import cats.effect.std.Env
 import cats.effect.unsafe.metrics.IORuntimeMetrics as CEIORuntimeMetrics
 import cats.effect.{IO, Resource}
-import cats.effect.std.Env
 import cats.syntax.functor.*
-import org.typelevel.otel4s.oteljava.OtelJava
 import io.opentelemetry.api.OpenTelemetry as JOpenTelemetry
 import io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender
 import io.opentelemetry.instrumentation.runtimetelemetry.RuntimeTelemetry
@@ -12,6 +11,7 @@ import org.typelevel.otel4s.context.LocalProvider
 import org.typelevel.otel4s.instrumentation.ce.IORuntimeMetrics
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.oteljava.context.{Context, IOLocalContextStorage}
+import org.typelevel.otel4s.oteljava.OtelJava
 import org.typelevel.otel4s.semconv.attributes.ServiceAttributes
 
 object Telemetry:
