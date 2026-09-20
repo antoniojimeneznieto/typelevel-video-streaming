@@ -41,5 +41,12 @@ jobs:
         uses: sbt/setup-sbt@v1
         with:
           disk-cache: false
+      - name: Check formatting
+        run: sbt --batch ';scalafmtCheckAll;scalafmtSbtCheck'
       - name: Run all tests
         run: sbt --batch test
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
