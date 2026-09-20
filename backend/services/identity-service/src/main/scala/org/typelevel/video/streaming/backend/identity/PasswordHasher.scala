@@ -4,8 +4,8 @@ import java.nio.charset.StandardCharsets
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.password4j.{Argon2Function, SaltGenerator}
 import com.password4j.types.Argon2
+import com.password4j.{Argon2Function, SaltGenerator}
 import org.typelevel.video.streaming.backend.identity.domain.{NewPassword, Password, PasswordHash}
 
 trait PasswordHasher:

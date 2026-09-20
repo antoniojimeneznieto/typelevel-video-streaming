@@ -10,7 +10,6 @@ import cats.effect.IO
 
 /** Loads the RSA key pair used to sign and verify access tokens.
   *
-  *
   * {{{
   * -----BEGIN PRIVATE KEY-----
   * MIIEvQIBADANBgkqhkiG9w0BAQEFAASC...

@@ -50,7 +50,7 @@ object Main extends IOApp.Simple:
                               TokenIssuer.IDENTITY.stringValue,
                               TokenAudience.COURSE_PLATFORM.stringValue,
                             )
-            service       = new IdentityServiceImpl(
+            service = new IdentityServiceImpl(
                         repository,
                         passwordHasher,
                         tokenIssuer,
