@@ -78,7 +78,7 @@ object AppConfig:
       env("AWS_REGION").default("us-east-1"),
       env("S3_BUCKET")
         .default("videos")
-        .as(
+        .as(using
           ConfigDecoder[String].mapOption("S3 bucket name") { value =>
             Option.when(value.matches("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"))(value)
           },
@@ -100,10 +100,12 @@ object AppConfig:
 
   private val kafkaConfig: ConfigValue[Effect, KafkaConfig] =
     (
-      env("KAFKA_BOOTSTRAP_SERVERS").default("localhost:9092").as(nonEmptyString),
-      env("KAFKA_GROUP_ID").default("playback-projections-v1").as(nonEmptyString),
-      env("KAFKA_LESSON_PUBLISHED_TOPIC").default("catalog.lesson-published.v1").as(nonEmptyString),
-      env("KAFKA_USER_CREATED_TOPIC").default("identity.user-created.v1").as(nonEmptyString),
+      env("KAFKA_BOOTSTRAP_SERVERS").default("localhost:9092").as(using nonEmptyString),
+      env("KAFKA_GROUP_ID").default("playback-projections-v1").as(using nonEmptyString),
+      env("KAFKA_LESSON_PUBLISHED_TOPIC")
+        .default("catalog.lesson-published.v1")
+        .as(using nonEmptyString),
+      env("KAFKA_USER_CREATED_TOPIC").default("identity.user-created.v1").as(using nonEmptyString),
     ).parMapN(KafkaConfig.apply).flatMap { config =>
       if config.lessonPublishedTopic == config.userCreatedTopic then
         ConfigValue.failed(ciris.ConfigError("Kafka event topics must be distinct"))

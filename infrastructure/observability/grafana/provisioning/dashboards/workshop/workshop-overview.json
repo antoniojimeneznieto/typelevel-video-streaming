@@ -1,0 +1,575 @@
+{
+  "uid": "workshop-overview",
+  "title": "Workshop Overview",
+  "tags": [
+    "workshop",
+    "red",
+    "http"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    {
+      "title": "Gateway and Dependencies",
+      "url": "/",
+      "targetBlank": false
+    },
+    {
+      "title": "PostgreSQL and Skunk",
+      "url": "/",
+      "targetBlank": false
+    },
+    {
+      "title": "JVM Overview",
+      "url": "/d/b91844d7-121e-4d0a-93b8-a9c1a05703b3/jvm-overview-opentelemetry",
+      "targetBlank": false
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "custom",
+        "query": "gateway-service,identity-service,catalog-service,playback-service",
+        "includeAll": true,
+        "allValue": "gateway-service|identity-service|catalog-service|playback-service",
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "route",
+        "label": "Route",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(http_server_request_duration_seconds_count{service_name=~\"$service\",http_phase=\"body\"}, classifier)",
+          "refId": "RouteVariable"
+        },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true,
+        "refresh": 2,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "method",
+        "label": "Method",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(http_server_request_duration_seconds_count{service_name=~\"$service\",http_phase=\"body\"}, http_request_method)",
+          "refId": "MethodVariable"
+        },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true,
+        "refresh": 2,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "instance",
+        "label": "Instance",
+        "type": "custom",
+        "query": "All",
+        "includeAll": false,
+        "multi": false,
+        "hide": 0,
+        "current": {
+          "text": "All",
+          "value": "All"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Workshop orientation",
+      "id": 1,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Overall request rate",
+      "description": "Completed response rate. No series means no telemetry; a visible zero means measured traffic with no requests in the rate window.",
+      "id": 2,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "Success",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"2..|3..\"}[$__rate_interval]))",
+          "legendFormat": "successful",
+          "exemplar": true
+        },
+        {
+          "refId": "Failure",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"4..|5..\"}[$__rate_interval]))",
+          "legendFormat": "failed",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Overall server error percentage",
+      "description": "5xx responses divided by all completed responses. 4xx responses are visible separately and do not count as server errors.",
+      "id": 3,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "noValue": "No telemetry"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"5..\"}[$__rate_interval])) / sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Platform p95 duration",
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 3,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "noValue": "No traffic"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval])))"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Platform p99 duration",
+      "id": 5,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 1,
+        "w": 3,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "noValue": "No traffic"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval])))"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Active requests",
+      "id": 6,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 3,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "requests",
+          "noValue": "No telemetry"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(http_server_active_requests{service_name=~\"$service\"})"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Telemetry freshness",
+      "description": "Age of the newest completed HTTP metric sample. No value means the metric pipeline is absent.",
+      "id": 7,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 21,
+        "y": 1,
+        "w": 3,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "noValue": "No telemetry"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - max(timestamp(http_server_request_duration_seconds_count{service_name=~\"$service\",http_phase=\"body\"}))"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "RED by service",
+      "id": 8,
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Request rate by service",
+      "id": 9,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}}",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Server error percentage by service",
+      "id": 10,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 10,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"5..\"}[$__rate_interval])) / sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}}",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Duration by service",
+      "id": 11,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 10,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "p50",
+          "expr": "histogram_quantile(0.50, sum by (service_name, le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval])))",
+          "legendFormat": "{{service_name}} p50",
+          "exemplar": true
+        },
+        {
+          "refId": "p95",
+          "expr": "histogram_quantile(0.95, sum by (service_name, le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval])))",
+          "legendFormat": "{{service_name}} p95",
+          "exemplar": true
+        },
+        {
+          "refId": "p99",
+          "expr": "histogram_quantile(0.99, sum by (service_name, le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval])))",
+          "legendFormat": "{{service_name}} p99",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Operation comparison",
+      "id": 12,
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "table",
+      "title": "Slowest HTTP operations (p99)",
+      "description": "Bounded, metric-derived p99 by stable server classifier. Use the trace link below for representative traces.",
+      "id": 13,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 12,
+        "h": 8
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(20, histogram_quantile(0.99, sum by (service_name, classifier, http_request_method, le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))))",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Route request rate",
+      "id": 14,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 19,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))",
+          "legendFormat": "{{classifier}}",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Route server error percentage",
+      "id": 15,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum by (classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"5..\"}[$__rate_interval])) / sum by (classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))",
+          "legendFormat": "{{classifier}}",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "type": "heatmap",
+      "title": "Route latency heatmap",
+      "id": 16,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 27,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))",
+          "format": "heatmap",
+          "legendFormat": "{{le}}"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Traces, logs, and navigation",
+      "id": 17,
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "text",
+      "title": "Representative traces and recent errors",
+      "id": 18,
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 24,
+        "h": 6
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Use **Explore → Tempo** to search `service.name` and the stable `http.route` selected above, and **Explore → Loki** with the same service and time range for application errors.\n\nError policy: 5xx is a server error; 4xx is displayed in request-rate panels but excluded from server-error percentage. Transport failures and cancellation need the pending bounded outcome metric before they can contribute to the rate."
+      }
+    }
+  ]
+}

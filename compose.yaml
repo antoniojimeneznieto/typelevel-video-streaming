@@ -451,6 +451,9 @@ services:
 
   lgtm:
     image: grafana/otel-lgtm:0.32.1
+    volumes:
+      - ./infrastructure/observability/grafana/provisioning/dashboards/workshop.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/workshop.yaml:ro
+      - ./infrastructure/observability/grafana/provisioning/dashboards/workshop:/otel-lgtm/grafana/conf/provisioning/dashboards/workshop:ro
     ports:
       - "${LGTM_OTLP_UI_PORT:-3000}:3000"
       - "${LGTM_OTLP_GRPC_PORT:-4317}:4317"
