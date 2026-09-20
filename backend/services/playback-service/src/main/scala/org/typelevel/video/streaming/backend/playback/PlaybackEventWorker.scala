@@ -16,11 +16,11 @@ final class PlaybackEventWorker(
     repository: PlaybackProjectionRepository,
 )(using TracerProvider[IO]):
 
-  private val stringDeserializer = Deserializer[IO, String].option.map(_.orNull)
+  private val stringDeserializer = Deserializer[IO, String]
 
-  private val settings = ConsumerSettings[IO, String, String](
+  private val settings = ConsumerSettings[IO, String, Option[String]](
     stringDeserializer,
-    stringDeserializer,
+    stringDeserializer.option,
   )
     .withBootstrapServers(config.bootstrapServers)
     .withGroupId(config.groupId)
@@ -50,27 +50,25 @@ final class PlaybackEventWorker(
       topic: String,
       partition: Int,
       offset: Long,
-      value: String,
+      value: Option[String],
       commit: IO[Unit],
-  ): IO[Unit] = IO.defer {
+  ): IO[Unit] =
     def invalidRecord: IllegalArgumentException =
       new IllegalArgumentException(
         s"Invalid playback event at topic=$topic partition=$partition offset=$offset",
       )
 
-    def decode[A: Schema]: IO[A] =
+    def decode[A: Schema](value: String): IO[A] =
       IO(Json.read[A](Blob(value))).attempt.flatMap {
         case Right(Right(event)) => IO.pure(event)
         case _ => IO.raiseError(invalidRecord)
       }
 
-    val applyEvent =
-      if value == null then IO.raiseError[Unit](invalidRecord)
-      else if topic == config.lessonPublishedTopic then
-        decode[LessonPublished].flatMap(repository.lessonPublished)
-      else if topic == config.userCreatedTopic then
-        decode[UserCreated].flatMap(repository.userCreated)
-      else IO.raiseError[Unit](invalidRecord)
+    val applyEvent = value match
+      case Some(value) if topic == config.lessonPublishedTopic =>
+        decode[LessonPublished](value).flatMap(repository.lessonPublished)
+      case Some(value) if topic == config.userCreatedTopic =>
+        decode[UserCreated](value).flatMap(repository.userCreated)
+      case _ => IO.raiseError[Unit](invalidRecord)
 
     applyEvent *> commit
-  }
