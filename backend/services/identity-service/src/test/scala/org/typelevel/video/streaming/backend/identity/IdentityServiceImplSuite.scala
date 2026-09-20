@@ -6,7 +6,6 @@ import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import org.typelevel.video.streaming.backend.events.UserCreated
 import org.typelevel.video.streaming.backend.identity.api.*
-import org.typelevel.video.streaming.backend.identity.auth.AccessTokenClaims
 import org.typelevel.video.streaming.backend.identity.domain.*
 import org.typelevel.video.streaming.backend.identity.IdentityFixture
 import org.typelevel.video.streaming.backend.identity.repository.{
@@ -33,12 +32,12 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
 
   private def serviceWithDatabase: Resource[
     IO,
-    (IdentityService[IO], IdentityRepository, Session[IO], IOLocalRequestContext[AccessTokenClaims]),
+    (IdentityService[IO], IdentityRepository, Session[IO], IOLocalRequestContext[UUID]),
   ] =
     for
       sessions  <- sessionPool
       session   <- sessions
-      context   <- Resource.eval(IOLocalRequestContext.create[AccessTokenClaims])
+      context   <- Resource.eval(IOLocalRequestContext.create[UUID])
       repository = new IdentityRepositoryImpl(sessions)
       service    = new IdentityServiceImpl(repository, PasswordHasherImpl(), tokenIssuer, context)
     yield (service, repository, session, context)
@@ -251,7 +250,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
         _             <- repository.create(alice)
         _             <- repository.create(bob)
         initialEvents <- session.execute(selectOutbox)
-        response      <- context.scope(claims.copy(sub = bob.id))(service.getCurrentUser())
+        response      <- context.scope(bob.id.value)(service.getCurrentUser())
         byId          <- repository.findById(bob.id)
         byEmail       <- repository.findByEmail(valid(Email("BOB@example.COM")))
         missingId     <- repository.findById(UserId(new UUID(0L, 99L)))
