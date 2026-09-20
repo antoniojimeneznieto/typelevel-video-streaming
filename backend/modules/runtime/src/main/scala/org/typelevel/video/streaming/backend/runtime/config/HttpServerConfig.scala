@@ -1,6 +1,5 @@
 package org.typelevel.video.streaming.backend.runtime.config
 
-import cats.effect.Async
 import cats.syntax.all.*
 import ciris.{ConfigDecoder, ConfigValue, Effect, env}
 import com.comcast.ip4s.{Host, Port, host}
@@ -20,6 +19,3 @@ object HttpServerConfig:
       env("HOST").as[Host].default(host"127.0.0.1"),
       env("PORT").as[Port].default(defaultPort),
     ).parMapN(HttpServerConfig.apply)
-
-  def load[F[_]: Async](defaultPort: Port): F[HttpServerConfig] =
-    config(defaultPort).load[F]
