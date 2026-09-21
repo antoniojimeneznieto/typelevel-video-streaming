@@ -69,27 +69,19 @@ object Footer:
         div(
           cls := "footer__socials",
           aria.label := "Social links",
-          a(
-            href := "https://github.com/typelevel",
-            aria.label := "GitHub",
-            target := "_blank",
-            rel := List("noreferrer"),
-            Icons(Icon.Github),
-          ),
-          a(
-            href := "https://discord.gg/XF3CXcMzqD",
-            aria.label := "Discord",
-            target := "_blank",
-            rel := List("noreferrer"),
-            Icons(Icon.Discord),
-          ),
-          a(
-            href := "https://typelevel.org/blog/",
-            aria.label := "Typelevel blog",
-            target := "_blank",
-            rel := List("noreferrer"),
-            Icons(Icon.Rss),
-          ),
+          List(
+            ("https://github.com/typelevel", "GitHub", Icon.Github),
+            ("https://discord.gg/XF3CXcMzqD", "Discord", Icon.Discord),
+            ("https://typelevel.org/blog/", "Typelevel blog", Icon.Rss),
+          ).map { (url, label, icon) =>
+            a(
+              href := url,
+              aria.label := label,
+              target := "_blank",
+              rel := List("noreferrer"),
+              Icons(icon),
+            )
+          },
         ),
       ),
     ).widen

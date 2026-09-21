@@ -8,9 +8,8 @@ import cats.syntax.all.*
 import fs2.concurrent.Signal
 import fs2.dom.HtmlElement
 import typelevel.courses.AppContext
-import typelevel.courses.domain.Course
 import typelevel.courses.state.RemoteStateStatus
-import typelevel.courses.ui.{Icon, Icons}
+import typelevel.courses.ui.{CourseView, Icon, Icons}
 
 object FavoriteButton:
   private enum Variant:
@@ -28,30 +27,31 @@ object FavoriteButton:
       anonymous: Boolean,
   )
 
-  def card(ctx: AppContext, course: Signal[IO, Course]): Resource[IO, HtmlElement[IO]] =
+  def card(ctx: AppContext, course: Signal[IO, CourseView]): Resource[IO, HtmlElement[IO]] =
     render(ctx, course, Variant.Card)
 
-  def featured(ctx: AppContext, course: Course): Resource[IO, HtmlElement[IO]] =
+  def featured(ctx: AppContext, course: CourseView): Resource[IO, HtmlElement[IO]] =
     render(ctx, Signal.constant(course), Variant.Featured)
 
-  def detail(ctx: AppContext, course: Course): Resource[IO, HtmlElement[IO]] =
+  def detail(ctx: AppContext, course: CourseView): Resource[IO, HtmlElement[IO]] =
     render(ctx, Signal.constant(course), Variant.Detail)
 
   private def render(
       ctx: AppContext,
-      course: Signal[IO, Course],
+      course: Signal[IO, CourseView],
       variant: Variant,
   ): Resource[IO, HtmlElement[IO]] =
-    val state = (
-      course,
+    val courseId = course.map(_.course.id.value.toString).changes
+    val state    = (
+      courseId,
       ctx.store.user,
       ctx.store.saved,
       ctx.store.favoritesStatus,
       ctx.store.pendingFavoriteIds,
-    ).mapN { (course, user, saved, status, pending) =>
-      val saving = pending.contains(course.id)
+    ).mapN { (id, user, saved, status, pending) =>
+      val saving = pending.contains(id)
       State(
-        saved   = saved.contains(course.id),
+        saved   = saved.contains(id),
         saving  = saving,
         canSave = status == RemoteStateStatus.Ready && !saving &&
           (variant != Variant.Card || user.nonEmpty),
@@ -60,30 +60,25 @@ object FavoriteButton:
     }.changes(using Eq.fromUniversalEquals)
     val saved     = state.map(_.saved).changes
     val saving    = state.map(_.saving).changes
-    val iconLabel = variant match
-      case Variant.Card =>
-        Some((course, state).mapN { (course, state) =>
-          if state.saving then s"Saving ${course.title}"
-          else if state.saved then s"Remove ${course.title} from saved"
-          else s"Save ${course.title}"
-        }.changes)
-      case Variant.Featured =>
-        Some(state.map { state =>
-          if state.saving then "Saving featured content"
-          else if state.saved then "Remove featured content from saved"
-          else "Save featured content"
-        }.changes)
-      case Variant.Detail => None
+    val iconLabel = Option.unless(variant == Variant.Detail) {
+      val subject: Signal[IO, String] =
+        if variant == Variant.Card then course.map(_.course.title.value)
+        else Signal.constant("featured content")
+      (subject, state).mapN { (subject, state) =>
+        if state.saving then s"Saving $subject"
+        else if state.saved then s"Remove $subject from saved"
+        else s"Save $subject"
+      }.changes
+    }
 
     button(
       cls <-- saved.map(value => variant.classes ++ Option.when(value)("is-active")),
       typ := "button",
-      // Only card buttons disappear for anonymous users; hero buttons keep their layout.
       Option.when(variant == Variant.Card)(hidden <-- state.map(_.anonymous).changes),
       disabled <-- state.map(!_.canSave).changes,
       aria.busy <-- saving,
       iconLabel.map(label => aria.label <-- label),
-      onClick(course.get.flatMap(value => ctx.store.toggleSaved(value.id))),
+      onClick(courseId.get.flatMap(ctx.store.toggleSaved)),
       saved.map(value => Icons(if value then Icon.Check else Icon.Bookmark)),
       Option.when(variant == Variant.Detail)(state.map { state =>
         if state.saving then " Saving…"

@@ -1,5 +1,6 @@
 package typelevel.courses.state
 
+import java.util.UUID
 import scala.concurrent.duration.*
 import scala.scalajs.js
 
@@ -13,8 +14,33 @@ import io.circe.parser.decode
 import io.circe.syntax.*
 import io.circe.{Decoder, Encoder}
 import org.scalajs.dom
-import typelevel.courses.api.*
-import typelevel.courses.domain.Course
+import org.typelevel.video.streaming.backend.identity.api.{LoginInput, RegisterInput, UserResponse}
+import org.typelevel.video.streaming.backend.identity.domain.{
+  DisplayName,
+  Email,
+  NewPassword,
+  Password,
+}
+import org.typelevel.video.streaming.backend.playback.api.{
+  CourseNotFoundError,
+  InvalidPlaybackProgressError,
+  ListFavoritesInput,
+  ListPlaybackProgressInput,
+  PlaybackUnavailableError,
+  PlaybackUrlResponse,
+  VideoNotFoundError,
+}
+import org.typelevel.video.streaming.backend.playback.domain.{
+  CourseId,
+  Favorite,
+  PageLimit,
+  PageOffset,
+  PlaybackProgress,
+}
+import smithy4s.http.RawErrorResponse
+import smithy4s.time.Timestamp
+import typelevel.courses.api.{IdentityApi, PlaybackApi}
+import typelevel.courses.ui.CourseView
 
 enum AuthStatus:
   case Checking, Authenticated, Anonymous
@@ -27,10 +53,9 @@ final case class StoredAuthSession(accessToken: String, expiresAt: Double)
       Encoder.AsObject
 
 final private[state] case class AppStateData(
-    user: Option[User]                         = None,
+    user: Option[UserResponse]                 = None,
     authStatus: AuthStatus                     = AuthStatus.Anonymous,
     accessToken: String                        = "",
-    expiresAt: Double                          = 0,
     playbackProgress: Vector[PlaybackProgress] = Vector.empty,
     favorites: Vector[Favorite]                = Vector.empty,
     progressStatus: RemoteStateStatus          = RemoteStateStatus.Idle,
@@ -49,7 +74,6 @@ final case class AppState private[state] (
   export data.{
     accessToken,
     authStatus,
-    expiresAt,
     favoriteMutationError,
     favorites,
     favoritesStatus,
@@ -62,10 +86,11 @@ final case class AppState private[state] (
     user,
   }
 
-  val saved: Set[String]              = favorites.map(_.courseId).toSet
-  val recentCourseIds: Vector[String] = playbackProgress.map(_.courseId).distinct
+  val saved: Set[String]              = favorites.map(_.courseId.value.toString).toSet
+  val recentCourseIds: Vector[String] = playbackProgress.map(_.courseId.value.toString).distinct
   val completedLessons: Set[String]   = playbackProgress.collect {
-    case item if item.completed => AppState.completedKey(item.courseId, item.lessonId)
+    case item if item.completed =>
+      AppState.completedKey(item.courseId.value.toString, item.lessonId.value)
   }.toSet
 
   def progressError: Option[String]  = progressMutationError.orElse(progressSyncError)
@@ -94,49 +119,44 @@ object AppState:
 
   private[state] def signal(
       data: Signal[IO, AppStateData],
-      courses: Signal[IO, Vector[Course]],
+      courses: Signal[IO, Vector[CourseView]],
   ): Signal[IO, AppState] =
     (data, courses).mapN(view).changes
 
   private[state] def view(
       data: AppStateData,
-      courses: Vector[Course],
+      courses: Vector[CourseView],
   ): AppState =
     val items       = data.playbackProgress
-    val percentages = courses.flatMap { course =>
-      val totalDuration = course.lessons.map(_.durationSeconds).sum
+    val percentages = courses.flatMap { view =>
+      val courseId      = view.course.id.value
+      val totalDuration = view.lessons.map(_.durationSeconds).sum
       if totalDuration <= 0 then None
       else
-        val watchedDuration = course.lessons.map { lesson =>
+        val watchedDuration = view.lessons.map { lesson =>
           items
-            .find(item => item.courseId == course.id && item.lessonId == lesson.id)
+            .find(item => item.courseId.value == courseId && item.lessonId.value == lesson.id)
             .fold(0)(item =>
               if item.completed then lesson.durationSeconds
-              else math.min(item.positionSeconds, lesson.durationSeconds),
+              else math.min(item.positionSeconds.value, lesson.durationSeconds),
             )
         }.sum
         if watchedDuration <= 0 then None
         else
-          val allComplete = course.lessons.nonEmpty && course.lessons.forall { lesson =>
+          val allComplete = view.lessons.nonEmpty && view.lessons.forall { lesson =>
             items.exists(item =>
-              item.courseId == course.id && item.lessonId == lesson.id && item.completed,
+              item.courseId.value == courseId && item.lessonId.value == lesson.id && item.completed,
             )
           }
           val amount =
             if allComplete then 100
             else math.min(99, math.floor(watchedDuration.toDouble / totalDuration * 100).toInt)
-          Some(course.id -> amount)
+          Some(courseId.toString -> amount)
     }.toMap
 
     AppState(data, percentages)
 
-private trait AuthSessionStorage:
-  def read(nowMillis: Double): IO[Option[StoredAuthSession]]
-  def write(session: StoredAuthSession): IO[Unit]
-  def clear: IO[Unit]
-  def removeLegacyLearningState: IO[Unit]
-
-private object LocalAuthSessionStorage extends AuthSessionStorage:
+private object LocalAuthSessionStorage:
   def read(nowMillis: Double): IO[Option[StoredAuthSession]] =
     IO.delay(Option(dom.window.localStorage.getItem(AppState.authStorageKey)))
       .attempt
@@ -172,27 +192,21 @@ final class AppStore private (
     private val identity: IdentityApi,
     private val playback: PlaybackApi,
     private val catalog: CatalogStore,
-    private val storage: AuthSessionStorage,
     private val supervisor: Supervisor[IO],
     private val progressWriters: Ref[IO, Map[(String, String), Deferred[IO, Unit]]],
-    private val expiryFiber: cats.effect.Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
-    private val syncFiber: cats.effect.Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+    private val expiryFiber: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+    private val syncFiber: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
 ):
   private def distinct[A](source: Signal[IO, A]): Signal[IO, A] =
     source.changes(using Eq.fromUniversalEquals)
 
   val signal: Signal[IO, AppState]                   = AppState.signal(ref, catalog.courses)
-  val user: Signal[IO, Option[User]]                 = distinct(signal.map(_.user))
+  val user: Signal[IO, Option[UserResponse]]         = distinct(signal.map(_.user))
   val authStatus: Signal[IO, AuthStatus]             = distinct(signal.map(_.authStatus))
-  val playbackStatus: Signal[IO, RemoteStateStatus]  = distinct(signal.map(_.playbackStatus))
   val progressStatus: Signal[IO, RemoteStateStatus]  = distinct(signal.map(_.progressStatus))
   val favoritesStatus: Signal[IO, RemoteStateStatus] = distinct(signal.map(_.favoritesStatus))
-  val playbackError: Signal[IO, Option[String]]      = distinct(signal.map(_.playbackError))
-  val progressError: Signal[IO, Option[String]]      = distinct(signal.map(_.progressError))
-  val favoritesError: Signal[IO, Option[String]]     = distinct(signal.map(_.favoritesError))
   val pendingFavoriteIds: Signal[IO, Set[String]]    = distinct(signal.map(_.pendingFavoriteIds))
   val saved: Signal[IO, Set[String]]                 = distinct(signal.map(_.saved))
-  val recentCourseIds: Signal[IO, Vector[String]]    = distinct(signal.map(_.recentCourseIds))
   val progress: Signal[IO, Map[String, Int]]         = distinct(signal.map(_.progress))
   val completedLessons: Signal[IO, Set[String]]      = distinct(signal.map(_.completedLessons))
   private val playbackProgress: Signal[IO, Vector[PlaybackProgress]] =
@@ -220,31 +234,38 @@ final class AppStore private (
 
   def lessonProgress(courseId: String, lessonId: String): Signal[IO, Option[PlaybackProgress]] =
     distinct(
-      playbackProgress.map(_.find(item => item.courseId == courseId && item.lessonId == lessonId)),
-    )
-
-  def getLessonProgress(courseId: String, lessonId: String): IO[Option[PlaybackProgress]] =
-    ref.get.map(
-      _.playbackProgress.find(item => item.courseId == courseId && item.lessonId == lessonId),
+      playbackProgress.map(
+        _.find(item => item.courseId.value.toString == courseId && item.lessonId.value == lessonId),
+      ),
     )
 
   def signIn(email: String, password: String): IO[Unit] =
     for
-      login   <- identity.login(LoginRequest(email, password))
-      now     <- IO.realTime.map(_.toMillis.toDouble)
-      session  = StoredAuthSession(login.accessToken, now + login.expiresIn.toDouble * 1000)
-      _       <- storage.write(session)
+      login <- (validated(Email(email)), validated(Password(password)))
+                 .mapN(LoginInput.apply)
+                 .flatMap(identity.login)
+      now    <- IO.realTime.map(_.toMillis.toDouble)
+      session =
+        StoredAuthSession(login.accessToken.value, now + login.expiresIn.value.toDouble * 1000)
+      _       <- LocalAuthSessionStorage.write(session)
       current <- identity.currentUser(session.accessToken).attempt
       _       <- current.fold(
-             error => clearSession(cancelWorkers = true) *> IO.raiseError(error),
+             error => clearSession *> IO.raiseError(error),
              user => authenticate(session, user),
            )
     yield ()
 
   def register(displayName: String, email: String, password: String): IO[Unit] =
-    identity.register(RegisterRequest(email, password, displayName)) *> signIn(email, password)
+    (
+      validated(Email(email)),
+      validated(NewPassword(password)),
+      validated(DisplayName(displayName)),
+    ).mapN(RegisterInput.apply).flatMap(identity.register) *> signIn(email, password)
 
-  def signOut: IO[Unit] = clearSession(cancelWorkers = true)
+  private def validated[A](value: Either[String, A]): IO[A] =
+    IO.fromEither(value.leftMap(message => IllegalArgumentException(message)))
+
+  def signOut: IO[Unit] = clearSession
 
   def requestPlaybackUrl(courseId: String, lessonId: String): IO[PlaybackUrlResponse] =
     authenticatedToken.flatMap { token =>
@@ -301,8 +322,7 @@ final class AppStore private (
     }
 
   def toggleSaved(courseId: String): IO[Unit] =
-    // Optimistic updates can unmount the button that started this request.
-    supervisor.supervise(updateSaved(courseId)).void
+    runInBackground(updateSaved(courseId))
 
   private def updateSaved(courseId: String): IO[Unit] =
     ref
@@ -313,10 +333,13 @@ final class AppStore private (
           current.pendingFavoriteIds.contains(courseId)
         then current -> Option.empty[(String, Option[Favorite])]
         else
-          val existing   = current.favorites.find(_.courseId == courseId)
+          val existing   = current.favorites.find(_.courseId.value.toString == courseId)
           val optimistic = existing.fold(
-            Favorite(courseId, new js.Date().toISOString()) +: current.favorites,
-          )(_ => current.favorites.filterNot(_.courseId == courseId))
+            Favorite(
+              CourseId(UUID.fromString(courseId)),
+              Timestamp.fromEpochMilli(js.Date.now().toLong),
+            ) +: current.favorites,
+          )(_ => current.favorites.filterNot(_.courseId.value.toString == courseId))
           current.copy(
             pendingFavoriteIds = current.pendingFavoriteIds + courseId,
             favorites          = optimistic,
@@ -334,7 +357,7 @@ final class AppStore private (
               case Right(created) =>
                 updateIfCurrent(token) { current =>
                   val favorites = created.fold(current.favorites)(favorite =>
-                    favorite +: current.favorites.filterNot(_.courseId == courseId),
+                    favorite +: current.favorites.filterNot(_.courseId.value.toString == courseId),
                   )
                   current.copy(favorites = favorites, favoriteMutationError = None)
                 }
@@ -342,8 +365,10 @@ final class AppStore private (
                 handlePlaybackFailure(token, error) *>
                   updateIfCurrent(token) { current =>
                     val rolledBack = existing.fold(
-                      current.favorites.filterNot(_.courseId == courseId),
-                    )(favorite => favorite +: current.favorites.filterNot(_.courseId == courseId))
+                      current.favorites.filterNot(_.courseId.value.toString == courseId),
+                    )(favorite =>
+                      favorite +: current.favorites.filterNot(_.courseId.value.toString == courseId),
+                    )
                     current.copy(
                       favorites             = rolledBack,
                       favoriteMutationError = Some(playbackErrorMessage(error)),
@@ -378,19 +403,18 @@ final class AppStore private (
         case Left(_) =>
           ref.get.flatMap(state =>
             IO.whenA(state.accessToken == stored.accessToken)(
-              clearSession(cancelWorkers = true),
+              clearSession,
             ),
           )
       }
     }
 
-  private def authenticate(session: StoredAuthSession, current: User): IO[Unit] =
+  private def authenticate(session: StoredAuthSession, current: UserResponse): IO[Unit] =
     ref.set(
       AppStateData(
         user        = Some(current),
         authStatus  = AuthStatus.Authenticated,
         accessToken = session.accessToken,
-        expiresAt   = session.expiresAt,
       ),
     ) *>
       scheduleExpiry(session) *>
@@ -400,24 +424,20 @@ final class AppStore private (
     ref.get.flatMap { current =>
       if current.authStatus == AuthStatus.Authenticated && current.accessToken.nonEmpty then
         IO.pure(current.accessToken)
-      else IO.raiseError(ApiRequestError("Authentication is required.", 401))
+      else IO.raiseError(IllegalStateException("Authentication is required."))
     }
 
   private def scheduleExpiry(session: StoredAuthSession): IO[Unit] =
     for
       now      <- IO.realTime.map(_.toMillis.toDouble)
       remaining = math.max(0, session.expiresAt - now).millis
-      fiber    <- supervisor.supervise(
-                 IO.sleep(remaining) *> expireIfCurrent(session.accessToken),
-               )
-      previous <- expiryFiber.getAndSet(Some(fiber))
-      _        <- previous.traverse_(_.cancel)
+      _ <- replaceFiber(expiryFiber, IO.sleep(remaining) *> expireIfCurrent(session.accessToken))
     yield ()
 
   private def expireIfCurrent(token: String): IO[Unit] =
     ref.get.flatMap { current =>
       IO.whenA(current.accessToken == token) {
-        storage.clear *>
+        LocalAuthSessionStorage.clear *>
           ref.set(AppStateData()) *>
           cancelFiber(syncFiber)
       }
@@ -439,12 +459,17 @@ final class AppStore private (
 
   private def syncProgress(token: String): IO[Unit] =
     collectPages(offset =>
-      PlaybackApi.withRetry(
-        playback.listProgress(
-          token,
-          ProgressQuery(limit = Some(100), offset = Some(offset)),
-        ),
-      ),
+      PlaybackApi
+        .withRetry(
+          playback.listProgress(
+            token,
+            ListPlaybackProgressInput(
+              limit  = PageLimit.unsafeApply(100),
+              offset = PageOffset.unsafeApply(offset),
+            ),
+          ),
+        )
+        .map(page => page.items -> page.total.value),
     ).attempt.flatMap {
       case Left(error) if isUnauthorized(error) => invalidateIfCurrent(token)
       case Left(error) =>
@@ -466,12 +491,17 @@ final class AppStore private (
 
   private def syncFavorites(token: String): IO[Unit] =
     collectPages(offset =>
-      PlaybackApi.withRetry(
-        playback.listFavorites(
-          token,
-          FavoritesQuery(limit = Some(100), offset = Some(offset)),
-        ),
-      ),
+      PlaybackApi
+        .withRetry(
+          playback.listFavorites(
+            token,
+            ListFavoritesInput(
+              limit  = PageLimit.unsafeApply(100),
+              offset = PageOffset.unsafeApply(offset),
+            ),
+          ),
+        )
+        .map(page => page.items -> page.total.value),
     ).attempt.flatMap {
       case Left(error) if isUnauthorized(error) => invalidateIfCurrent(token)
       case Left(error) =>
@@ -491,12 +521,12 @@ final class AppStore private (
         )
     }
 
-  private def collectPages[A](load: Int => IO[Page[A]]): IO[Vector[A]] =
+  private def collectPages[A](load: Int => IO[(List[A], Long)]): IO[Vector[A]] =
     def loop(offset: Int, items: Vector[A]): IO[Vector[A]] =
-      load(offset).flatMap { page =>
-        val collected = items ++ page.items
-        if page.items.isEmpty || collected.size >= page.total then IO.pure(collected)
-        else loop(offset + page.items.size, collected)
+      load(offset).flatMap { (pageItems, total) =>
+        val collected = items ++ pageItems
+        if pageItems.isEmpty || collected.size >= total then IO.pure(collected)
+        else loop(offset + pageItems.size, collected)
       }
     loop(0, Vector.empty)
 
@@ -506,21 +536,21 @@ final class AppStore private (
   private def invalidateIfCurrent(token: String): IO[Unit] =
     ref.get.flatMap(current =>
       IO.whenA(current.accessToken == token)(
-        storage.clear *> ref.set(AppStateData()) *> cancelFiber(expiryFiber),
+        LocalAuthSessionStorage.clear *> ref.set(AppStateData()) *> cancelFiber(expiryFiber),
       ),
     )
 
-  private def clearSession(cancelWorkers: Boolean): IO[Unit] =
-    storage.clear *>
+  private def clearSession: IO[Unit] =
+    LocalAuthSessionStorage.clear *>
       ref.set(AppStateData()) *>
       cancelFiber(expiryFiber) *>
-      IO.whenA(cancelWorkers)(cancelFiber(syncFiber))
+      cancelFiber(syncFiber)
 
   private def updateIfCurrent(token: String)(update: AppStateData => AppStateData): IO[Unit] =
     ref.update(current => if current.accessToken == token then update(current) else current)
 
   private def replaceFiber(
-      slot: cats.effect.Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+      slot: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
       task: IO[Unit],
   ): IO[Unit] = for
     next     <- supervisor.supervise(task)
@@ -529,20 +559,25 @@ final class AppStore private (
   yield ()
 
   private def cancelFiber(
-      slot: cats.effect.Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+      slot: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
   ): IO[Unit] =
     slot.getAndSet(None).flatMap(_.traverse_(_.cancel))
 
   private def isUnauthorized(error: Throwable): Boolean = error match
-    case api: ApiRequestError => api.status == 401
+    case response: RawErrorResponse => response.code == 401
     case _ => false
 
   private def playbackErrorMessage(error: Throwable): String = error match
-    case api: ApiRequestError if api.status == 404 =>
+    case _: VideoNotFoundError | _: CourseNotFoundError =>
       "This content has not reached the playback service yet."
-    case api: ApiRequestError if api.status == 503 =>
+    case response: RawErrorResponse if response.code == 404 =>
+      "This content has not reached the playback service yet."
+    case _: PlaybackUnavailableError =>
       "Playback is still synchronizing. Please try again shortly."
-    case api: ApiRequestError => api.getMessage
+    case response: RawErrorResponse if response.code == 503 =>
+      "Playback is still synchronizing. Please try again shortly."
+    case error: InvalidPlaybackProgressError => error.message
+    case error: IllegalArgumentException => error.getMessage
     case _ => "The playback service could not be reached."
 
 object AppStore:
@@ -558,24 +593,18 @@ object AppStore:
                 AppStateData(
                   authStatus  = AuthStatus.Checking,
                   accessToken = stored.accessToken,
-                  expiresAt   = stored.expiresAt,
                 ),
               )
     ref             <- SignallingRef[IO].of(initial).toResource
     supervisor      <- Supervisor[IO]
     progressWriters <- Ref.of[IO, Map[(String, String), Deferred[IO, Unit]]](Map.empty).toResource
-    expiryFiber     <- cats.effect.Ref
-                     .of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-                     .toResource
-    syncFiber <- cats.effect.Ref
-                   .of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-                   .toResource
-    store = AppStore(
+    expiryFiber     <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None).toResource
+    syncFiber       <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None).toResource
+    store            = AppStore(
               ref,
               identity,
               playback,
               catalog,
-              LocalAuthSessionStorage,
               supervisor,
               progressWriters,
               expiryFiber,

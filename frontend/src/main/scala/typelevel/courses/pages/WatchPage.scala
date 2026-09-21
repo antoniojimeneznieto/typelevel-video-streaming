@@ -13,20 +13,25 @@ import fs2.concurrent.{Signal, SignallingRef}
 import fs2.dom.{HtmlElement, HtmlInputElement, HtmlVideoElement, Node}
 import fs2.Stream
 import org.scalajs.dom
-import typelevel.courses.api.{ApiRequestError, PlaybackProgress}
+import org.typelevel.video.streaming.backend.playback.api.{
+  CourseNotFoundError,
+  InvalidPlaybackProgressError,
+  PlaybackUnavailableError,
+  VideoNotFoundError,
+}
+import org.typelevel.video.streaming.backend.playback.domain.PlaybackProgress
+import smithy4s.http.RawErrorResponse
 import typelevel.courses.AppContext
-import typelevel.courses.domain.{Course, CourseFormat, Lesson}
 import typelevel.courses.routing.AppRoute
 import typelevel.courses.state.RemoteStateStatus
-import typelevel.courses.ui.{Icon, Icons}
+import typelevel.courses.ui.{CourseView, Icon, Icons, LessonView}
 
 object WatchPage:
   private val ChromeIdle         = 2800.millis
   private val ProgressCheckpoint = 10.seconds
 
   private enum SourceState:
-    case Loading
-    case Ready(url: String)
+    case Loading, Ready
     case Failed(message: String)
 
   final private case class RefreshSnapshot(position: Double, playing: Boolean)
@@ -77,13 +82,6 @@ object WatchPage:
               )
     yield page
 
-  def apply(
-      ctx: AppContext,
-      slug: String,
-      lessonId: String,
-  ): Resource[IO, HtmlElement[IO]] =
-    SignallingRef[IO].of((slug, lessonId)).toResource.flatMap(apply(ctx, _))
-
   private def renderRoute(
       ctx: AppContext,
       shared: SharedState,
@@ -106,13 +104,14 @@ object WatchPage:
   private def renderLesson(
       ctx: AppContext,
       shared: SharedState,
-      course: Course,
-      lesson: Lesson,
+      course: CourseView,
+      lesson: LessonView,
       lessonIndex: Int,
   ): Resource[IO, HtmlElement[IO]] =
+    val courseId          = course.course.id.value.toString
     val nextLesson        = course.lessons.lift(lessonIndex + 1)
-    val lessonProgress    = ctx.store.lessonProgress(course.id, lesson.id)
-    val isStandaloneVideo = course.format == CourseFormat.Video
+    val lessonProgress    = ctx.store.lessonProgress(courseId, lesson.id)
+    val isStandaloneVideo = course.isVideo
 
     for
       currentTime          <- SignallingRef[IO].of(0.0).toResource
@@ -132,7 +131,7 @@ object WatchPage:
       sourceRequests       <- SignallingRef[IO].of(0L -> false).toResource
       stageRef             <- Ref[IO].of(Option.empty[dom.Element]).toResource
       progressSession      <- ctx.store.snapshot.map(_.accessToken).toResource
-      persistProgress      <- ctx.store.lessonProgressSaver(course.id, lesson.id).toResource
+      persistProgress      <- ctx.store.lessonProgressSaver(courseId, lesson.id).toResource
       progressWriter       <- ProgressWriter.resource(
                           (position, keepalive) =>
                             ctx.store.snapshot.flatMap { current =>
@@ -142,11 +141,12 @@ object WatchPage:
                             },
                           error => progressSaveError.set(error.map(progressErrorMessage)),
                           ctx.store.runInBackground,
-                          ctx.store.runLessonProgressWriter(course.id, lesson.id),
+                          ctx.store.runLessonProgressWriter(courseId, lesson.id),
                         )
       shouldAutoPlay <-
         Resource.eval(
-          shared.autoplayTarget.modify(target => (None, target.contains((course.slug, lesson.id)))),
+          shared.autoplayTarget
+            .modify(target => (None, target.contains((course.course.slug.value, lesson.id)))),
         )
       autoPlayPending <- Ref[IO].of(shouldAutoPlay).toResource
       refs             = PlayerRefs(
@@ -186,7 +186,7 @@ object WatchPage:
       _          <- videoEvents(videoElement, controller)
       playerReady = (sourceState: Signal[IO, SourceState], ctx.store.progressStatus).mapN {
                       case (
-                            SourceState.Ready(_),
+                            SourceState.Ready,
                             RemoteStateStatus.Ready | RemoteStateStatus.Error,
                           ) =>
                         true
@@ -225,8 +225,8 @@ object WatchPage:
 
   private def buildStage(
       ctx: AppContext,
-      course: Course,
-      lesson: Lesson,
+      course: CourseView,
+      lesson: LessonView,
       lessonIndex: Int,
       videoElement: HtmlVideoElement[IO],
       controller: PlayerController,
@@ -248,7 +248,7 @@ object WatchPage:
         playerTop(ctx, course, lesson, isStandaloneVideo),
         children <-- (refs.sourceState: Signal[IO, SourceState], ctx.store.progressStatus).mapN {
           case (SourceState.Loading, _) => List(asNode(playbackLoading))
-          case (SourceState.Ready(_), RemoteStateStatus.Loading | RemoteStateStatus.Idle) =>
+          case (SourceState.Ready, RemoteStateStatus.Loading | RemoteStateStatus.Idle) =>
             List(asNode(progressLoading))
           case (SourceState.Failed(message), _) =>
             List(asNode(playbackError(course, message, controller.beginSourceRequest(true))))
@@ -300,11 +300,11 @@ object WatchPage:
 
   private def playerTop(
       ctx: AppContext,
-      course: Course,
-      lesson: Lesson,
+      course: CourseView,
+      lesson: LessonView,
       isStandaloneVideo: Boolean,
   ): Resource[IO, HtmlElement[IO]] =
-    val backRoute = AppRoute.Course(course.slug)
+    val backRoute = AppRoute.Course(course.course.slug.value)
     div(
       cls := "video-stage__top video-player-chrome",
       a.withSelf { self =>
@@ -318,7 +318,7 @@ object WatchPage:
       },
       div(
         cls := "video-stage__title",
-        Option.when(course.title != lesson.title)(span(course.title)),
+        Option.when(course.course.title.value != lesson.title)(span(course.course.title.value)),
         h1(lesson.title),
       ),
     )
@@ -343,7 +343,7 @@ object WatchPage:
     )
 
   private def playbackError(
-      course: Course,
+      course: CourseView,
       message: String,
       retry: IO[Unit],
   ): Resource[IO, HtmlElement[IO]] =
@@ -371,8 +371,8 @@ object WatchPage:
     )
 
   private def lessonSlide(
-      course: Course,
-      lesson: Lesson,
+      course: CourseView,
+      lesson: LessonView,
       lessonIndex: Int,
       phase: Int,
   ): Resource[IO, Node[IO]] =
@@ -382,7 +382,7 @@ object WatchPage:
         div(
           cls := "lesson-slide__top",
           aria.hidden := true,
-          span(s"TYPELEVEL LEARNING CENTER / ${course.topic.toUpperCase}"),
+          span(s"TYPELEVEL LEARNING CENTER / ${course.course.topic.value.toUpperCase}"),
           span(s"LESSON ${pad2(lessonIndex + 1)}"),
         ),
         phasePanel(course, lesson, phase),
@@ -392,8 +392,8 @@ object WatchPage:
     )
 
   private def phasePanel(
-      course: Course,
-      lesson: Lesson,
+      course: CourseView,
+      lesson: LessonView,
       phase: Int,
   ): Resource[IO, Node[IO]] =
     val safeTitle = lesson.title.replace("\"", "'")
@@ -411,7 +411,7 @@ object WatchPage:
             p("FOCUSED LESSON"),
             div(cls := "lesson-slide__display-title", lesson.title),
             span(cls := "lesson-slide__rule"),
-            small(course.instructor.name),
+            small(course.course.instructor.name.value),
           )
         case 1 =>
           div(
@@ -527,18 +527,15 @@ object WatchPage:
 
   final private class PlayerController(
       ctx: AppContext,
-      course: Course,
-      lesson: Lesson,
-      nextLesson: Option[Lesson],
+      course: CourseView,
+      lesson: LessonView,
+      nextLesson: Option[LessonView],
       lessonProgress: Signal[IO, Option[PlaybackProgress]],
       val shared: SharedState,
       refs: PlayerRefs,
       video: dom.HTMLVideoElement,
   ):
-    private def sourceReady: IO[Boolean] = refs.sourceState.get.map {
-      case SourceState.Ready(_) => true
-      case _ => false
-    }
+    private def sourceReady: IO[Boolean] = refs.sourceState.get.map(_ == SourceState.Ready)
 
     private def playerReady: IO[Boolean] =
       (sourceReady, ctx.store.progressStatus.get).mapN { (ready, status) =>
@@ -548,7 +545,7 @@ object WatchPage:
     private def clampPosition(position: Double): Int =
       normalizedProgressPosition(position, lesson.durationSeconds)
 
-    def queueProgressSave(position: Double): IO[Unit] =
+    private def queueProgressSave(position: Double): IO[Unit] =
       refs.hasPlaybackActivity.get.ifM(refs.progressWriter.offer(clampPosition(position)), IO.unit)
 
     def beginSourceRequest(capturePlayback: Boolean): IO[Unit] =
@@ -573,17 +570,17 @@ object WatchPage:
 
     private def requestSource: IO[Unit] =
       ctx.store
-        .requestPlaybackUrl(course.id, lesson.id)
+        .requestPlaybackUrl(course.course.id.value.toString, lesson.id)
         .attempt
         .flatMap {
           case Right(response) =>
             IO.delay {
               // The MinIO URL is already signed. Preserve it exactly and never add the identity JWT.
-              video.setAttribute("src", response.url)
+              video.setAttribute("src", response.url.value)
               video.load()
             } *>
-              refs.sourceState.set(SourceState.Ready(response.url)) *>
-              IO.sleep(sourceRefreshDelayMillis(response.expiresIn).millis) *>
+              refs.sourceState.set(SourceState.Ready) *>
+              IO.sleep(sourceRefreshDelayMillis(response.expiresIn.value).millis) *>
               IO.defer(sourceLoop(capturePlayback = true))
           case Left(error) =>
             refs.sourceState.set(SourceState.Failed(sourceErrorMessage(error)))
@@ -591,7 +588,7 @@ object WatchPage:
 
     private def captureForRefresh: IO[Unit] =
       (refs.sourceState.get, refs.restored.get).tupled.flatMap {
-        case (SourceState.Ready(_), true) =>
+        case (SourceState.Ready, true) =>
           val position = finiteOrZero(video.currentTime)
           for
             progress <- lessonProgress.get
@@ -625,10 +622,8 @@ object WatchPage:
         _ <- IO.whenA(loaded && (snapshot.nonEmpty || (!alreadyRestored && canRestore))) {
                for
                  progress  <- lessonProgress.get
-                 mediaLimit =
-                   if video.duration.isFinite && video.duration > 0.0 then video.duration
-                   else lesson.durationSeconds.toDouble
-                 position = restoredPosition(
+                 mediaLimit = validDuration(video.duration, lesson.durationSeconds.toDouble)
+                 position   = restoredPosition(
                               progress        = progress,
                               refreshPosition = snapshot.map(_.position),
                               lessonDuration  = lesson.durationSeconds,
@@ -688,14 +683,14 @@ object WatchPage:
         shared.autoNext.get.flatMap { enabled =>
           (enabled, nextLesson) match
             case (true, Some(next)) =>
-              shared.autoplayTarget.set(Some((course.slug, next.id))) *>
-                ctx.navigator.go(AppRoute.Watch(course.slug, next.id))
+              shared.autoplayTarget.set(Some((course.course.slug.value, next.id))) *>
+                ctx.navigator.go(AppRoute.Watch(course.course.slug.value, next.id))
             case _ => IO.unit
         }
 
     def handleMediaError: IO[Unit] =
       refs.sourceState.get.flatMap {
-        case SourceState.Ready(_) =>
+        case SourceState.Ready =>
           refs.mediaRefreshAttempts
             .modify { attempts =>
               if attempts < 1 then attempts + 1 -> true else attempts -> false
@@ -938,15 +933,20 @@ object WatchPage:
       video.textTracks(0).mode =
         if enabled then dom.TextTrackMode.showing else dom.TextTrackMode.hidden
 
-  private def sourceErrorMessage(error: Throwable): String = error match
-    case apiError: ApiRequestError if apiError.status == 404 =>
+  private[pages] def sourceErrorMessage(error: Throwable): String = error match
+    case _: VideoNotFoundError | _: CourseNotFoundError =>
       "This video is uploaded, but its playback record is not available yet."
-    case apiError: ApiRequestError if apiError.status == 503 =>
+    case response: RawErrorResponse if response.code == 404 =>
+      "This video is uploaded, but its playback record is not available yet."
+    case _: PlaybackUnavailableError =>
+      "Playback is still synchronizing your account. Please try again shortly."
+    case response: RawErrorResponse if response.code == 503 =>
       "Playback is still synchronizing your account. Please try again shortly."
     case _ => "The video could not be prepared for playback."
 
-  private def progressErrorMessage(error: Throwable): String = error match
-    case apiError: ApiRequestError if apiError.status == 400 => apiError.getMessage
+  private[pages] def progressErrorMessage(error: Throwable): String = error match
+    case error: InvalidPlaybackProgressError => error.message
+    case error: IllegalArgumentException => error.getMessage
     case _ =>
       "Your progress could not be saved. We will try again at the next checkpoint."
 
@@ -966,7 +966,7 @@ object WatchPage:
   ): Double =
     val requested = refreshPosition.getOrElse {
       if progress.exists(_.completed) then 0.0
-      else progress.fold(0.0)(_.positionSeconds.toDouble)
+      else progress.fold(0.0)(_.positionSeconds.value.toDouble)
     }
     requested.max(0.0).min(lessonDuration.toDouble).min(mediaDuration)
 

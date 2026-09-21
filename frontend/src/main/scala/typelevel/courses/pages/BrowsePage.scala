@@ -8,13 +8,14 @@ import cats.syntax.all.*
 import fs2.concurrent.{Signal, SignallingRef}
 import fs2.dom.{HtmlElement, Node}
 import fs2.Stream
-import typelevel.courses.api.ListCoursesParams
+import org.typelevel.video.streaming.backend.catalog.api.ListCoursesInput
+import org.typelevel.video.streaming.backend.catalog.domain.{LearningPath, PageLimit, Topic}
 import typelevel.courses.AppContext
 import typelevel.courses.components.{Artwork, CourseCard, FavoriteButton, SiteHeader}
-import typelevel.courses.domain.{Course, CourseFormat, LearningPath}
 import typelevel.courses.routing.AppRoute
 import typelevel.courses.state.AppState
-import typelevel.courses.ui.{Icon, Icons}
+import typelevel.courses.ui.CatalogPresentation.*
+import typelevel.courses.ui.{CourseView, Icon, Icons}
 
 object BrowsePage:
   private enum TopicStatus:
@@ -22,7 +23,7 @@ object BrowsePage:
 
   final private case class TopicRequest(
       topic: String,
-      items: Vector[Course],
+      items: Vector[CourseView],
       status: TopicStatus,
   )
 
@@ -49,17 +50,15 @@ object BrowsePage:
       .switchMap {
         case ("All topics", _) => Stream.eval(topicRequest.set(None))
         case (topic, courses) =>
-          val local = courses.filter(_.topic == topic)
+          val local = coursesForTopic(courses, topic)
           Stream.eval(
             topicRequest.set(Some(TopicRequest(topic, local, TopicStatus.Loading))) *>
-              ctx.catalog
-                .queryCourses(
-                  ListCoursesParams(
-                    topic  = Some(topic),
-                    limit  = Some(100),
-                    offset = Some(0),
-                  ),
-                )
+              IO.fromEither(Topic(topic).leftMap(new IllegalArgumentException(_)))
+                .flatMap { value =>
+                  ctx.catalog.queryCourses(
+                    ListCoursesInput(topic = Some(value), limit = PageLimit.unsafeApply(100)),
+                  )
+                }
                 .attempt
                 .flatMap {
                   case Right(items) =>
@@ -84,7 +83,7 @@ object BrowsePage:
     val continueCourses = (courses, ctx.store.progress)
       .mapN { (items, progress) =>
         items.filter { course =>
-          val amount = progress.getOrElse(course.id, 0)
+          val amount = progress.getOrElse(course.course.id.value.toString, 0)
           amount > 0 && amount < 100 && course.lessons.nonEmpty
         }
       }
@@ -92,7 +91,10 @@ object BrowsePage:
     val filteredCourses = (courses, activeTopic, topicRequest)
       .mapN { (items, topic, request) =>
         if topic == "All topics" then items
-        else request.filter(_.topic == topic).fold(items.filter(_.topic == topic))(_.items)
+        else
+          request
+            .filter(_.topic == topic)
+            .fold(coursesForTopic(items, topic))(_.items)
       }
       .changes(using Eq.fromUniversalEquals)
     val currentRequest = (activeTopic: Signal[IO, String], topicRequest).mapN { (topic, request) =>
@@ -102,7 +104,7 @@ object BrowsePage:
     def selectTopic(next: String): IO[Unit] =
       courses.get.flatMap { items =>
         val request = Option.unless(next == "All topics")(
-          TopicRequest(next, items.filter(_.topic == next), TopicStatus.Loading),
+          TopicRequest(next, coursesForTopic(items, next), TopicStatus.Loading),
         )
         topicRequest.set(request) *> activeTopic.set(next)
       }
@@ -188,17 +190,23 @@ object BrowsePage:
       ),
     ).widen
 
+  private def coursesForTopic(courses: Vector[CourseView], topic: String): Vector[CourseView] =
+    courses.filter(_.course.topic.value == topic)
+
   private def welcome(state: AppState): String = state.user match
     case Some(user) =>
-      s"Good to see you, ${user.displayName.split(' ').headOption.getOrElse(user.displayName)}."
+      val name = user.displayName.value
+      s"Good to see you, ${name.split(' ').headOption.getOrElse(name)}."
     case _ => "What will you understand next?"
 
   private def featuredHero(
       ctx: AppContext,
-      featured: Course,
+      featured: CourseView,
   ): Resource[IO, HtmlElement[IO]] =
-    val watch   = AppRoute.Watch(featured.slug, "lesson-1")
-    val details = AppRoute.Course(featured.slug)
+    val course  = featured.course
+    val watch   = AppRoute.Watch(course.slug.value, "lesson-1")
+    val details = AppRoute.Course(course.slug.value)
+    val format  = featured.formatLabel.toLowerCase
 
     sectionTag(
       cls := "app-shell featured-course-hero",
@@ -213,18 +221,18 @@ object BrowsePage:
         span(
           cls := "featured-badge",
           span(()),
-          s" Featured ${featured.format.label.toLowerCase}",
+          s" Featured $format",
         ),
         p(
           cls := "eyebrow",
-          s"${featured.topic}${if featured.isNew then " · New" else ""}",
+          s"${course.topic.value}${if featured.isNew then " · New" else ""}",
         ),
-        h2(featured.title),
+        h2(course.title.value),
         p(featured.shortDescription),
         div(
           cls := "featured-course-hero__facts",
           featured.rating.map(value => span(Icons(Icon.Star), s" $value")),
-          span(featured.level.label),
+          span(course.level.label),
           span(
             if featured.lessonCount == 1 then "1 video"
             else s"${featured.lessonCount} lessons",
@@ -239,7 +247,7 @@ object BrowsePage:
               href := ctx.navigator.href(watch),
               ctx.navigator.intercept(self, watch),
               Icons(Icon.Play),
-              s" Play ${featured.format.label.toLowerCase}",
+              s" Play $format",
             )
           },
           a.withSelf { self =>
@@ -253,7 +261,7 @@ object BrowsePage:
           FavoriteButton.featured(ctx, featured),
         ),
       ),
-      Option.unless(featured.format == CourseFormat.Video)(
+      Option.unless(featured.isVideo)(
         div(
           cls := "featured-course-hero__code",
           aria.hidden := true,
@@ -266,7 +274,7 @@ object BrowsePage:
 
   private def continueSection(
       ctx: AppContext,
-      courses: Signal[IO, Vector[Course]],
+      courses: Signal[IO, Vector[CourseView]],
   ): Resource[IO, HtmlElement[IO]] =
     sectionTag(
       cls := "app-section app-shell",
@@ -288,25 +296,25 @@ object BrowsePage:
         children[String] { id =>
           courses.get.toResource
             .flatMap { items =>
-              items.find(_.id == id) match
+              items.find(_.course.id.value.toString == id) match
                 case None => div(())
                 case Some(initial) =>
                   val course = courses
-                    .map(_.find(_.id == id).getOrElse(initial))
+                    .map(_.find(_.course.id.value.toString == id).getOrElse(initial))
                     .changes(using Eq.fromUniversalEquals)
                   continueCard(ctx, course)
             }
             .map(value => value: Node[IO])
-        } <-- courses.map(_.map(_.id).toList),
+        } <-- courses.map(_.map(_.course.id.value.toString).toList),
       ),
     ).widen
 
   private def continueCard(
       ctx: AppContext,
-      course: Signal[IO, Course],
+      course: Signal[IO, CourseView],
   ): Resource[IO, HtmlElement[IO]] =
     val amount = (course, ctx.store.progress).mapN { (course, progress) =>
-      progress.getOrElse(course.id, 0)
+      progress.getOrElse(course.course.id.value.toString, 0)
     }.changes
     val nextLesson = (course, amount)
       .mapN { (course, amount) =>
@@ -318,7 +326,7 @@ object BrowsePage:
       }
       .changes(using Eq.fromUniversalEquals)
     val destination = (course, nextLesson).mapN { (course, lesson) =>
-      AppRoute.Watch(course.slug, lesson.id)
+      AppRoute.Watch(course.course.slug.value, lesson.id)
     }
     articleTag(
       cls := "continue-card",
@@ -326,7 +334,7 @@ object BrowsePage:
         (
           cls := "continue-card__art",
           href <-- destination.map(ctx.navigator.href),
-          aria.label <-- course.map(value => s"Continue ${value.title}"),
+          aria.label <-- course.map(value => s"Continue ${value.course.title.value}"),
           ctx.navigator.intercept(self, destination.get.map(_.uri)),
           course
             .map(value => (value.artwork, value.artLabel, value.thumbnail))
@@ -337,7 +345,7 @@ object BrowsePage:
       },
       div(
         cls := "continue-card__body",
-        p(cls := "eyebrow eyebrow--small", course.map(_.title)),
+        p(cls := "eyebrow eyebrow--small", course.map(_.course.title.value)),
         h3(nextLesson.map(_.title)),
         div(
           cls := "continue-card__bottom",
@@ -348,7 +356,7 @@ object BrowsePage:
       div(
         cls := "progress-bar",
         role := List("progressbar"),
-        aria.label <-- course.map(value => s"${value.title} progress"),
+        aria.label <-- course.map(value => s"${value.course.title.value} progress"),
         aria.valueMin := 0,
         aria.valueMax := 100,
         aria.valueNow <-- amount.map(_.toDouble),
@@ -379,7 +387,7 @@ object BrowsePage:
         div(
           cls := "browse-path-grid",
           learningPaths.zipWithIndex.toList.map { case (learningPath, index) =>
-            val destination = AppRoute.Paths.uri.withFragment(learningPath.id)
+            val destination = AppRoute.Paths.uri.withFragment(learningPath.id.value)
             a.withSelf { self =>
               (
                 cls := s"browse-path-card browse-path-card--${learningPath.tone.cssName}",
@@ -391,11 +399,11 @@ object BrowsePage:
                     cls := "eyebrow eyebrow--small",
                     f"Path ${index + 1}%02d · ${learningPath.level.label}",
                   ),
-                  h3(learningPath.title),
-                  p(learningPath.description),
+                  h3(learningPath.title.value),
+                  p(learningPath.description.value),
                   span(
                     cls := "browse-path-card__meta",
-                    s"${learningPath.courseIds.size} courses · ${learningPath.time}",
+                    s"${learningPath.courseIds.size} courses · ${learningPath.timeLabel.value}",
                   ),
                 ),
                 Icons(Icon.ChevronRight, className = "browse-path-card__arrow"),

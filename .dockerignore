@@ -3,6 +3,12 @@
 !project/
 !project/build.properties
 !project/plugins.sbt
+!shared/
+!shared/api-contracts/
+!shared/api-contracts/src/
+!shared/api-contracts/src/main/
+!shared/api-contracts/src/main/smithy/
+!shared/api-contracts/src/main/smithy/**
 !frontend/
 !frontend/**
 frontend/node_modules/

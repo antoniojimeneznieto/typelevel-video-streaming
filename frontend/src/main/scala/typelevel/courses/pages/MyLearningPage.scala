@@ -10,10 +10,9 @@ import fs2.dom.HtmlElement
 import org.http4s.Uri
 import typelevel.courses.AppContext
 import typelevel.courses.components.{CourseCard, SiteHeader}
-import typelevel.courses.domain.Course
 import typelevel.courses.routing.AppRoute
 import typelevel.courses.state.{AppState, RemoteStateStatus}
-import typelevel.courses.ui.{Icon, Icons}
+import typelevel.courses.ui.{CourseView, Icon, Icons}
 
 object MyLearningPage:
   private enum ContentMode:
@@ -23,18 +22,18 @@ object MyLearningPage:
 
   private case class LearningView(
       tab: String,
-      inProgress: Vector[Course],
-      saved: Vector[Course],
-      completed: Vector[Course],
+      inProgress: Vector[CourseView],
+      saved: Vector[CourseView],
+      completed: Vector[CourseView],
       status: RemoteStateStatus,
       error: Option[String],
   ):
-    def courses(tab: String): Vector[Course] = tab match
+    def courses(tab: String): Vector[CourseView] = tab match
       case "saved" => saved
       case "completed" => completed
       case _ => inProgress
 
-    def visible: Vector[Course] = courses(tab)
+    def visible: Vector[CourseView] = courses(tab)
 
     def mode: ContentMode = status match
       case RemoteStateStatus.Idle | RemoteStateStatus.Loading => ContentMode.Loading
@@ -43,10 +42,10 @@ object MyLearningPage:
         if visible.isEmpty then ContentMode.Empty(tab)
         else ContentMode.Courses(showProgress = tab == "progress")
 
-  private val tabs = Vector(
-    "progress" -> "In progress",
-    "saved" -> "Saved",
-    "completed" -> "Completed",
+  private val tabs = List(
+    ("progress", "In progress", Icon.Play),
+    ("saved", "Saved", Icon.Bookmark),
+    ("completed", "Completed", Icon.Trophy),
   )
 
   private def tabUri(value: String): Uri =
@@ -68,16 +67,19 @@ object MyLearningPage:
   private def view(
       tab: String,
       state: AppState,
-      courses: Vector[Course],
+      courses: Vector[CourseView],
   ): LearningView =
-    val coursesById   = courses.map(course => course.id -> course).toMap
+    val coursesById   = courses.map(course => course.course.id.value.toString -> course).toMap
     val recentCourses = state.recentCourseIds.flatMap(coursesById.get)
     val inProgress    = recentCourses.filter { course =>
-      val amount = state.progress.getOrElse(course.id, 0)
+      val amount = state.progress.getOrElse(course.course.id.value.toString, 0)
       amount > 0 && amount < 100
     }
-    val savedCourses = state.favorites.flatMap(favorite => coursesById.get(favorite.courseId))
-    val completed    = recentCourses.filter(course => state.progress.getOrElse(course.id, 0) >= 100)
+    val savedCourses =
+      state.favorites.flatMap(favorite => coursesById.get(favorite.courseId.value.toString))
+    val completed = recentCourses.filter(course =>
+      state.progress.getOrElse(course.course.id.value.toString, 0) >= 100,
+    )
     val activeStatus = if tab == "saved" then state.favoritesStatus else state.progressStatus
     val activeError  = if tab == "saved" then state.favoritesError else state.progressError
 
@@ -99,27 +101,19 @@ object MyLearningPage:
       ),
       div(
         cls := "learning-summary",
-        div(
-          span(Icons(Icon.Play)),
-          strong(model.map(_.inProgress.size.toString).changes),
-          small("In progress"),
-        ),
-        div(
-          span(Icons(Icon.Bookmark)),
-          strong(model.map(_.saved.size.toString).changes),
-          small("Saved"),
-        ),
-        div(
-          span(Icons(Icon.Trophy)),
-          strong(model.map(_.completed.size.toString).changes),
-          small("Completed"),
-        ),
+        tabs.map { case (value, label, icon) =>
+          div(
+            span(Icons(icon)),
+            strong(model.map(_.courses(value).size.toString).changes),
+            small(label),
+          )
+        },
       ),
       div(
         cls := "learning-tabs",
         role := List("tablist"),
         aria.label := "My learning categories",
-        tabs.toList.map { case (value, label) =>
+        tabs.map { case (value, label, _) =>
           val selected = model.map(_.tab == value).changes
           val count    = model.map(_.courses(value).size.toString).changes
           button(

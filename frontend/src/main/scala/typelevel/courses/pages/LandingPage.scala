@@ -8,6 +8,7 @@ import org.http4s.Uri
 import typelevel.courses.AppContext
 import typelevel.courses.components.{CourseCard, Footer, SiteHeader}
 import typelevel.courses.routing.AppRoute
+import typelevel.courses.ui.CatalogPresentation.*
 import typelevel.courses.ui.{Icon, Icons}
 
 object LandingPage:
@@ -15,12 +16,10 @@ object LandingPage:
     def productLink(anchor: HtmlAnchorElement[IO], destination: String) =
       val target = Uri.unsafeFromString(destination)
       val login  = AppRoute.Login(Some(destination)).uri
+      val route  = ctx.store.user.map(_.fold(login)(_ => target))
       (
-        href <-- ctx.store.user.map(_.fold(login)(_ => target).renderString),
-        ctx.navigator.intercept(
-          anchor,
-          ctx.store.user.get.map(_.fold(login)(_ => target)),
-        ),
+        href <-- route.map(_.renderString),
+        ctx.navigator.intercept(anchor, route.get),
       )
 
     div(
@@ -83,7 +82,7 @@ object LandingPage:
                   (
                     cls := "hero-art-frame",
                     linkTo(ctx, self, AppRoute.Register),
-                    aria.label := s"Register to watch ${featured.fold("the featured video")(_.title)}",
+                    aria.label := s"Register to watch ${featured.fold("the featured video")(_.course.title.value)}",
                     img(
                       src := featured.flatMap(_.thumbnail).getOrElse("/learning-network.webp"),
                       alt := "",
@@ -91,7 +90,7 @@ object LandingPage:
                     div(
                       cls := "hero-art-frame__topline",
                       span(featured.fold("Featured this week")(_.eyebrow)),
-                      span(featured.fold("Intermediate")(_.level.label)),
+                      span(featured.fold("Intermediate")(_.course.level.label)),
                     ),
                     span(
                       cls := "hero-play-button",
@@ -106,7 +105,7 @@ object LandingPage:
                           else s"${course.lessonCount} lessons · ${course.duration}"
                         },
                       ),
-                      strong(featured.fold("Featured video")(_.title)),
+                      strong(featured.fold("Featured video")(_.course.title.value)),
                     ),
                   )
                 },
@@ -182,7 +181,7 @@ object LandingPage:
               div(
                 cls := "path-grid",
                 learningPaths.zipWithIndex.toList.map { (path, index) =>
-                  val destination = s"/paths#${path.id}"
+                  val destination = s"/paths#${path.id.value}"
                   a.withSelf { self =>
                     (
                       cls := s"path-card path-card--${path.tone.cssName}",
@@ -190,12 +189,12 @@ object LandingPage:
                       div(cls := "path-card__number", f"${index + 1}%02d"),
                       div(cls := "path-card__icon", pathIcon(index)),
                       span(cls := "eyebrow eyebrow--small", s"${path.level.label} path"),
-                      h3(path.title),
-                      p(path.description),
+                      h3(path.title.value),
+                      p(path.description.value),
                       div(
                         cls := "path-card__meta",
                         span(s"${path.courseIds.size} courses"),
-                        span(path.time),
+                        span(path.timeLabel.value),
                         Icons(Icon.ArrowRight),
                       ),
                     )
@@ -308,10 +307,10 @@ object LandingPage:
       ctx.navigator.intercept(anchor, route),
     )
 
-  private def pathIcon(index: Int) = index match
-    case 0 => Icons(Icon.Code)
-    case 1 => Icons(Icon.Infinity)
-    case _ => Icons(Icon.Layers)
+  private def pathIcon(index: Int) = Icons(index match
+    case 0 => Icon.Code
+    case 1 => Icon.Infinity
+    case _ => Icon.Layers)
 
   private def valueItem(icon: Icon, title: String, description: String) =
     articleTag(

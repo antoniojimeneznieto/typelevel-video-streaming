@@ -1,7 +1,6 @@
 package typelevel.courses.components
 
 import calico.html.io.{*, given}
-import calico.syntax.*
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import fs2.concurrent.SignallingRef
@@ -9,10 +8,10 @@ import fs2.dom.{HtmlAnchorElement, HtmlDivElement, HtmlElement, HtmlInputElement
 import org.http4s.Uri
 import org.scalajs.dom
 import typelevel.courses.AppContext
-import typelevel.courses.domain.Course
 import typelevel.courses.routing.AppRoute
 import typelevel.courses.state.RemoteStateStatus
-import typelevel.courses.ui.{Icon, Icons}
+import typelevel.courses.ui.CatalogPresentation.*
+import typelevel.courses.ui.{CourseView, FormEvents, Icon, Icons}
 
 object SiteHeader:
   private def routeLink(
@@ -21,14 +20,7 @@ object SiteHeader:
       copy: String,
       className: String = "",
   ): Resource[IO, HtmlAnchorElement[IO]] =
-    for
-      anchor <- a(
-                  cls := className,
-                  href := ctx.navigator.href(route),
-                  copy,
-                )
-      _ <- ctx.navigator.intercept(anchor, route)
-    yield anchor
+    pathLink(ctx, ctx.navigator.href(route), copy, className)
 
   private def pathLink(
       ctx: AppContext,
@@ -58,6 +50,16 @@ object SiteHeader:
       _ <- ctx.navigator.intercept(anchor, route)
     yield anchor
 
+  private def mobileMenuButton(open: SignallingRef[IO, Boolean]): Resource[IO, HtmlElement[IO]] =
+    button(
+      cls := "mobile-menu-button",
+      typ := "button",
+      aria.label <-- open.map(if _ then "Close menu" else "Open menu"),
+      aria.expanded <-- open,
+      onClick(open.update(!_)),
+      open.map(value => Icons(if value then Icon.X else Icon.Menu)),
+    ).widen
+
   private def globalSearchShortcuts(open: SignallingRef[IO, Boolean]): Resource[IO, Unit] =
     val handle = fs2.dom
       .events[IO, dom.KeyboardEvent](dom.window, "keydown")
@@ -84,34 +86,35 @@ object SiteHeader:
   private def searchUri(query: String): Uri =
     AppRoute.Search.uri.withQueryParam("q", query.trim)
 
-  private def quickCourses(query: String, courses: Vector[Course]): Vector[Course] =
+  private def quickCourses(query: String, courses: Vector[CourseView]): Vector[CourseView] =
     val normalized = query.trim.toLowerCase
     if normalized.isEmpty then courses.take(4)
     else
       courses
-        .filter { course =>
+        .filter { view =>
+          val course = view.course
           (Vector(
-            course.title,
-            course.shortDescription,
-            course.topic,
-          ) ++ course.technologies).mkString(" ").toLowerCase.contains(normalized)
+            course.title.value,
+            view.shortDescription,
+            course.topic.value,
+          ) ++ course.technologies.map(_.value)).mkString(" ").toLowerCase.contains(normalized)
         }
         .take(5)
 
   private def quickResult(
       ctx: AppContext,
-      course: Course,
+      course: CourseView,
       close: IO[Unit],
   ): Resource[IO, HtmlAnchorElement[IO]] =
-    val destination = AppRoute.Course(course.slug)
+    val destination = AppRoute.Course(course.course.slug.value)
     for
       anchor <- a(
                   cls := "quick-result",
                   href := ctx.navigator.href(destination),
                   Artwork(course.artwork, course.artLabel, thumbnail = course.thumbnail),
                   span(
-                    strong(course.title),
-                    small(s"${course.topic} · ${course.duration}"),
+                    strong(course.course.title.value),
+                    small(s"${course.course.topic.value} · ${course.duration}"),
                   ),
                   Icons(Icon.ChevronRight),
                 )
@@ -160,7 +163,7 @@ object SiteHeader:
         (0 until matches.length).toVector
           .map(index => matches.item(index).asInstanceOf[dom.HTMLElement])
       }.flatMap { focusable =>
-        focusable.headOption.zip(focusable.lastOption).headOption match
+        focusable.headOption.zip(focusable.lastOption) match
           case Some((first, last)) if event.shiftKey && dom.document.activeElement == first =>
             event.preventDefault *> IO(last.focus())
           case Some((first, last)) if !event.shiftKey && dom.document.activeElement == last =>
@@ -173,41 +176,43 @@ object SiteHeader:
       close: IO[Unit],
   ): Resource[IO, HtmlElement[IO]] =
     for
-      query       <- SignallingRef[IO].of("").toResource
-      searchInput <- input(
-                       value <-- query,
-                       placeholder := "Search courses, topics, or technology…",
-                       aria.label := "Search",
-                     )
-      _ <- searchInput.modify(
-             onInput(_ => searchInput.value.get.flatMap(query.set)),
-           )
-      formElement <- form(
-                       cls := "search-dialog__form",
-                       onSubmit(event =>
-                         event.preventDefault *> query.get.flatMap(value =>
-                           close *> ctx.navigator.go(searchUri(value)),
+      query <- SignallingRef[IO].of("").toResource
+      search = (query, ctx.catalog.courses).mapN { (current, courses) =>
+                 current -> quickCourses(current, courses)
+               }
+      searchInput <- input.withSelf { self =>
+                       (
+                         value <-- query,
+                         onInput(_ => self.value.get.flatMap(query.set)),
+                         placeholder := "Search courses, topics, or technology…",
+                         aria.label := "Search",
+                       )
+                     }
+      formElement <- form.withSelf { self =>
+                       (
+                         FormEvents.preventNativeSubmit(self),
+                         cls := "search-dialog__form",
+                         onSubmit(
+                           query.get.flatMap(value => close *> ctx.navigator.go(searchUri(value))),
                          ),
-                       ),
-                       Icons(Icon.Search),
-                       searchInput,
-                       button(
-                         typ := "button",
-                         onClick(close),
-                         aria.label := "Close search",
-                         Icons(Icon.X, className = "search-dialog__mobile-close"),
-                         kbd("Esc"),
-                       ),
-                     )
+                         Icons(Icon.Search),
+                         searchInput,
+                         button(
+                           typ := "button",
+                           onClick(close),
+                           aria.label := "Close search",
+                           Icons(Icon.X, className = "search-dialog__mobile-close"),
+                           kbd("Esc"),
+                         ),
+                       )
+                     }
       titleRow <- div(
                     cls := "search-dialog__title-row",
-                    children <-- (query, ctx.catalog.courses).mapN { (current, courses) =>
-                      val normalized = current.trim.toLowerCase
-                      val matches    = quickCourses(current, courses)
+                    children <-- search.map { (current, matches) =>
+                      val hasQuery = current.trim.nonEmpty
                       List(
-                        p(if normalized.nonEmpty then s"${matches.size} quick results"
-                        else "Popular now"),
-                      ) ++ Option.when(normalized.nonEmpty)(
+                        p(if hasQuery then s"${matches.size} quick results" else "Popular now"),
+                      ) ++ Option.when(hasQuery)(
                         button(
                           typ := "button",
                           onClick(close *> ctx.navigator.go(searchUri(current))),
@@ -219,8 +224,7 @@ object SiteHeader:
                   )
       results <- div(
                    cls := "search-dialog__results",
-                   children <-- (query, ctx.catalog.courses).mapN { (current, courses) =>
-                     val matches = quickCourses(current, courses)
+                   children <-- search.map { (_, matches) =>
                      if matches.nonEmpty then
                        matches.toList.map(course => quickResult(ctx, course, close))
                      else
@@ -303,16 +307,7 @@ object SiteHeader:
                         "Start learning",
                         "button button--primary register-link",
                       ),
-                      button(
-                        cls := "mobile-menu-button",
-                        typ := "button",
-                        aria.label <-- menuOpen.map(open =>
-                          if open then "Close menu" else "Open menu",
-                        ),
-                        aria.expanded <-- menuOpen,
-                        onClick(menuOpen.update(!_)),
-                        menuOpen.map(open => Icons(if open then Icon.X else Icon.Menu)),
-                      ),
+                      mobileMenuButton(menuOpen),
                     ),
                   ),
                 )
@@ -364,7 +359,7 @@ object SiteHeader:
                         summaryTag(
                           aria.label := "Open account menu",
                           user.map {
-                            case Some(value) => span(value.displayName.take(1).toUpperCase)
+                            case Some(value) => span(value.displayName.value.take(1).toUpperCase)
                             case None => Icons(Icon.UserRound)
                           },
                         ),
@@ -372,8 +367,8 @@ object SiteHeader:
                           cls := "user-menu__panel",
                           div(
                             cls := "user-menu__identity",
-                            strong(user.map(_.fold("Guest learner")(_.displayName))),
-                            span(user.map(_.fold("Learning synced to your account")(_.email))),
+                            strong(user.map(_.fold("Guest learner")(_.displayName.value))),
+                            span(user.map(_.fold("Learning synced to your account")(_.email.value))),
                           ),
                           user.map {
                             case None => routeLink(ctx, AppRoute.Login(), "Log in")
@@ -386,16 +381,7 @@ object SiteHeader:
                           },
                         ),
                       ),
-                      button(
-                        cls := "mobile-menu-button",
-                        typ := "button",
-                        aria.label <-- menuOpen.map(open =>
-                          if open then "Close menu" else "Open menu",
-                        ),
-                        aria.expanded <-- menuOpen,
-                        onClick(menuOpen.update(!_)),
-                        menuOpen.map(open => Icons(if open then Icon.X else Icon.Menu)),
-                      ),
+                      mobileMenuButton(menuOpen),
                     ),
                   ),
                 )

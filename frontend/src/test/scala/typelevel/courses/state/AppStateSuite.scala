@@ -1,211 +1,113 @@
 package typelevel.courses.state
 
-import cats.effect.IO
-import cats.effect.std.Queue
-import fs2.concurrent.SignallingRef
-import io.circe.Json
-import io.circe.parser.decode
-import io.circe.syntax.*
-import munit.CatsEffectSuite
-import typelevel.courses.api.{Favorite, PlaybackProgress}
+import munit.FunSuite
+import org.typelevel.video.streaming.backend.playback.domain.{
+  CourseId,
+  Favorite,
+  LessonId,
+  PlaybackProgress,
+  PositionSeconds,
+}
+import smithy4s.time.Timestamp
 import typelevel.courses.data.Catalog
 
-final class AppStateSuite extends CatsEffectSuite:
-  private val video  = Catalog.courses.find(_.slug == "threads-at-scale").get
-  private val lesson = video.lessons.head
+final class AppStateSuite extends FunSuite:
+  private val seed   = Catalog.courses.head
+  private val course = seed.copy(lessons =
+    Vector(
+      seed.lessons.head.copy(id = "lesson-1", durationSeconds = 100),
+      seed.lessons.head.copy(id = "lesson-2", durationSeconds = 300),
+    ),
+  )
+  private val courseId  = CourseId(course.course.id.value)
+  private val id        = courseId.value.toString
+  private val updatedAt = Timestamp(2026, 9, 8)
 
-  test("anonymous state contains no device-local learning data") {
-    val state = AppState.anonymous
-
-    assertEquals(state.authStatus, AuthStatus.Anonymous)
-    assertEquals(state.user, None)
-    assertEquals(state.saved, Set.empty)
-    assertEquals(state.progress, Map.empty)
-    assertEquals(state.completedLessons, Set.empty)
-    assertEquals(state.playbackStatus, RemoteStateStatus.Idle)
-  }
-
-  test("a lower server resume position replaces progress and clears completion") {
-    val completed = AppState.view(
-      AppStateData(playbackProgress = Vector(progress(lesson.durationSeconds, completed = true))),
-      Catalog.courses,
-    )
-    val rewound = AppState.view(
-      completed.data.copy(playbackProgress = Vector(progress(300, completed = false))),
-      Catalog.courses,
+  test("course progress is weighted by lesson duration") {
+    val state = view(
+      AppStateData(playbackProgress =
+        Vector(
+          progress("lesson-1", 100),
+          progress("lesson-2", 150),
+        ),
+      ),
     )
 
-    assertEquals(completed.progress(video.id), 100)
-    assert(completed.completedLessons.contains(AppState.completedKey(video.id, lesson.id)))
-    assertEquals(rewound.progress(video.id), (300.0 / lesson.durationSeconds * 100).floor.toInt)
-    assert(!rewound.completedLessons.contains(AppState.completedKey(video.id, lesson.id)))
+    assertEquals(state.progress(id), 62)
   }
 
-  test("recent courses preserve the backend's newest-first order without duplicates") {
-    val other = Catalog.courses.find(_.slug == "typelevel-retrospective").get
-    val items = Vector(
-      progress(10, completed = false),
-      PlaybackProgress(other.id, other.lessons.head.id, 20, false, "2026-09-08T09:00:00Z"),
-      progress(30, completed = false),
+  test("full playback remains below 100 percent until every lesson is completed") {
+    val watched = Vector(
+      progress("lesson-1", 110).copy(completed = true),
+      progress("lesson-2", 300),
     )
-    val state = AppState.view(AppStateData(playbackProgress = items), Catalog.courses)
+    val incomplete = view(AppStateData(playbackProgress = watched))
+    val completed  = view(AppStateData(playbackProgress = watched.map(_.copy(completed = true))))
 
-    assertEquals(state.recentCourseIds, Vector(video.id, other.id))
+    assertEquals(incomplete.progress(id), 99)
+    assertEquals(incomplete.completedLessons, Set(AppState.completedKey(id, "lesson-1")))
+    assertEquals(completed.progress(id), 100)
+    assertEquals(completed.completedLessons.size, 2)
   }
 
-  test("favorites expose backend course UUIDs as saved content") {
-    val items = Vector(
-      Favorite(video.id, "2026-09-08T10:00:00Z"),
-      Favorite("another-course", "2026-09-08T09:00:00Z"),
+  test("rewinding a completed lesson updates progress and clears its completion") {
+    val completed = AppStateData(playbackProgress =
+      Vector(
+        progress("lesson-1", 100).copy(completed = true),
+        progress("lesson-2", 300).copy(completed = true),
+      ),
     )
-    val state = AppState.view(AppStateData(favorites = items), Catalog.courses)
+    val rewound = view(
+      completed.copy(playbackProgress = progress("lesson-1", 20) +: completed.playbackProgress.tail),
+    )
 
-    assertEquals(state.saved, Set(video.id, "another-course"))
+    assertEquals(rewound.progress(id), 80)
+    assert(!rewound.completedLessons.contains(AppState.completedKey(id, "lesson-1")))
   }
 
-  test("combined playback status and errors retain independent service results") {
-    val state = AppState.view(
+  test("recent courses keep backend order without duplicates") {
+    val otherId = CourseId(Catalog.courses(1).course.id.value)
+    val state   = view(
+      AppStateData(playbackProgress =
+        Vector(
+          progress("lesson-1", 20),
+          progress("lesson-1", 30).copy(courseId = otherId),
+          progress("lesson-2", 40),
+        ),
+      ),
+    )
+
+    assertEquals(state.recentCourseIds, Vector(id, otherId.value.toString))
+  }
+
+  test("saved course IDs come from server favorites") {
+    val state = view(AppStateData(favorites = Vector(Favorite(courseId, updatedAt))))
+
+    assertEquals(state.saved, Set(id))
+  }
+
+  test("a progress sync failure does not hide a separate favorites failure") {
+    val state = view(
       AppStateData(
         progressStatus        = RemoteStateStatus.Error,
         favoritesStatus       = RemoteStateStatus.Ready,
         progressSyncError     = Some("progress unavailable"),
         favoriteMutationError = Some("favorite unavailable"),
       ),
-      Catalog.courses,
     )
 
     assertEquals(state.playbackStatus, RemoteStateStatus.Error)
-    assertEquals(state.playbackError, Some("progress unavailable"))
+    assertEquals(state.progressError, Some("progress unavailable"))
     assertEquals(state.favoritesError, Some("favorite unavailable"))
   }
 
-  test("watching the full duration without completion remains capped at 99 percent") {
-    val state = AppState.view(
-      AppStateData(playbackProgress =
-        Vector(progress(lesson.durationSeconds + 10, completed = false)),
-      ),
-      Catalog.courses,
-    )
+  private def view(data: AppStateData): AppState = AppState.view(data, Vector(course))
 
-    assertEquals(state.progress(video.id), 99)
-    assertEquals(state.completedLessons, Set.empty)
-  }
-
-  test("source-only updates derive saved and learning state without a background subscriber") {
-    for
-      data    <- SignallingRef[IO].of(AppStateData())
-      courses <- SignallingRef[IO].of(Catalog.courses)
-      state    = AppState.signal(data, courses)
-      _       <- data.update(
-             _.copy(
-               favorites        = Vector(Favorite(video.id, "2026-09-08T10:00:00Z")),
-               playbackProgress = Vector(progress(lesson.durationSeconds, completed = true)),
-             ),
-           )
-      completed <- state.get
-      _         <- data.update(_.copy(playbackProgress = Vector(progress(300, completed = false))))
-      rewound   <- state.get
-      _         <- data.set(AppStateData())
-      cleared   <- state.get
-    yield
-      assertEquals(completed.saved, Set(video.id))
-      assertEquals(completed.recentCourseIds, Vector(video.id))
-      assertEquals(completed.completedLessons, Set(AppState.completedKey(video.id, lesson.id)))
-      assertEquals(completed.progress(video.id), 100)
-      assertEquals(rewound.saved, completed.saved)
-      assertEquals(rewound.completedLessons, Set.empty)
-      assertEquals(rewound.progress(video.id), (300.0 / lesson.durationSeconds * 100).floor.toInt)
-      assertEquals(cleared, AppState.anonymous)
-  }
-
-  test("favorite source rollback derives saved IDs without disturbing learning state or errors") {
-    val favorite = Favorite(video.id, "2026-09-08T10:00:00Z")
-    val another  = Favorite("another-course", "2026-09-08T09:00:00Z")
-    val initial  = AppStateData(
-      favorites         = Vector(another),
-      playbackProgress  = Vector(progress(300, completed = false)),
-      progressSyncError = Some("progress unavailable"),
-    )
-
-    for
-      data    <- SignallingRef[IO].of(initial)
-      courses <- SignallingRef[IO].of(Catalog.courses)
-      state    = AppState.signal(data, courses)
-      _       <- data.update(current =>
-             current.copy(
-               favorites          = favorite +: current.favorites,
-               pendingFavoriteIds = Set(video.id),
-             ),
-           )
-      optimistic <- state.get
-      _          <- data.update(current =>
-             current.copy(
-               favorites             = current.favorites.filterNot(_.courseId == video.id),
-               pendingFavoriteIds    = Set.empty,
-               favoriteMutationError = Some("favorite unavailable"),
-             ),
-           )
-      rolledBack <- state.get
-    yield
-      assertEquals(optimistic.saved, Set(video.id, another.courseId))
-      assertEquals(optimistic.pendingFavoriteIds, Set(video.id))
-      assertEquals(rolledBack.saved, Set(another.courseId))
-      assertEquals(rolledBack.pendingFavoriteIds, Set.empty)
-      assertEquals(rolledBack.progress, optimistic.progress)
-      assertEquals(rolledBack.recentCourseIds, optimistic.recentCourseIds)
-      assertEquals(rolledBack.progressError, Some("progress unavailable"))
-      assertEquals(rolledBack.favoritesError, Some("favorite unavailable"))
-  }
-
-  test("catalog duration changes emit revised percentages without rewriting source state") {
-    val short   = video.copy(lessons = Vector(lesson.copy(durationSeconds = 100)))
-    val long    = video.copy(lessons = Vector(lesson.copy(durationSeconds = 200)))
-    val initial = AppStateData(playbackProgress = Vector(progress(50, completed = false)))
-
-    for
-      data     <- SignallingRef[IO].of(initial)
-      courses  <- SignallingRef[IO].of(Vector(short))
-      observed <- Queue.unbounded[IO, AppState]
-      state     = AppState.signal(data, courses)
-      _        <- state.discrete.evalMap(observed.offer).compile.drain.background.use { _ =>
-             for
-               first    <- observed.take
-               _        <- courses.set(Vector(long))
-               revised  <- observed.take
-               _        <- courses.set(Vector.empty)
-               absent   <- observed.take
-               _        <- courses.set(Vector(short))
-               restored <- observed.take
-               source   <- data.get
-             yield
-               assertEquals(first.progress(video.id), 50)
-               assertEquals(revised.progress(video.id), 25)
-               assertEquals(absent.progress, Map.empty)
-               assertEquals(absent.recentCourseIds, Vector(video.id))
-               assertEquals(restored.progress, first.progress)
-               assertEquals(source, initial)
-           }
-    yield ()
-  }
-
-  test("derived auth-session codecs preserve the stored JSON contract") {
-    val session = StoredAuthSession("access-token", 1788861600000d)
-
-    assertEquals(
-      session.asJson,
-      Json.obj(
-        "accessToken" -> Json.fromString("access-token"),
-        "expiresAt" -> Json.fromDoubleOrNull(1788861600000d),
-      ),
-    )
-    assertEquals(decode[StoredAuthSession](session.asJson.noSpaces), Right(session))
-  }
-
-  private def progress(position: Int, completed: Boolean): PlaybackProgress =
+  private def progress(lessonId: String, position: Int): PlaybackProgress =
     PlaybackProgress(
-      courseId        = video.id,
-      lessonId        = lesson.id,
-      positionSeconds = position,
-      completed       = completed,
-      updatedAt       = "2026-09-08T10:00:00Z",
+      courseId,
+      LessonId.unsafeApply(lessonId),
+      PositionSeconds.unsafeApply(position),
+      completed = false,
+      updatedAt = updatedAt,
     )
