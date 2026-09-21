@@ -15,5 +15,3 @@ frontend/.env.*
 infrastructure/identity/keys/*.pem
 infrastructure/identity/keys/.identity-*-key.*
 .DS_Store
-.start.lock
-.start.lock.d/
