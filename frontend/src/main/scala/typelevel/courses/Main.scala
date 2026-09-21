@@ -1,11 +1,14 @@
 package typelevel.courses
 
+import scala.concurrent.duration.*
+
 import calico.IOWebApp
 import calico.router.Router
 import cats.effect.{IO, Ref, Resource}
 import fs2.dom.HtmlElement
+import org.http4s.dom.FetchClientBuilder
 import org.scalajs.dom
-import typelevel.courses.api.{ApiConfig, CatalogApi, HttpClient, IdentityApi, PlaybackApi}
+import typelevel.courses.api.{ApiConfig, CatalogApi, IdentityApi, PlaybackApi}
 import typelevel.courses.routing.{AppRoute, Navigator}
 import typelevel.courses.state.{AppStore, CatalogStore}
 
@@ -13,8 +16,11 @@ object Main extends IOWebApp:
   private val FragmentLookupFrames = 12
 
   def render: Resource[IO, HtmlElement[IO]] = for
-    router  <- Router(window).toResource
-    client  <- HttpClient.resource
+    router <- Router(window).toResource
+    client <- FetchClientBuilder[IO]
+                .withRequestTimeout(30.seconds)
+                .withoutStreamingRequests
+                .resource
     config   = ApiConfig.browser
     catalog <- CatalogStore.resource(CatalogApi(config.catalogBaseUrl, client))
     store   <- AppStore.resource(

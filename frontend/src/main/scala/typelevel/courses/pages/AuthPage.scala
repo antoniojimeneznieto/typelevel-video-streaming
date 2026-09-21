@@ -4,13 +4,25 @@ import calico.html.io.{*, given}
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import fs2.concurrent.{Signal, SignallingRef}
-import fs2.dom.{Event, HtmlElement}
+import fs2.dom.HtmlElement
 import org.http4s.Uri
-import typelevel.courses.api.ApiRequestError
+import org.typelevel.video.streaming.backend.identity.api.{
+  AuthenticationErrorCode,
+  ConflictError,
+  ConflictErrorCode,
+  InvalidCredentialsError,
+}
+import org.typelevel.video.streaming.backend.identity.domain.{
+  DisplayName,
+  Email,
+  NewPassword,
+  Password,
+}
+import smithy4s.http.RawErrorResponse
 import typelevel.courses.AppContext
 import typelevel.courses.components.Brand
 import typelevel.courses.routing.AppRoute
-import typelevel.courses.ui.{Icon, Icons}
+import typelevel.courses.ui.{FormEvents, Icon, Icons}
 
 object AuthPage:
   enum Mode:
@@ -111,125 +123,129 @@ object AuthPage:
                         else "Enter your details to pick up where you left off.",
                       ),
                     ),
-                    form(
-                      cls := "auth-form",
-                      noValidate := true,
-                      onSubmit(
-                        submit(
-                          ctx,
-                          isRegister,
-                          requestedDestination,
-                          name,
-                          email,
-                          password,
-                          error,
-                          notice,
-                          submitting,
+                    form.withSelf { self =>
+                      (
+                        FormEvents.preventNativeSubmit(self),
+                        cls := "auth-form",
+                        noValidate := true,
+                        onSubmit(
+                          submit(
+                            ctx,
+                            isRegister,
+                            requestedDestination,
+                            name,
+                            email,
+                            password,
+                            error,
+                            notice,
+                            submitting,
+                          ),
                         ),
-                      ),
-                      aria.busy <-- submitting,
-                      Option.when(isRegister)(
+                        aria.busy <-- submitting,
+                        Option.when(isRegister)(
+                          textField(
+                            labelText       = "Name",
+                            inputType       = "text",
+                            inputState      = name,
+                            placeholderText = "Ada Lovelace",
+                            autocomplete    = "name",
+                            error           = error,
+                            submitting      = submitting,
+                          ),
+                        ),
                         textField(
-                          labelText       = "Name",
-                          inputType       = "text",
-                          inputState      = name,
-                          placeholderText = "Ada Lovelace",
-                          autocomplete    = "name",
+                          labelText       = "Email address",
+                          inputType       = "email",
+                          inputState      = email,
+                          placeholderText = "you@example.com",
+                          autocomplete    = "email",
                           error           = error,
                           submitting      = submitting,
                         ),
-                      ),
-                      textField(
-                        labelText       = "Email address",
-                        inputType       = "email",
-                        inputState      = email,
-                        placeholderText = "you@example.com",
-                        autocomplete    = "email",
-                        error           = error,
-                        submitting      = submitting,
-                      ),
-                      label(
-                        cls := "field",
-                        span(
-                          cls := "field__label-row",
-                          "Password",
-                          Option.when(!isRegister)(
+                        label(
+                          cls := "field",
+                          span(
+                            cls := "field__label-row",
+                            "Password",
+                            Option.when(!isRegister)(
+                              button(
+                                typ := "button",
+                                disabled <-- submitting,
+                                onClick(
+                                  notice.set(
+                                    "Password reset is not available yet.",
+                                  ) *> error.set(""),
+                                ),
+                                "Forgot password?",
+                              ),
+                            ),
+                          ),
+                          span(
+                            cls := "password-field",
+                            input.withSelf { self =>
+                              (
+                                typ <-- showPassword.map(if _ then "text" else "password"),
+                                value <-- password,
+                                onInput(self.value.get.flatMap(password.set)),
+                                placeholder :=
+                                  (if isRegister then "At least 12 characters"
+                                   else "Your password"),
+                                autoComplete :=
+                                  (if isRegister then "new-password" else "current-password"),
+                                disabled <-- submitting,
+                                aria.invalid <-- error.map(message =>
+                                  if message.nonEmpty then "true" else "false",
+                                ),
+                                aria.describedBy <-- error.map(message =>
+                                  Option.when(message.nonEmpty)("auth-error"),
+                                ),
+                              )
+                            },
                             button(
                               typ := "button",
                               disabled <-- submitting,
-                              onClick(
-                                notice.set(
-                                  "Password reset is not available yet.",
-                                ) *> error.set(""),
-                              ),
-                              "Forgot password?",
+                              onClick(showPassword.update(!_)),
+                              aria.label <-- showPassword.map(if _ then "Hide password"
+                              else "Show password"),
+                              showPassword.map { shown =>
+                                Icons(if shown then Icon.EyeOff else Icon.Eye)
+                              },
                             ),
                           ),
                         ),
-                        span(
-                          cls := "password-field",
-                          input.withSelf { self =>
-                            (
-                              typ <-- showPassword.map(if _ then "text" else "password"),
-                              value <-- password,
-                              onInput(self.value.get.flatMap(password.set)),
-                              placeholder :=
-                                (if isRegister then "At least 12 characters" else "Your password"),
-                              autoComplete :=
-                                (if isRegister then "new-password" else "current-password"),
-                              disabled <-- submitting,
-                              aria.invalid <-- error.map(message =>
-                                if message.nonEmpty then "true" else "false",
-                              ),
-                              aria.describedBy <-- error.map(message =>
-                                Option.when(message.nonEmpty)("auth-error"),
-                              ),
-                            )
+                        Option.when(isRegister)(
+                          password.map { value =>
+                            Option.when(value.nonEmpty)(passwordStrength(value))
                           },
-                          button(
-                            typ := "button",
-                            disabled <-- submitting,
-                            onClick(showPassword.update(!_)),
-                            aria.label <-- showPassword.map(if _ then "Hide password"
-                            else "Show password"),
-                            showPassword.map { shown =>
-                              Icons(if shown then Icon.EyeOff else Icon.Eye)
-                            },
-                          ),
                         ),
-                      ),
-                      Option.when(isRegister)(
-                        password.map { value =>
-                          Option.when(value.nonEmpty)(passwordStrength(value))
+                        error.map { message =>
+                          Option.when(message.nonEmpty)(
+                            p(
+                              idAttr := "auth-error",
+                              cls := "form-message form-message--error",
+                              role := List("alert"),
+                              message,
+                            ),
+                          )
                         },
-                      ),
-                      error.map { message =>
-                        Option.when(message.nonEmpty)(
-                          p(
-                            idAttr := "auth-error",
-                            cls := "form-message form-message--error",
-                            role := List("alert"),
-                            message,
-                          ),
-                        )
-                      },
-                      notice.map { message =>
-                        Option.when(message.nonEmpty)(
-                          p(cls := "form-message", role := List("status"), message),
-                        )
-                      },
-                      button(
-                        cls := "button button--primary button--large auth-submit",
-                        typ := "submit",
-                        disabled <-- submitting,
-                        submitting.map { active =>
-                          if active then if isRegister then "Creating account…" else "Logging in…"
-                          else if isRegister then "Create account"
-                          else "Log in"
+                        notice.map { message =>
+                          Option.when(message.nonEmpty)(
+                            p(cls := "form-message", role := List("status"), message),
+                          )
                         },
-                        submitting.map(active => Option.unless(active)(Icons(Icon.ArrowRight))),
-                      ),
-                    ),
+                        button(
+                          cls := "button button--primary button--large auth-submit",
+                          typ := "submit",
+                          disabled <-- submitting,
+                          submitting.map { active =>
+                            if active then if isRegister then "Creating account…" else "Logging in…"
+                            else if isRegister then "Create account"
+                            else "Log in"
+                          },
+                          submitting.map(active => Option.unless(active)(Icons(Icon.ArrowRight))),
+                        ),
+                      )
+                    },
                     p(
                       cls := "auth-switch",
                       if isRegister then "Already learning with us? "
@@ -257,63 +273,61 @@ object AuthPage:
       error: SignallingRef[IO, String],
       notice: SignallingRef[IO, String],
       submitting: SignallingRef[IO, Boolean],
-  )(event: Event[IO]): IO[Unit] =
-    event.preventDefault *> submitting.get.ifM(
+  ): IO[Unit] =
+    submitting.get.ifM(
       IO.unit,
       error.set("") *> notice.set("") *> (for
-        currentName        <- name.get
-        currentEmail       <- email.get
+        currentName        <- name.get.map(_.trim)
+        currentEmail       <- email.get.map(_.trim)
         currentPassword    <- password.get
         currentDestination <- requestedDestination.get
-        validationError     = validate(
-                            isRegister,
-                            currentName,
-                            currentEmail.trim,
-                            currentPassword,
-                          )
-        _ <- validationError.fold {
-               submitting.set(true) *>
-                 (if isRegister then
-                    ctx.store.register(currentName.trim, currentEmail.trim, currentPassword)
-                  else ctx.store.signIn(currentEmail.trim, currentPassword)).attempt
-                   .flatMap {
-                     case Right(_) => ctx.navigator.replace(currentDestination)
-                     case Left(cause) => error.set(authErrorMessage(cause))
-                   }
-                   .guarantee(submitting.set(false))
-             }(error.set)
+        _                  <- validate(isRegister, currentName, currentEmail, currentPassword) match
+               case Some(message) => error.set(message)
+               case None =>
+                 val authenticate =
+                   if isRegister then ctx.store.register(currentName, currentEmail, currentPassword)
+                   else ctx.store.signIn(currentEmail, currentPassword)
+                 submitting.set(true) *>
+                   authenticate.attempt
+                     .flatMap {
+                       case Right(_) => ctx.navigator.replace(currentDestination)
+                       case Left(cause) => error.set(authErrorMessage(cause))
+                     }
+                     .guarantee(submitting.set(false))
       yield ()),
     )
 
-  private def validate(
+  private[pages] def validate(
       isRegister: Boolean,
       name: String,
       email: String,
       password: String,
   ): Option[String] =
-    if isRegister && name.trim.isEmpty then Some("Please enter your name.")
-    else if isRegister && name.trim.length > 100 then
-      Some("Your name must be 100 characters or fewer.")
-    else if email.length < 3 || email.length > 254 || !EmailPattern.matches(email) then
-      Some("Enter a valid email address.")
-    else if password.length < 12 || password.length > 128 then
+    if isRegister && DisplayName(name.trim).isLeft then
+      Some(
+        if name.trim.isEmpty then "Please enter your name."
+        else "Your name must be 100 characters or fewer and contain non-whitespace text.",
+      )
+    else if Email(email).isLeft then Some("Enter a valid email address.")
+    else if isRegister && NewPassword(password).isLeft then
       Some("Your password must contain between 12 and 128 characters.")
+    else if !isRegister && Password(password).isLeft then
+      Some("Your password must contain between 1 and 128 characters.")
     else None
 
-  private val EmailPattern = """^\S+@\S+\.\S+$""".r
-
-  private def authErrorMessage(cause: Throwable): String =
+  private[pages] def authErrorMessage(cause: Throwable): String =
     cause match
-      case error: ApiRequestError if error.code.contains("EMAIL_ALREADY_EXISTS") =>
+      case ConflictError(ConflictErrorCode.EMAIL_ALREADY_EXISTS) =>
         "An account already exists for that email address."
-      case error: ApiRequestError
-          if error.code.contains("INVALID_CREDENTIALS") || error.status == 401 =>
+      case InvalidCredentialsError(AuthenticationErrorCode.INVALID_CREDENTIALS) =>
         "The email or password is incorrect."
-      case error: ApiRequestError if error.status == 400 =>
+      case response: RawErrorResponse if response.code == 401 =>
+        "The email or password is incorrect."
+      case response: RawErrorResponse if response.code == 400 =>
         "The account details did not pass validation. Please check each field."
-      case error: ApiRequestError if error.status == 0 =>
-        "The identity service could not be reached. Please try again shortly."
-      case _ => "The identity service returned an unexpected response. Please try again."
+      case _: IllegalArgumentException =>
+        "The account details did not pass validation. Please check each field."
+      case _ => "The identity service could not complete the request. Please try again shortly."
 
   private def textField(
       labelText: String,

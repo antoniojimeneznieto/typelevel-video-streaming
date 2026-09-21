@@ -8,11 +8,12 @@ import cats.syntax.all.*
 import fs2.concurrent.{Signal, SignallingRef}
 import fs2.dom.HtmlElement
 import org.http4s.{Query, Uri}
+import org.typelevel.video.streaming.backend.catalog.domain.{CourseKind, CourseLevel}
 import typelevel.courses.AppContext
 import typelevel.courses.components.{CourseCard, SiteHeader}
-import typelevel.courses.domain.Course
 import typelevel.courses.routing.AppRoute
-import typelevel.courses.ui.{Icon, Icons}
+import typelevel.courses.ui.CatalogPresentation.*
+import typelevel.courses.ui.{CourseView, FormEvents, Icon, Icons}
 
 object SearchPage:
   final private case class SearchParams(
@@ -26,8 +27,8 @@ object SearchPage:
 
   final private case class Draft(source: String, value: String)
 
-  private val levels  = Vector("All levels", "Beginner", "Intermediate", "Advanced")
-  private val formats = Vector("All formats", "Course", "Workshop", "Talk", "Video")
+  private val levels  = "All levels" +: CourseLevel.values.map(_.label).toVector
+  private val formats = "All formats" +: (CourseKind.values.map(_.label).toVector :+ "Video")
 
   def apply(ctx: AppContext): Resource[IO, HtmlElement[IO]] = for
     initialUri  <- Resource.eval(ctx.navigator.location.get)
@@ -45,16 +46,14 @@ object SearchPage:
       if value.source == current.query then value.value else current.query
     }
 
-    val submit = for
-      uri        <- ctx.navigator.location.get
-      value      <- draftValue.get
-      trimmed     = value.trim
-      destination = updateParam(uri, "q", trimmed, "")
-      _          <- draft.set(Draft(trimmed, trimmed))
-      _          <- ctx.navigator.go(destination)
-    yield ()
+    def setQuery(uri: Uri, query: String): IO[Unit] =
+      draft.set(Draft(query, query)) *> ctx.navigator.go(updateParam(uri, "q", query, ""))
 
-    val clearAll = draft.set(Draft("", "")) *> ctx.navigator.go(AppRoute.Search)
+    val submit = (ctx.navigator.location.get, draftValue.get).flatMapN { (uri, value) =>
+      setQuery(uri, value.trim)
+    }
+    val clearQuery = ctx.navigator.location.get.flatMap(uri => setQuery(uri, ""))
+    val clearAll   = draft.set(Draft("", "")) *> ctx.navigator.go(AppRoute.Search)
 
     div(
       cls := "app-page search-page",
@@ -69,16 +68,16 @@ object SearchPage:
         ),
         form(
           cls := "library-search",
-          onSubmit(event => event.preventDefault *> submit),
+          onSubmit(submit),
           Icons(Icon.Search),
           input.withSelf { self =>
             (
               value <-- draftValue,
-              onInput --> (_.foreach(_ =>
+              onInput(_ =>
                 (searchParams.get, self.value.get).flatMapN { (current, value) =>
                   draft.set(Draft(current.query, value))
                 },
-              )),
+              ),
               placeholder := "Try “structured concurrency” or “http4s”…",
               aria.label := "Search course library",
               autoFocus := true,
@@ -90,19 +89,13 @@ object SearchPage:
                 typ := "button",
                 cls := "library-search__clear",
                 aria.label := "Clear search",
-                onClick {
-                  for
-                    uri <- ctx.navigator.location.get
-                    _   <- draft.set(Draft("", ""))
-                    _   <- ctx.navigator.go(updateParam(uri, "q", "", ""))
-                  yield ()
-                },
+                onClick(clearQuery),
                 Icons(Icon.X),
               )
             }
           },
           button(typ := "submit", cls := "button button--primary", "Search"),
-        ),
+        ).flatTap(FormEvents.preventNativeSubmit),
         filters(ctx, searchParams, clearAll),
         results(ctx, searchParams, ctx.catalog.courses, clearAll),
       ),
@@ -119,17 +112,17 @@ object SearchPage:
         defaultValue: String,
         values: Signal[IO, Vector[String]],
         selected: SearchParams => String,
-    ) = label(
+    ) = calico.html.io.label(
       span(labelText),
       select.withSelf { self =>
         (
           children[String](item => option(value := item, item)) <-- values.map(_.toList),
           value <-- (values, current).mapN((_, params) => selected(params)),
-          onChange --> (_.foreach(_ =>
+          onChange(_ =>
             (ctx.navigator.location.get, self.value.get).flatMapN { (uri, nextValue) =>
               ctx.navigator.go(updateParam(uri, key, nextValue, defaultValue))
             },
-          )),
+          ),
         )
       },
     )
@@ -155,7 +148,7 @@ object SearchPage:
   private def results(
       ctx: AppContext,
       current: Signal[IO, SearchParams],
-      courses: Signal[IO, Vector[Course]],
+      courses: Signal[IO, Vector[CourseView]],
       clearAll: IO[Unit],
   ): Resource[IO, HtmlElement[IO]] =
     val matching = (current, courses).mapN(matchingCourses).changes(using Eq.fromUniversalEquals)
@@ -219,20 +212,24 @@ object SearchPage:
         },
     ).widen
 
-  private def matchingCourses(current: SearchParams, courses: Vector[Course]): Vector[Course] =
+  private def matchingCourses(
+      current: SearchParams,
+      courses: Vector[CourseView],
+  ): Vector[CourseView] =
     val normalized = current.query.trim.toLowerCase
-    courses.filter { course =>
+    courses.filter { view =>
+      val course   = view.course
       val haystack = (Vector(
-        course.title,
-        course.shortDescription,
-        course.description,
-        course.topic,
-        course.instructor.name,
-      ) ++ course.technologies).mkString(" ").toLowerCase
+        course.title.value,
+        view.shortDescription,
+        course.description.value,
+        course.topic.value,
+        course.instructor.name.value,
+      ) ++ course.technologies.map(_.value)).mkString(" ").toLowerCase
       val matchesQuery  = normalized.isEmpty || haystack.contains(normalized)
-      val matchesTopic  = current.topic == "All topics" || course.topic == current.topic
+      val matchesTopic  = current.topic == "All topics" || course.topic.value == current.topic
       val matchesLevel  = current.level == "All levels" || course.level.label == current.level
-      val matchesFormat = current.format == "All formats" || course.format.label == current.format
+      val matchesFormat = current.format == "All formats" || view.formatLabel == current.format
       matchesQuery && matchesTopic && matchesLevel && matchesFormat
     }
 

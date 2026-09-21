@@ -14,8 +14,8 @@ object NotFoundPage:
       embedded: Boolean = false,
   ): Resource[IO, HtmlElement[IO]] =
     mainTag(
-      cls := s"not-found${Option.when(embedded)(" not-found--embedded").getOrElse("")}",
-      Option.when(!embedded)(Brand(ctx)),
+      cls := (if embedded then "not-found not-found--embedded" else "not-found"),
+      Option.unless(embedded)(Brand(ctx)),
       div(cls := "not-found__code", "404"),
       span(cls := "not-found__icon", Icons(Icon.Compass)),
       p(cls := "eyebrow", "That path ends here"),

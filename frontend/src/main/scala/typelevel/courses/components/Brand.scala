@@ -9,9 +9,8 @@ import typelevel.courses.routing.AppRoute
 object Brand:
   def apply(
       ctx: AppContext,
-      compact: Boolean = false,
-      light: Boolean   = false,
-      to: AppRoute     = AppRoute.Landing,
+      light: Boolean = false,
+      to: AppRoute   = AppRoute.Landing,
   ): Resource[IO, HtmlElement[IO]] =
     for
       anchor <- a(
@@ -34,7 +33,7 @@ object Brand:
                       ),
                     ),
                   ),
-                  Option.unless(compact)(span(cls := "brand__suffix", "learning center")),
+                  span(cls := "brand__suffix", "learning center"),
                 )
       _ <- ctx.navigator.intercept(anchor, to)
     yield anchor

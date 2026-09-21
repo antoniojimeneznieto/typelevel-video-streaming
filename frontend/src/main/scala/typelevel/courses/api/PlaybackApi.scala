@@ -1,26 +1,47 @@
 package typelevel.courses.api
 
+import java.util.UUID
 import scala.concurrent.duration.*
+import scala.util.Try
 
 import cats.effect.{IO, Temporal}
-import org.http4s.circe.CirceEntityCodec.*
 import org.http4s.client.Client
-import org.http4s.dom.FetchOptions
-import org.http4s.headers.Authorization
-import org.http4s.{AuthScheme, Credentials, Method, Request, Uri}
+import org.http4s.Uri
+import org.typelevel.video.streaming.backend.playback.api.{
+  ListFavoritesInput,
+  ListPlaybackProgressInput,
+  PlaybackService,
+  PlaybackUnavailableError,
+  PlaybackUrlResponse,
+}
+import org.typelevel.video.streaming.backend.playback.domain.{
+  CourseId,
+  Favorite,
+  FavoritePage,
+  LessonId,
+  PlaybackProgress,
+  PlaybackProgressPage,
+  PositionSeconds,
+}
+import smithy4s.http.RawErrorResponse
+import smithy4s.http4s.SimpleRestJsonBuilder
 
 final class PlaybackApi(baseUri: Uri, client: Client[IO]):
+  private val smithy = SmithyClient(
+    client,
+    transport => SimpleRestJsonBuilder(PlaybackService).client(transport).uri(baseUri).resource,
+  )
 
   def playbackUrl(
       accessToken: String,
       courseId: String,
       lessonId: String,
   ): IO[PlaybackUrlResponse] =
-    HttpClient.json[PlaybackUrlResponse](
-      client,
-      Request[IO](uri = lessonUri(courseId, lessonId) / "playback")
-        .putHeaders(bearer(accessToken)),
-    )
+    for
+      course <- validCourseId(courseId)
+      lesson <- validated(LessonId(lessonId))
+      result <- smithy.call(Some(accessToken))(_.getPlaybackUrl(course, lesson))
+    yield result
 
   def putProgress(
       accessToken: String,
@@ -29,70 +50,45 @@ final class PlaybackApi(baseUri: Uri, client: Client[IO]):
       positionSeconds: Int,
       keepalive: Boolean = false,
   ): IO[PlaybackProgress] =
-    HttpClient.json[PlaybackProgress](
-      client,
-      Request[IO](
-        Method.PUT,
-        lessonUri(courseId, lessonId) / "progress",
-      )
-        .putHeaders(bearer(accessToken))
-        .withEntity(PositionRequest(positionSeconds))
-        .withAttribute(FetchOptions.Key, FetchOptions.default.withKeepAlive(keepalive)),
-    )
+    for
+      course   <- validCourseId(courseId)
+      lesson   <- validated(LessonId(lessonId))
+      position <- validated(PositionSeconds(positionSeconds))
+      result   <-
+        smithy.call(Some(accessToken), Some(keepalive))(
+          _.updatePlaybackProgress(course, lesson, position),
+        )
+    yield result
 
   def listProgress(
       accessToken: String,
-      query: ProgressQuery = ProgressQuery(),
-  ): IO[Page[PlaybackProgress]] =
-    HttpClient.json[Page[PlaybackProgress]](
-      client,
-      Request[IO](
-        uri = (baseUri / "progress")
-          .withOptionQueryParam("courseId", query.courseId.filter(_.nonEmpty))
-          .withOptionQueryParam("completed", query.completed)
-          .withOptionQueryParam("limit", query.limit)
-          .withOptionQueryParam("offset", query.offset),
-      ).putHeaders(bearer(accessToken)),
-    )
+      query: ListPlaybackProgressInput = ListPlaybackProgressInput(),
+  ): IO[PlaybackProgressPage] =
+    smithy.call(Some(accessToken)) {
+      _.listPlaybackProgress(query.limit, query.offset, query.courseId, query.completed)
+    }
 
   def putFavorite(accessToken: String, courseId: String): IO[Favorite] =
-    HttpClient.json[Favorite](
-      client,
-      Request[IO](
-        Method.PUT,
-        baseUri / "favorites" / courseId,
-      )
-        .putHeaders(bearer(accessToken)),
-    )
+    validCourseId(courseId).flatMap(course => smithy.call(Some(accessToken))(_.addFavorite(course)))
 
   def deleteFavorite(accessToken: String, courseId: String): IO[Unit] =
-    HttpClient.empty(
-      client,
-      Request[IO](
-        Method.DELETE,
-        baseUri / "favorites" / courseId,
-      )
-        .putHeaders(bearer(accessToken)),
+    validCourseId(courseId).flatMap(course =>
+      smithy.call(Some(accessToken))(_.removeFavorite(course)),
     )
 
   def listFavorites(
       accessToken: String,
-      query: FavoritesQuery = FavoritesQuery(),
-  ): IO[Page[Favorite]] =
-    HttpClient.json[Page[Favorite]](
-      client,
-      Request[IO](
-        uri = (baseUri / "favorites")
-          .withOptionQueryParam("limit", query.limit)
-          .withOptionQueryParam("offset", query.offset),
-      ).putHeaders(bearer(accessToken)),
+      query: ListFavoritesInput = ListFavoritesInput(),
+  ): IO[FavoritePage] =
+    smithy.call(Some(accessToken))(_.listFavorites(query.limit, query.offset))
+
+  private def validCourseId(value: String): IO[CourseId] =
+    validated(
+      Try(UUID.fromString(value)).toEither.left.map(_ => "Invalid course ID.").map(CourseId(_)),
     )
 
-  private def lessonUri(courseId: String, lessonId: String): Uri =
-    baseUri / "courses" / courseId / "lessons" / lessonId
-
-  private def bearer(accessToken: String): Authorization =
-    Authorization(Credentials.Token(AuthScheme.Bearer, accessToken))
+  private def validated[A](value: Either[String, A]): IO[A] =
+    IO.fromEither(value.left.map(message => new IllegalArgumentException(message)))
 
 object PlaybackApi:
   private val retryDelays = Vector(250.millis, 750.millis, 1500.millis)
@@ -100,7 +96,9 @@ object PlaybackApi:
   def withRetry[A](request: IO[A]): IO[A] =
     def loop(remaining: Vector[FiniteDuration]): IO[A] =
       request.handleErrorWith {
-        case error: ApiRequestError if error.status == 503 && remaining.nonEmpty =>
+        case _: PlaybackUnavailableError if remaining.nonEmpty =>
+          Temporal[IO].sleep(remaining.head) *> loop(remaining.tail)
+        case error: RawErrorResponse if error.code == 503 && remaining.nonEmpty =>
           Temporal[IO].sleep(remaining.head) *> loop(remaining.tail)
         case error => IO.raiseError(error)
       }

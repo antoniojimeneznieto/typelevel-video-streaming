@@ -2,36 +2,43 @@ package typelevel.courses.api
 
 import cats.effect.IO
 import org.http4s.client.Client
-import org.http4s.{Request, Uri}
+import org.http4s.Uri
+import org.typelevel.video.streaming.backend.catalog.api.{
+  CatalogService,
+  ListCoursesInput,
+  ListLearningPathsInput,
+}
+import org.typelevel.video.streaming.backend.catalog.domain.{CoursePage, LearningPathPage}
+import smithy4s.http4s.SimpleRestJsonBuilder
 
 final class CatalogApi(baseUri: Uri, client: Client[IO]):
+  private val smithy = SmithyClient(
+    client,
+    transport => SimpleRestJsonBuilder(CatalogService).client(transport).uri(baseUri).resource,
+  )
 
-  def listCourses(params: ListCoursesParams = ListCoursesParams()): IO[Page[ApiCourse]] =
-    HttpClient.json[Page[ApiCourse]](
-      client,
-      Request[IO](
-        uri = (baseUri / "courses")
-          .withOptionQueryParam("q", params.query.filter(_.nonEmpty))
-          .withOptionQueryParam("level", params.level.map(_.value))
-          .withOptionQueryParam("kind", params.kind.map(_.value))
-          .withOptionQueryParam("topic", params.topic.filter(_.nonEmpty))
-          .withOptionQueryParam("technology", params.technology.filter(_.nonEmpty))
-          .withOptionQueryParam("limit", params.limit)
-          .withOptionQueryParam("offset", params.offset),
-      ),
-    )
+  def listCourses(params: ListCoursesInput = ListCoursesInput()): IO[CoursePage] =
+    smithy.call() {
+      _.listCourses(
+        limit      = params.limit,
+        offset     = params.offset,
+        query      = params.query,
+        level      = params.level,
+        kind       = params.kind,
+        topic      = params.topic,
+        technology = params.technology,
+      )
+    }
 
   def listLearningPaths(
-      params: ListLearningPathsParams = ListLearningPathsParams(),
-  ): IO[Page[ApiLearningPath]] =
-    HttpClient.json[Page[ApiLearningPath]](
-      client,
-      Request[IO](
-        uri = (baseUri / "learning-paths")
-          .withOptionQueryParam("q", params.query.filter(_.nonEmpty))
-          .withOptionQueryParam("level", params.level.map(_.value))
-          .withOptionQueryParam("tone", params.tone.map(_.value))
-          .withOptionQueryParam("limit", params.limit)
-          .withOptionQueryParam("offset", params.offset),
-      ),
-    )
+      params: ListLearningPathsInput = ListLearningPathsInput(),
+  ): IO[LearningPathPage] =
+    smithy.call() {
+      _.listLearningPaths(
+        limit  = params.limit,
+        offset = params.offset,
+        query  = params.query,
+        level  = params.level,
+        tone   = params.tone,
+      )
+    }

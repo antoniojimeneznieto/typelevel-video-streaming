@@ -19,6 +19,7 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/index.html frontend/main.js frontend/vite.config.js ./
 COPY frontend/public ./public
 COPY frontend/src/main ./src/main
+COPY shared/api-contracts/src/main /app/shared/api-contracts/src/main
 
 ARG VITE_IDENTITY_API_URL=/api/identity
 ARG VITE_CATALOG_API_URL=/api/catalog

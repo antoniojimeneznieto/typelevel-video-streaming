@@ -7,6 +7,7 @@ import fs2.dom.HtmlElement
 import typelevel.courses.AppContext
 import typelevel.courses.components.{Artwork, SiteHeader}
 import typelevel.courses.routing.AppRoute
+import typelevel.courses.ui.CatalogPresentation.*
 import typelevel.courses.ui.{Icon, Icons}
 
 object PathsPage:
@@ -15,7 +16,7 @@ object PathsPage:
       cls := "app-page paths-page",
       SiteHeader.AppHeader(ctx),
       ctx.catalog.signal.map { catalog =>
-        val coursesById = catalog.courses.map(course => course.id -> course).toMap
+        val coursesById = catalog.courses.map(course => course.course.id -> course).toMap
 
         mainTag(
           headerTag(
@@ -34,22 +35,22 @@ object PathsPage:
               val pathCourses = learningPath.courseIds.flatMap(coursesById.get)
               sectionTag(
                 cls := s"path-detail path-detail--${learningPath.tone.cssName}",
-                idAttr := learningPath.id,
+                idAttr := learningPath.id.value,
                 div(
                   cls := "path-detail__intro",
                   span(cls := "path-detail__number", f"${pathIndex + 1}%02d"),
                   p(
                     cls := "eyebrow",
-                    s"${learningPath.level.label} · ${learningPath.time}",
+                    s"${learningPath.level.label} · ${learningPath.timeLabel.value}",
                   ),
-                  h2(learningPath.title),
-                  p(learningPath.description),
+                  h2(learningPath.title.value),
+                  p(learningPath.description.value),
                   ul(
                     li(Icons(Icon.CircleCheck), " Curated course order"),
                     li(Icons(Icon.Clock), " Learn at your own pace"),
                   ),
                   pathCourses.headOption.map { firstCourse =>
-                    val destination = AppRoute.Course(firstCourse.slug)
+                    val destination = AppRoute.Course(firstCourse.course.slug.value)
                     a.withSelf { self =>
                       (
                         cls := "button button--primary",
@@ -63,8 +64,11 @@ object PathsPage:
                 ),
                 div(
                   cls := "path-detail__courses",
-                  pathCourses.zipWithIndex.toList.map { case (course, index) =>
-                    val destination = AppRoute.Course(course.slug)
+                  pathCourses.zipWithIndex.map { case (course, index) =>
+                    val destination = AppRoute.Course(course.course.slug.value)
+                    val lessonLabel =
+                      if course.lessonCount == 1 then "1 video"
+                      else s"${course.lessonCount} lessons"
                     a.withSelf { self =>
                       (
                         href := ctx.navigator.href(destination),
@@ -72,14 +76,9 @@ object PathsPage:
                         span(cls := "path-detail__step", f"${index + 1}%02d"),
                         Artwork(course.artwork, course.artLabel, thumbnail = course.thumbnail),
                         span(
-                          small(course.topic),
-                          strong(course.title),
-                          em(
-                            s"${course.duration} · ${
-                                if course.lessonCount == 1 then "1 video"
-                                else s"${course.lessonCount} lessons"
-                              }",
-                          ),
+                          small(course.course.topic.value),
+                          strong(course.course.title.value),
+                          em(s"${course.duration} · $lessonLabel"),
                         ),
                         Icons(Icon.ArrowRight),
                       )

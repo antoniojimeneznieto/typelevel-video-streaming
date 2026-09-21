@@ -9,10 +9,10 @@ import fs2.dom.HtmlElement
 import org.scalajs.dom
 import typelevel.courses.AppContext
 import typelevel.courses.components.{Artwork, CourseCard, FavoriteButton, SiteHeader}
-import typelevel.courses.domain.{Course, CourseFormat}
 import typelevel.courses.routing.AppRoute
 import typelevel.courses.state.AppState
-import typelevel.courses.ui.{Icon, Icons}
+import typelevel.courses.ui.CatalogPresentation.*
+import typelevel.courses.ui.{CourseView, Icon, Icons}
 
 object CoursePage:
   def apply(ctx: AppContext, slug: String): Resource[IO, HtmlElement[IO]] =
@@ -31,16 +31,18 @@ object CoursePage:
 
   private def content(
       ctx: AppContext,
-      course: Course,
+      course: CourseView,
   ): Resource[IO, HtmlElement[IO]] =
-    val isVideo        = course.format == CourseFormat.Video
-    val courseProgress = ctx.store.progress.map(_.getOrElse(course.id, 0)).changes
-    val related        = ctx.catalog.courses
+    val isVideo        = course.isVideo
+    val courseProgress =
+      ctx.store.progress.map(_.getOrElse(course.course.id.value.toString, 0)).changes
+    val related = ctx.catalog.courses
       .map { courses =>
         courses
           .filter { item =>
-            item.id != course.id && (
-              item.topic == course.topic || item.technologies.exists(course.technologies.contains)
+            item.course.id != course.course.id && (
+              item.course.topic == course.course.topic ||
+                item.course.technologies.exists(course.course.technologies.contains)
             )
           }
           .take(3)
@@ -55,14 +57,18 @@ object CoursePage:
               course.lessons.size - 1,
               math.floor(progress.toDouble / 100 * course.lessons.size).toInt,
             )
-        AppRoute.Watch(course.slug, course.lessons.lift(nextLessonIndex).fold("lesson-1")(_.id))
+        AppRoute.Watch(
+          course.course.slug.value,
+          course.lessons.lift(nextLessonIndex).fold("lesson-1")(_.id),
+        )
       }
       .changes(using Eq.fromUniversalEquals)
 
     val startLabel = courseProgress.map { progress =>
+      val contentType = if isVideo then "video" else "course"
       if progress >= 100 then if isVideo then "Watch again" else "Review course"
-      else if progress > 0 then s"Resume ${if isVideo then "video" else "course"} · $progress%"
-      else s"Start ${if isVideo then "video" else "course"}"
+      else if progress > 0 then s"Resume $contentType · $progress%"
+      else s"Start $contentType"
     }
 
     mainTag(
@@ -86,13 +92,13 @@ object CoursePage:
               cls := "detail-hero__copy",
               div(
                 cls := "detail-tags",
-                span(course.format.label),
+                span(course.formatLabel),
                 Option.when(course.isNew)(span(cls := "is-new", "New")),
-                span(course.level.label),
+                span(course.course.level.label),
               ),
-              p(cls := "eyebrow", course.topic),
-              h1(course.title),
-              p(cls := "detail-hero__description", course.description),
+              p(cls := "eyebrow", course.course.topic.value),
+              h1(course.course.title.value),
+              p(cls := "detail-hero__description", course.course.description.value),
               div(
                 cls := "detail-hero__facts",
                 course.rating.zip(course.students).map { (rating, students) =>
@@ -113,11 +119,11 @@ object CoursePage:
               ),
               div(
                 cls := "detail-instructor",
-                span(course.instructor.initials),
+                span(course.course.instructor.initials),
                 p(
                   small(if isVideo then "Presented by" else "Created and taught by"),
-                  strong(course.instructor.name),
-                  em(course.instructor.role),
+                  strong(course.course.instructor.name.value),
+                  em(course.course.instructor.role.fold("")(_.value)),
                 ),
               ),
               div(
@@ -152,7 +158,7 @@ object CoursePage:
                     cls := "detail-art-play",
                     href <-- watch.map(ctx.navigator.href),
                     ctx.navigator.intercept(self, watch.get.map(_.uri)),
-                    aria.label := s"Play ${course.title}",
+                    aria.label := s"Play ${course.course.title.value}",
                     Icons(Icon.Play),
                   )
                 }
@@ -160,7 +166,7 @@ object CoursePage:
               div(
                 cls := "detail-art-caption",
                 span(course.eyebrow),
-                strong(course.technologies.mkString(" · ")),
+                strong(course.course.technologies.map(_.value).mkString(" · ")),
               ),
             ),
           ),
@@ -170,10 +176,10 @@ object CoursePage:
         cls := "detail-content app-shell",
         div(
           cls := "detail-content__main",
-          outcomes(course, isVideo),
-          curriculum(ctx, course, isVideo),
+          outcomes(course),
+          curriculum(ctx, course),
         ),
-        sidebar(course, isVideo),
+        sidebar(course),
       ),
       related
         .map(_.nonEmpty)
@@ -181,15 +187,12 @@ object CoursePage:
         .map(nonEmpty => Option.when(nonEmpty)(relatedSection(ctx, related))),
     ).widen
 
-  private def outcomes(
-      course: Course,
-      isVideo: Boolean,
-  ): Resource[IO, HtmlElement[IO]] =
+  private def outcomes(course: CourseView): Resource[IO, HtmlElement[IO]] =
     sectionTag(
       cls := "outcomes-panel",
-      p(cls := "eyebrow", if isVideo then "Ideas covered" else "What you will learn"),
+      p(cls := "eyebrow", if course.isVideo then "Ideas covered" else "What you will learn"),
       h2(
-        if isVideo then "A focused perspective from the community."
+        if course.isVideo then "A focused perspective from the community."
         else "Build the understanding behind the code.",
       ),
       div(
@@ -200,9 +203,9 @@ object CoursePage:
 
   private def curriculum(
       ctx: AppContext,
-      course: Course,
-      isVideo: Boolean,
+      course: CourseView,
   ): Resource[IO, HtmlElement[IO]] =
+    val isVideo = course.isVideo
     sectionTag(
       cls := "curriculum-section",
       div(
@@ -220,9 +223,9 @@ object CoursePage:
         cls := "curriculum-list",
         course.lessons.zipWithIndex.toList.map { case (lesson, index) =>
           val complete = ctx.store.completedLessons
-            .map(_.contains(AppState.completedKey(course.id, lesson.id)))
+            .map(_.contains(AppState.completedKey(course.course.id.value.toString, lesson.id)))
             .changes
-          val destination = AppRoute.Watch(course.slug, lesson.id)
+          val destination = AppRoute.Watch(course.course.slug.value, lesson.id)
           detailsTag.withSelf { self =>
             (
               Option.when(index == 0)(
@@ -263,7 +266,8 @@ object CoursePage:
       ),
     ).widen
 
-  private def sidebar(course: Course, isVideo: Boolean): Resource[IO, HtmlElement[IO]] =
+  private def sidebar(course: CourseView): Resource[IO, HtmlElement[IO]] =
+    val isVideo = course.isVideo
     asideTag(
       cls := "course-sidebar",
       sectionTag(
@@ -298,7 +302,7 @@ object CoursePage:
         p(cls := "eyebrow eyebrow--small", "Technologies"),
         div(
           cls := "technology-tags",
-          course.technologies.toList.map(technology => span(technology)),
+          course.course.technologies.map(technology => span(technology.value)),
         ),
       ),
       sectionTag(
@@ -309,7 +313,7 @@ object CoursePage:
 
   private def relatedSection(
       ctx: AppContext,
-      related: Signal[IO, Vector[Course]],
+      related: Signal[IO, Vector[CourseView]],
   ): Resource[IO, HtmlElement[IO]] =
     sectionTag(
       cls := "app-section app-section--lavender related-section",
