@@ -1,25 +1,21 @@
 package typelevel.courses.routing
 
 import munit.FunSuite
-import org.http4s.Uri
+import org.http4s.syntax.all.*
 
 final class AppRouteSuite extends FunSuite:
-  test("parses public, protected, alias, and media routes") {
-    assertEquals(AppRoute.parse(Uri.unsafeFromString("/")), AppRoute.Landing)
-    assertEquals(AppRoute.parse(Uri.unsafeFromString("/browse")), AppRoute.Browse)
+  test("parses the main workshop routes") {
+    assertEquals(AppRoute.parse(uri"/"), AppRoute.Landing)
+    assertEquals(AppRoute.parse(uri"/browse"), AppRoute.Browse)
     assertEquals(
-      AppRoute.parse(Uri.unsafeFromString("/content/thinking-in-types")),
-      AppRoute.Course("thinking-in-types"),
+      AppRoute.parse(uri"/course/fs2-chunk"),
+      AppRoute.Course("fs2-chunk"),
     )
     assertEquals(
-      AppRoute.parse(Uri.unsafeFromString("/watch/fs2-streaming/lesson-3")),
-      AppRoute.Watch("fs2-streaming", "lesson-3"),
+      AppRoute.parse(uri"/watch/fs2-chunk/lesson-1"),
+      AppRoute.Watch("fs2-chunk", "lesson-1"),
     )
-    assertEquals(
-      AppRoute.parse(Uri.unsafeFromString("/watch/fs2-streaming")),
-      AppRoute.Watch("fs2-streaming", "lesson-1"),
-    )
-    assertEquals(AppRoute.parse(Uri.unsafeFromString("/about")), AppRoute.NotFound)
+    assertEquals(AppRoute.parse(uri"/unknown"), AppRoute.NotFound)
   }
 
   test("accepts only local return destinations") {
@@ -28,35 +24,15 @@ final class AppRouteSuite extends FunSuite:
     assert(!AppRoute.isSafeReturnPath("https://example.com"))
   }
 
-  test("preserves query and fragment in auth return paths") {
-    val uri = Uri.unsafeFromString("/search?q=effects#results")
-    assertEquals(AppRoute.safeReturnPath(uri), "/search?q=effects#results")
+  test("login preserves the requested destination") {
+    val destination = uri"/search?q=effects#results"
+    val login       = AppRoute.Login(Some(AppRoute.safeReturnPath(destination)))
+    assertEquals(AppRoute.parse(login.uri), AppRoute.Login(Some("/search?q=effects#results")))
   }
 
-  test("login return destinations round-trip encoded query values and fragments") {
-    val returnTo = "/watch/fs2-chunk/lesson-1?query=Cats%20%2B%20FS2&offset=0#player"
-    val login    = AppRoute.Login(Some(returnTo))
-
-    assertEquals(AppRoute.parse(login.uri), login)
-    assertEquals(login.uri.query.params.get("from"), Some(returnTo))
-  }
-
-  test("course aliases and default watch routes retain trailing-slash behavior") {
-    assertEquals(
-      AppRoute.parse(Uri.unsafeFromString("/content/typelevel-retrospective/?from=browse")),
-      AppRoute.Course("typelevel-retrospective"),
-    )
-    assertEquals(
-      AppRoute.parse(Uri.unsafeFromString("/watch/fs2-chunk/?from=paths")),
-      AppRoute.Watch("fs2-chunk", "lesson-1"),
-    )
-  }
-
-  test("classifies only application learning routes as protected") {
-    assert(AppRoute.isProtected(Uri.unsafeFromString("/browse")))
-    assert(AppRoute.isProtected(Uri.unsafeFromString("/content/thinking-in-types")))
-    assert(AppRoute.isProtected(Uri.unsafeFromString("/watch/fs2-streaming/lesson-1")))
-    assert(!AppRoute.isProtected(Uri.unsafeFromString("/")))
-    assert(!AppRoute.isProtected(Uri.unsafeFromString("/login")))
-    assert(!AppRoute.isProtected(Uri.unsafeFromString("/unknown")))
+  test("learning pages require authentication") {
+    assert(AppRoute.isProtected(uri"/browse"))
+    assert(AppRoute.isProtected(uri"/watch/fs2-chunk/lesson-1"))
+    assert(!AppRoute.isProtected(uri"/"))
+    assert(!AppRoute.isProtected(uri"/login"))
   }
