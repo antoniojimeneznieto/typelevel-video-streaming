@@ -43,8 +43,6 @@ structure UserCreated {
     userId: UserId
 }
 
-/// Immutable first publication of a lesson. Replays do not change the projection.
-/// Topic: catalog.lesson-published.v1; Kafka key: courseId/lessonId.
 structure LessonPublished {
     @required
     eventId: EventId

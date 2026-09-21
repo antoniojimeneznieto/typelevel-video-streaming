@@ -1,7 +1,6 @@
 package org.typelevel.video.streaming.backend.identity.service
 
 import java.security.interfaces.RSAPrivateKey
-import java.time.Instant
 import java.util.UUID
 
 import cats.effect.{Clock, IO}
@@ -21,20 +20,18 @@ final case class IssuedAccessToken(
     expiresIn: ExpiresInSeconds,
 )
 
-final class AccessTokenIssuerImpl private[service] (
+final class AccessTokenIssuerImpl private (
     privateKey: RSAPrivateKey,
     expiresIn: ExpiresInSeconds,
-    currentInstant: IO[Instant],
-    newJwtId: IO[UUID],
 ) extends AccessTokenIssuer:
 
   private val algorithm = Algorithm.RSA256(privateKey)
 
   override def issue(userId: UserId, role: Role): IO[IssuedAccessToken] =
     for
-      issuedAt <- currentInstant
-      jwtId    <- newJwtId
-      token    <- IO.blocking {
+      issuedAt <- Clock[IO].realTimeInstant
+      jwtId    <- IO(UUID.randomUUID())
+      token    <- IO.delay {
                  JWT
                    .create()
                    .withIssuer(TokenIssuer.IDENTITY.stringValue)
@@ -57,9 +54,4 @@ object AccessTokenIssuerImpl:
       privateKey: RSAPrivateKey,
       expiresIn: ExpiresInSeconds,
   ): AccessTokenIssuerImpl =
-    new AccessTokenIssuerImpl(
-      privateKey     = privateKey,
-      expiresIn      = expiresIn,
-      currentInstant = Clock[IO].realTimeInstant,
-      newJwtId       = IO(UUID.randomUUID()),
-    )
+    new AccessTokenIssuerImpl(privateKey, expiresIn)

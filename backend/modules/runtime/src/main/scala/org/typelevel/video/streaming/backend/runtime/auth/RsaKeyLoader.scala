@@ -8,8 +8,30 @@ import java.util.Base64
 
 import cats.effect.IO
 
+/** Loads the RSA key pair used to sign and verify access tokens.
+  *
+  * {{{
+  * -----BEGIN PRIVATE KEY-----
+  * MIIEvQIBADANBgkqhkiG9w0BAQEFAASC...
+  * -----END PRIVATE KEY-----
+  *
+  * -----BEGIN PUBLIC KEY-----
+  * MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...
+  * -----END PUBLIC KEY-----
+  * }}}
+  *
+  * Load the unencrypted PKCS#8 private key and X.509 public key with:
+  *
+  * {{{
+  * for
+  *   signingKey      <- RsaKeyLoader.privateKey(Path.of("private-key.pem"))
+  *   verificationKey <- RsaKeyLoader.publicKey(Path.of("public-key.pem"))
+  * yield (signingKey, verificationKey)
+  * }}}
+  */
 object RsaKeyLoader:
 
+  /** Reads a `-----BEGIN PRIVATE KEY-----` PEM file and creates an RSA private key. */
   def privateKey(path: Path): IO[RSAPrivateKey] =
     readDer(path).flatMap { bytes =>
       IO.blocking {
@@ -20,6 +42,7 @@ object RsaKeyLoader:
       }
     }
 
+  /** Reads a `-----BEGIN PUBLIC KEY-----` PEM file and creates an RSA public key. */
   def publicKey(path: Path): IO[RSAPublicKey] =
     readDer(path).flatMap { bytes =>
       IO.blocking {
@@ -30,6 +53,7 @@ object RsaKeyLoader:
       }
     }
 
+  /** Removes the PEM boundary lines and Base64-decodes the body into DER bytes. */
   private def readDer(path: Path): IO[Array[Byte]] =
     IO.blocking {
       val base64 = Files

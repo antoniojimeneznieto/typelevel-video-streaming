@@ -1,20 +1,22 @@
 package org.typelevel.video.streaming.backend.identity
 
+import java.util.UUID
+
 import cats.effect.{IO, IOApp}
 import org.http4s.HttpApp
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.identity.api.IdentityService
-import org.typelevel.video.streaming.backend.identity.auth.AccessTokenClaims
+import org.typelevel.video.streaming.backend.identity.auth.{TokenAudience, TokenIssuer}
 import org.typelevel.video.streaming.backend.identity.config.AppConfig
 import org.typelevel.video.streaming.backend.identity.repository.IdentityRepositoryImpl
 import org.typelevel.video.streaming.backend.identity.service.{
   AccessTokenIssuerImpl,
-  AccessTokenVerifierImpl,
   IdentityServiceImpl,
   PasswordHasherImpl,
 }
 import org.typelevel.video.streaming.backend.runtime.auth.{
+  AccessTokenVerifier,
   BearerAuthenticationMiddleware,
   RsaKeyLoader,
 }
@@ -36,15 +38,19 @@ object Main extends IOApp.Simple:
           for
             privateKey     <- RsaKeyLoader.privateKey(config.jwt.privateKeyPath)
             publicKey      <- RsaKeyLoader.publicKey(config.jwt.publicKeyPath)
-            requestContext <- IOLocalRequestContext.create[AccessTokenClaims]
+            requestContext <- IOLocalRequestContext.create[UUID]
             repository      = new IdentityRepositoryImpl(sessions)
             passwordHasher  = PasswordHasherImpl()
             tokenIssuer     = AccessTokenIssuerImpl(
                             privateKey,
                             config.jwt.accessTokenExpiresIn,
                           )
-            tokenVerifier = AccessTokenVerifierImpl(publicKey)
-            service       = new IdentityServiceImpl(
+            tokenVerifier = AccessTokenVerifier.userId(
+                              publicKey,
+                              TokenIssuer.IDENTITY.stringValue,
+                              TokenAudience.COURSE_PLATFORM.stringValue,
+                            )
+            service = new IdentityServiceImpl(
                         repository,
                         passwordHasher,
                         tokenIssuer,

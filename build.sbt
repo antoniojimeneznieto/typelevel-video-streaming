@@ -290,7 +290,6 @@ lazy val playbackService = project
       "software.amazon.awssdk" % "s3" % AwsSdkVersion,
       "org.typelevel" %% "fs2-kafka" % Fs2KafkaVersion,
       "io.github.irevive" %% "fs2-kafka-otel4s-trace" % Fs2KafkaOtel4sVersion,
-      "software.amazon.awssdk" % "url-connection-client" % AwsSdkVersion,
       "software.amazon.awssdk" % "sts" % AwsSdkVersion,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),

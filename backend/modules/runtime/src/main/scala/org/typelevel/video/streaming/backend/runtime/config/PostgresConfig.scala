@@ -15,17 +15,15 @@ final case class PostgresConfig(
 
 object PostgresConfig:
 
-  final private case class PositiveInt(value: Int)
-
   private given ConfigDecoder[String, Host] =
     ConfigDecoder[String].mapOption("Host")(Host.fromString)
 
   private given ConfigDecoder[String, Port] =
     ConfigDecoder[String].mapOption("Port")(Port.fromString)
 
-  private given ConfigDecoder[String, PositiveInt] =
+  private val positiveIntDecoder: ConfigDecoder[String, Int] =
     ConfigDecoder[String, Int].mapOption("PositiveInt") { value =>
-      Option.when(value > 0)(PositiveInt(value))
+      Option.when(value > 0)(value)
     }
 
   def config(
@@ -38,7 +36,7 @@ object PostgresConfig:
       env("POSTGRES_USER").as[String].default(defaultDatabase),
       env("POSTGRES_DB").as[String].default(defaultDatabase),
       env("POSTGRES_PASSWORD").as[String].default(defaultPassword).secret,
-      env("POSTGRES_MAX_CONNECTIONS").as[PositiveInt].default(PositiveInt(10)),
+      env("POSTGRES_MAX_CONNECTIONS").as[Int](using positiveIntDecoder).default(10),
     ).parMapN { (host, port, user, database, password, maxConnections) =>
       PostgresConfig(
         host,
@@ -46,6 +44,6 @@ object PostgresConfig:
         user,
         database,
         password,
-        maxConnections.value,
+        maxConnections,
       )
     }

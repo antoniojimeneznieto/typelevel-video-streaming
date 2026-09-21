@@ -51,7 +51,13 @@ object PlaybackEventWorkerSuite extends SimpleIOSuite:
                        received.set(Some(event)) *> super.userCreated(event)
       worker = new PlaybackEventWorker(config, repository)
       _     <-
-        worker.process(config.userCreatedTopic, 2, 42L, userCreated, actions.update(_ :+ "commit"))
+        worker.process(
+          config.userCreatedTopic,
+          2,
+          42L,
+          Some(userCreated),
+          actions.update(_ :+ "commit"),
+        )
       observed <- actions.get
       event    <- received.get
     yield expect.all(
@@ -74,7 +80,7 @@ object PlaybackEventWorkerSuite extends SimpleIOSuite:
              config.lessonPublishedTopic,
              2,
              42L,
-             lessonPublished,
+             Some(lessonPublished),
              actions.update(_ :+ "commit"),
            )
       observed <- actions.get
@@ -93,15 +99,17 @@ object PlaybackEventWorkerSuite extends SimpleIOSuite:
   }
 
   test("invalid events stop processing without persistence, commits, or payload leakage") {
-    val invalid = List(
-      config.userCreatedTopic -> "not-json-private-payload",
-      config.userCreatedTopic -> "{}",
-      config.userCreatedTopic -> userCreated.replace(userId, "private-invalid-uuid"),
-      config.lessonPublishedTopic -> lessonPublished.replace("1849", "-1"),
-      config.lessonPublishedTopic -> lessonPublished.replace("lesson-1", "INVALID LESSON"),
-      config.userCreatedTopic -> null,
-      config.userCreatedTopic -> "null",
-      "unknown-topic" -> userCreated,
+    val invalid = List[(String, Option[String])](
+      config.userCreatedTopic -> Some("not-json-private-payload"),
+      config.userCreatedTopic -> Some("{}"),
+      config.userCreatedTopic -> Some(userCreated.replace(userId, "private-invalid-uuid")),
+      config.lessonPublishedTopic -> Some(lessonPublished.replace("1849", "-1")),
+      config.lessonPublishedTopic -> Some(
+        lessonPublished.replace("lesson-1", "INVALID LESSON"),
+      ),
+      config.userCreatedTopic -> None,
+      config.userCreatedTopic -> Some("null"),
+      "unknown-topic" -> Some(userCreated),
     )
 
     invalid
@@ -136,7 +144,13 @@ object PlaybackEventWorkerSuite extends SimpleIOSuite:
       worker  = new PlaybackEventWorker(config, repository)
       result <-
         worker
-          .process(config.userCreatedTopic, 2, 42L, userCreated, actions.update(_ :+ "commit"))
+          .process(
+            config.userCreatedTopic,
+            2,
+            42L,
+            Some(userCreated),
+            actions.update(_ :+ "commit"),
+          )
           .attempt
       observed <- actions.get
     yield expect.all(result == Left(failure), observed == Vector("user"))
@@ -153,7 +167,7 @@ object PlaybackEventWorkerSuite extends SimpleIOSuite:
                     config.lessonPublishedTopic,
                     2,
                     42L,
-                    lessonPublished,
+                    Some(lessonPublished),
                     actions.update(_ :+ "commit") *> IO.raiseError(failure),
                   )
                   .attempt

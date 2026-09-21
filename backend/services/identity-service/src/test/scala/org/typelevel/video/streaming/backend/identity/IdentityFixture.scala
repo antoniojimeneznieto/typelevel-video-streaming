@@ -6,7 +6,6 @@ import java.util.UUID
 import cats.effect.IO
 import org.http4s.{DecodeResult, EntityDecoder, MalformedMessageBodyFailure, MediaType}
 import org.typelevel.video.streaming.backend.identity.api.*
-import org.typelevel.video.streaming.backend.identity.auth.*
 import org.typelevel.video.streaming.backend.identity.domain.*
 import org.typelevel.video.streaming.backend.runtime.postgres.SkunkSpec
 import skunk.codec.all.*
@@ -53,16 +52,6 @@ trait IdentityFixture extends SkunkSpec:
 
   protected val userResponse  = UserResponse(alice.id, alice.email, alice.displayName, alice.role)
   protected val existingEmail = valid(Email("existing@example.com"))
-
-  protected val claims = AccessTokenClaims(
-    iss  = TokenIssuer.IDENTITY,
-    sub  = alice.id,
-    aud  = TokenAudience.COURSE_PLATFORM,
-    role = alice.role,
-    iat  = valid(JwtNumericDate(1786200000L)),
-    exp  = valid(JwtNumericDate(1786207200L)),
-    jti  = JwtId(UUID.fromString("978c2e02-d49f-4c0a-a76d-72448a47e88d")),
-  )
 
   protected def user(id: Long, email: String): User = alice.copy(
     id    = UserId(new UUID(0L, id)),

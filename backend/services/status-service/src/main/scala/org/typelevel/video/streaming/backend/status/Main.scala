@@ -16,7 +16,7 @@ object Main extends IOApp.Simple:
       given MeterProvider[IO]  = otel.meterProvider
       given TracerProvider[IO] = otel.tracerProvider
 
-      HttpServerConfig.load[IO](port"8080").flatMap { config =>
+      HttpServerConfig.config(port"8080").load[IO].flatMap { config =>
         HttpServer.run(config, Routes.health.orNotFound, RouteClassifier.indeterminate)
       }
     }

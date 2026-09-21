@@ -5,7 +5,6 @@ import java.util.{Locale, UUID}
 import cats.effect.{Clock, IO}
 import cats.syntax.all.*
 import org.typelevel.video.streaming.backend.identity.api.*
-import org.typelevel.video.streaming.backend.identity.auth.AccessTokenClaims
 import org.typelevel.video.streaming.backend.identity.domain.*
 import org.typelevel.video.streaming.backend.identity.repository.*
 import org.typelevel.video.streaming.backend.runtime.context.RequestContext
@@ -15,7 +14,7 @@ final class IdentityServiceImpl(
     repository: IdentityRepository,
     passwordHasher: PasswordHasher,
     accessTokenIssuer: AccessTokenIssuer,
-    requestContext: RequestContext[IO, AccessTokenClaims],
+    requestContext: RequestContext[IO, UUID],
 ) extends IdentityService[IO]:
 
   override def register(
@@ -65,14 +64,14 @@ final class IdentityServiceImpl(
 
   override def getCurrentUser(): IO[UserResponse] =
     for
-      claims <- requestContext.get.flatMap {
-                  case Some(claims) => IO.pure(claims)
+      userId <- requestContext.get.flatMap {
+                  case Some(userId) => IO.pure(userId)
                   case None =>
                     IO.raiseError(
                       new IllegalStateException("Authenticated request context is missing"),
                     )
                 }
-      user <- repository.findById(claims.sub).flatMap {
+      user <- repository.findById(UserId(userId)).flatMap {
                 case Some(user) => IO.pure(user)
                 case None =>
                   IO.raiseError(new IllegalStateException("Authenticated user does not exist"))
