@@ -9,53 +9,50 @@ case "${SEED_VIDEOS:-true}" in
   *) fail "SEED_VIDEOS must be true or false" ;;
 esac
 
-: "${MINIO_ROOT_USER:?MINIO_ROOT_USER must be configured}"
-: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be configured}"
+: "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID must be configured}"
+: "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY must be configured}"
 
-endpoint=${MINIO_ENDPOINT:-http://minio:9000}
+endpoint=${S3_ENDPOINT:-http://seaweedfs:8333}
 bucket=${S3_BUCKET:-videos}
 region=${AWS_REGION:-us-east-1}
 case "$endpoint" in
   http://*|https://*) authority=${endpoint#*://}; authority=${authority%/} ;;
-  *) fail "MINIO_ENDPOINT must be an HTTP(S) origin without credentials" ;;
+  *) fail "S3_ENDPOINT must be an HTTP(S) origin without credentials" ;;
 esac
 [[ -n "$authority" && "$authority" != *[/@?#[:space:]]* ]] ||
-  fail "MINIO_ENDPOINT must be an HTTP(S) origin without credentials"
+  fail "S3_ENDPOINT must be an HTTP(S) origin without credentials"
 [[ "$bucket" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]] || fail "Invalid S3_BUCKET name"
 
-umask 077
-MC_CONFIG_DIR=$(mktemp -d)
-export MC_CONFIG_DIR MC_DISABLE_PAGER=1
+export AWS_EC2_METADATA_DISABLED=true
+aws_call() {
+  local timeout_seconds=$1
+  shift
+  timeout "$timeout_seconds" aws --endpoint-url "$endpoint" --region "$region" \
+    --no-cli-pager --cli-connect-timeout 5 --cli-read-timeout 20 "$@"
+}
 
-mc_call() { timeout "$1" mc --json --no-color "${@:2}" 2>/dev/null; }
-
-mc_call 15 alias set seed "$endpoint" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" \
-  --api S3v4 --path on >/dev/null || fail "Cannot connect to MinIO"
-mc_call 15 mb --ignore-existing --region "$region" "seed/$bucket" >/dev/null ||
-  fail "Cannot create or access the seed bucket"
-policy=$(mc_call 15 anonymous get-json "seed/$bucket") || fail "Cannot inspect bucket access"
-[[ "$policy" =~ \"permission\":[[:space:]]*\"private\" ]] ||
-  fail "Use a private bucket without a bucket policy; existing policy was not changed"
+aws_call 15 s3api head-bucket --bucket "$bucket" >/dev/null ||
+  fail "Cannot access the SeaweedFS seed bucket"
 
 stat_object() {
   local result
-  if result=$(mc_call 15 stat --no-list "$1"); then
-    [[ "$result" =~ \"type\":[[:space:]]*\"file\" &&
-       "$result" =~ \"size\":[[:space:]]*([0-9]+) ]] || fail "Unexpected object metadata"
-    object_size=${BASH_REMATCH[1]}
+  if result=$(aws_call 15 s3api head-object --bucket "$bucket" --key "$1" \
+      --query ContentLength --output text 2>&1); then
+    [[ "$result" =~ ^[0-9]+$ ]] || fail "Unexpected object size for $1"
+    object_size=$result
     return 0
   fi
-  [[ "$result" =~ \"message\":[[:space:]]*\"Object\ does\ not\ exist\" ]] ||
-    fail "Cannot inspect the existing video; check MinIO connectivity and permissions"
+  [[ "$result" == *"(404)"* || "$result" == *"Not Found"* ]] ||
+    fail "Cannot inspect the existing video; check SeaweedFS connectivity and permissions"
   return 1
 }
 
 upload_video() {
-  local course_id=$1 slug=$2 source target size file_header
+  local course_id=$1 slug=$2 source key size file_header
   source="/videos/$slug.mp4"
-  target="seed/$bucket/courses/$course_id/lesson-1.mp4"
+  key="courses/$course_id/lesson-1.mp4"
 
-  if stat_object "$target"; then
+  if stat_object "$key"; then
     (( object_size > 0 )) || fail "Existing object for $slug is empty; inspect it before retrying"
     echo "Already uploaded: $slug; leaving existing object unchanged"
     return
@@ -69,12 +66,12 @@ upload_video() {
   (( size <= 5 * 1024 * 1024 * 1024 )) || fail "$slug exceeds the 5 GiB single-upload limit"
 
   echo "Uploading $slug"
-  if mc_call 180 --custom-header 'If-None-Match:*' cp --disable-multipart \
-    --attr 'Content-Type=video/mp4' "$source" "$target" >/dev/null; then
-    stat_object "$target" || fail "Cannot verify the upload of $slug"
+  if aws_call 180 s3api put-object --bucket "$bucket" --key "$key" \
+    --body "$source" --content-type video/mp4 --if-none-match '*' >/dev/null; then
+    stat_object "$key" || fail "Cannot verify the upload of $slug"
     (( object_size == size )) || fail "Uploaded size does not match $slug"
   else
-    stat_object "$target" || fail "Upload failed for $slug"
+    stat_object "$key" || fail "Upload failed for $slug"
     (( object_size > 0 )) || fail "Existing object for $slug is empty; inspect it before retrying"
     echo "Already uploaded concurrently: $slug; leaving it unchanged"
   fi

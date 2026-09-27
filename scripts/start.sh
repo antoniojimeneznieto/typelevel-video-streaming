@@ -52,10 +52,10 @@ run_step "Checking backend launchers" validate_backend_images
 run_step "Preparing Identity signing keys" bash "$script_directory/generate-identity-keys.sh"
 run_step "Building frontend and startup helpers" \
   docker compose build frontend playback-ready identity-outbox-init
-run_step "Starting PostgreSQL and MinIO" docker compose up --detach --wait postgres minio
+run_step "Starting PostgreSQL and SeaweedFS" docker compose up --detach --wait postgres seaweedfs
 run_step "Setting up the Identity outbox" bash "$script_directory/setup-identity-outbox.sh"
 run_step "Setting up the Catalog outbox" bash "$script_directory/setup-catalog-outbox.sh"
-run_step "Uploading demo videos" docker compose run --rm --no-deps minio-seed
+run_step "Uploading demo videos" docker compose run --rm --no-deps seaweedfs-seed
 run_step "Starting application and telemetry services" docker compose up --detach --remove-orphans
 run_step "Waiting for the Identity outbox connector" bash "$script_directory/wait-outbox.sh" identity
 run_step "Waiting for the Catalog outbox connector" bash "$script_directory/wait-outbox.sh" catalog
