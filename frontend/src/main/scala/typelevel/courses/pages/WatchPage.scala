@@ -575,7 +575,7 @@ object WatchPage:
         .flatMap {
           case Right(response) =>
             IO.delay {
-              // The MinIO URL is already signed. Preserve it exactly and never add the identity JWT.
+              // The S3 URL is already signed. Preserve it exactly and never add the identity JWT.
               video.setAttribute("src", response.url.value)
               video.load()
             } *>
