@@ -55,11 +55,11 @@ object TrafficSuite extends SimpleIOSuite:
       for
         stats  <- Ref.of[IO, Stats](Stats())
         events <- Ref.of[IO, Map[String, Long]](Map.empty)
-        record = (key: String, count: Long) =>
+        record  = (key: String, count: Long) =>
                    events.update(m => m.updated(key, m.getOrElse(key, 0L) + count))
         metrics = new TrafficMetrics:
                     def arrivals(result: String, count: Long): IO[Unit] = record(result, count)
-                    def started: IO[Unit] = record("started", 1L)
+                    def started: IO[Unit]                               = record("started", 1L)
                     def completed(result: RequestResult, elapsed: FiniteDuration): IO[Unit] =
                       record("completed", 1L)
                     def cancelled: IO[Unit] = record("cancelled", 1L)
