@@ -1,0 +1,66 @@
+{
+  "uid": "workshop-traffic-generator",
+  "title": "Workshop Traffic",
+  "tags": ["workshop", "traffic"],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Offered load and service request rates",
+      "description": "Offered includes arrivals dropped by the generator. Gateway client attempts can exceed logical requests when retries are enabled.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 9 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(lab_traffic_arrivals_total{operation=\"catalog-courses\"}[$__rate_interval]))", "legendFormat": "generator offered" },
+        { "refId": "B", "expr": "sum(rate(lab_traffic_arrivals_total{operation=\"catalog-courses\",result=\"sent\"}[$__rate_interval]))", "legendFormat": "generator sent" },
+        { "refId": "C", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"gateway-service\",classifier=\"/api/catalog/courses\",http_phase=\"body\"}[$__rate_interval]))", "legendFormat": "gateway inbound" },
+        { "refId": "D", "expr": "sum(rate(http_client_request_duration_seconds_count{service_name=\"gateway-service\",classifier=\"catalog:/courses\",http_phase=\"body\"}[$__rate_interval]))", "legendFormat": "gateway catalog attempts" },
+        { "refId": "E", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"catalog-service\",classifier=\"/courses\",http_phase=\"body\"}[$__rate_interval]))", "legendFormat": "catalog server" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Generator outcomes and dropped arrivals",
+      "description": "Dropped capacity or late arrivals invalidate the offered-load comparison. A blank series means no observed event of that kind; inspect the JSON summary for exact run totals.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 9, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (outcome) (rate(lab_traffic_requests_total{operation=\"catalog-courses\"}[$__rate_interval]))", "legendFormat": "{{outcome}}" },
+        { "refId": "B", "expr": "sum by (result) (rate(lab_traffic_arrivals_total{operation=\"catalog-courses\",result=~\"dropped_capacity|dropped_late\"}[$__rate_interval]))", "legendFormat": "{{result}}" },
+        { "refId": "C", "expr": "sum(rate(lab_traffic_cancellations_total{operation=\"catalog-courses\"}[$__rate_interval]))", "legendFormat": "cancelled" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Generator end-to-end p95",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 9, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(lab_traffic_request_duration_seconds_bucket{operation=\"catalog-courses\"}[$__rate_interval])))", "legendFormat": "p95" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Generator requests in flight",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 17, "w": 24, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "requests" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(lab_traffic_requests_active{operation=\"catalog-courses\"})", "legendFormat": "in flight" }
+      ]
+    }
+  ]
+}

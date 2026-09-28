@@ -20,7 +20,7 @@ cd "$project_directory"
 
 log_file="$project_directory/startup-$(date +%Y%m%d-%H%M%S)-$$.log"
 source "$script_directory/progress.sh"
-init_progress "$log_file" 13
+init_progress "$log_file" 14
 trap stop_spinner EXIT
 trap 'stop_spinner; printf "\nStartup interrupted. Full log: %s\n" "$log_file" >&2; exit 130' INT
 trap 'stop_spinner; printf "\nStartup stopped. Full log: %s\n" "$log_file" >&2; exit 143' TERM
@@ -32,6 +32,11 @@ validate_backend_images() {
       "typelevel-video-streaming/$service_name-service:local" \
       -J--dry-run || return "$?"
   done
+}
+
+initialize_catalog_proxy() {
+  docker compose up --detach --wait toxiproxy || return "$?"
+  docker compose run --rm --no-deps proxy-control reset || return "$?"
 }
 
 show_url() {
@@ -56,12 +61,14 @@ run_step "Starting PostgreSQL and SeaweedFS" docker compose up --detach --wait p
 run_step "Setting up the Identity outbox" bash "$script_directory/setup-identity-outbox.sh"
 run_step "Setting up the Catalog outbox" bash "$script_directory/setup-catalog-outbox.sh"
 run_step "Uploading demo videos" docker compose run --rm --no-deps seaweedfs-seed
+run_step "Initializing the catalog proxy path" initialize_catalog_proxy
 run_step "Starting application and telemetry services" docker compose up --detach --remove-orphans
 run_step "Waiting for the Identity outbox connector" bash "$script_directory/wait-outbox.sh" identity
 run_step "Waiting for the Catalog outbox connector" bash "$script_directory/wait-outbox.sh" catalog
 run_step "Waiting for Playback projections" docker compose run --rm --no-deps playback-ready
 run_step "Waiting for application health checks" docker compose up --detach --no-deps --wait \
   identity-service catalog-service playback-service gateway-service frontend
+
 docker compose ps >> "$log_file" 2>&1 || true
 
 printf '\nApplication ready! Startup completed in %ss.\n' "$((SECONDS - started_at))"

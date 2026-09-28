@@ -81,7 +81,7 @@ report() {
 
 echo "Checking workshop prerequisites..."
 if report; then
-  printf '\nReady! Run ./scripts/start.sh from the repository root.\n'
+  printf '\nReady! Run ./scripts/lab.sh start from the repository root.\n'
   exit 0
 elif "$check_only"; then
   printf '\nNot ready yet. Run bash scripts/setup.sh for installation or next steps.\n'
@@ -248,7 +248,7 @@ fi
 
 printf '\nChecking workshop prerequisites again...\n'
 if report; then
-  printf '\nReady! Run ./scripts/start.sh from the repository root.\n'
+  printf '\nReady! Run ./scripts/lab.sh start from the repository root.\n'
 else
   printf '\nSetup needs a few manual steps:\n'
   if "$is_wsl"; then

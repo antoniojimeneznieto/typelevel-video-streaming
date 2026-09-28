@@ -18,6 +18,11 @@
   "graphTooltip": 1,
   "links": [
     {
+      "title": "Workshop Traffic",
+      "url": "/d/workshop-traffic-generator/workshop-traffic",
+      "targetBlank": false
+    },
+    {
       "title": "Gateway and Dependencies",
       "url": "/",
       "targetBlank": false
