@@ -1,4 +1,7 @@
 import com.typesafe.sbt.packager.docker.DockerAlias
+import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport.{
+  stagingDirectory => packagingStagingDirectory,
+}
 import org.scalajs.linker.interface.{ModuleKind, ModuleSplitStyle}
 
 val ScalaLtsVersion            = "3.9.0"
@@ -62,6 +65,7 @@ def serviceSettings(serviceName: String, mainClassName: String, exposedPort: Int
         tag          = Some("local"),
       ),
     dockerBaseImage := "eclipse-temurin:17-jre-noble",
+    Docker / packagingStagingDirectory := (LocalRootProject / baseDirectory).value / "target" / "docker" / serviceName,
     dockerExposedPorts := Seq(exposedPort),
     dockerUpdateLatest := false,
     Universal / javaOptions += "-Dcats.effect.trackFiberContext=true",
@@ -205,6 +209,7 @@ lazy val trafficGenerator = project
       Some("local"),
     ),
     dockerBaseImage := "eclipse-temurin:17-jre-noble",
+    Docker / packagingStagingDirectory := (LocalRootProject / baseDirectory).value / "target" / "docker" / "traffic-generator",
     dockerUpdateLatest := false,
     libraryDependencies ++= Seq(
       "com.monovore" %% "decline" % DeclineVersion,

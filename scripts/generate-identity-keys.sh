@@ -3,10 +3,11 @@ set -euo pipefail
 
 script_directory="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_directory="$(cd -- "$script_directory/.." && pwd)"
+source "$script_directory/images.sh"
 key_directory="${IDENTITY_KEY_DIRECTORY:-$project_directory/infrastructure/identity/keys}"
 private_key="$key_directory/private-key.pem"
 public_key="$key_directory/public-key.pem"
-key_image="typelevel-video-streaming/identity-service:local"
+key_image="$IMAGE_PREFIX/identity-service:$IMAGE_TAG"
 private_temporary=""
 public_temporary=""
 normalized_temporary=""
@@ -30,7 +31,7 @@ for key_path in "$private_key" "$public_key"; do
 done
 
 if ! docker image inspect "$key_image" >/dev/null 2>&1; then
-  echo "Identity service image not found: $key_image. Build it before generating keys." >&2
+  echo "Identity service image not found: $key_image. Pull or build it before generating keys." >&2
   exit 1
 fi
 

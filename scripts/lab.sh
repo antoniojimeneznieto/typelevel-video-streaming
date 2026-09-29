@@ -8,7 +8,8 @@ cd "$project_directory"
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/lab.sh start
+  ./scripts/lab.sh start [--build]
+  ./scripts/lab.sh rebuild SERVICE
   ./scripts/lab.sh status
   ./scripts/lab.sh stop
   ./scripts/lab.sh traffic build
@@ -23,8 +24,10 @@ Usage:
   ./scripts/lab.sh proxy down
   ./scripts/lab.sh proxy reset
 
-start builds and seeds the application stack; stop shuts it down and clears ephemeral data.
-Build the traffic image once, then start the application before running traffic.
+start pulls published images and seeds the stack; --build builds from local source.
+rebuild builds and restarts only the named application service, leaving its dependencies running.
+stop shuts down the stack and clears ephemeral data.
+The traffic image is downloaded by start; traffic build rebuilds it from local source.
 traffic run defaults to 3 minutes; traffic start runs in the background until stopped.
 Options include --rate 5, --duration 3m, --max-concurrent 128, --request-timeout 30s.
 traffic status shows the background container and its latest JSON reports.
@@ -38,10 +41,23 @@ if [[ $# -eq 0 ]]; then
 fi
 container_name="typelevel-video-streaming-lab-traffic"
 
+if [[ "$1" != help && "$1" != --help && "$1" != -h ]]; then
+  source "$script_directory/images.sh"
+fi
+
 case "$1" in
   start)
-    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
-    exec "$script_directory/start.sh"
+    shift
+    exec "$script_directory/start.sh" "$@"
+    ;;
+  rebuild)
+    [[ $# -eq 2 ]] || { usage >&2; exit 2; }
+    case "$2" in
+      status-service|gateway-service|identity-service|catalog-service|playback-service|frontend) ;;
+      *) echo "Expected an application service, such as catalog-service." >&2; exit 2 ;;
+    esac
+    bash "$script_directory/build-images.sh" "$2"
+    exec docker compose up --detach --no-deps --no-build --pull never --force-recreate --wait "$2"
     ;;
   status)
     [[ $# -eq 1 ]] || { usage >&2; exit 2; }
@@ -96,7 +112,7 @@ fi
 case "$action" in
   build)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }
-    exec sbt 'trafficGenerator/Docker/publishLocal'
+    exec bash "$script_directory/build-images.sh" traffic-generator
     ;;
   run)
     exec docker compose run --rm --no-deps -T traffic-generator "$@"

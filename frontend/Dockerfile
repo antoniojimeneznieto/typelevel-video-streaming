@@ -1,6 +1,6 @@
-FROM node:22-bookworm-slim AS node
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS node
 
-FROM sbtscala/scala-sbt:eclipse-temurin-21.0.12_8_1.13.0_3.3.8 AS build
+FROM --platform=$BUILDPLATFORM sbtscala/scala-sbt:eclipse-temurin-21.0.12_8_1.13.0_3.3.8 AS build
 USER root
 COPY --from=node /usr/local/ /usr/local/
 
@@ -31,7 +31,8 @@ RUN --mount=type=cache,target=/root/.cache/coursier \
     npm run build
 
 FROM nginxinc/nginx-unprivileged:1.28-alpine-slim AS runtime
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+ENV S3_BUCKET=videos
+COPY frontend/nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build --chown=nginx:nginx /app/frontend/dist/ /usr/share/nginx/html/
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=6 \
