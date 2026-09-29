@@ -1,0 +1,47 @@
+{
+  "name": "Typelevel telemetry lab",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/node:2": {
+      "version": "22",
+      "nodeGypDependencies": false,
+      "pnpmVersion": "none"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:4": {}
+  },
+  "remoteUser": "vscode",
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb",
+    "storage": "32gb"
+  },
+  "forwardPorts": [8000, 3000],
+  "portsAttributes": {
+    "8000": {
+      "label": "Application",
+      "onAutoForward": "notify"
+    },
+    "3000": {
+      "label": "Grafana",
+      "onAutoForward": "notify"
+    }
+  },
+  "otherPortsAttributes": {
+    "onAutoForward": "ignore"
+  },
+  "updateContentCommand": "bash .devcontainer/prepare.sh",
+  "postAttachCommand": "printf '\\nStart the lab: ./scripts/start.sh\\nOpen Application and Grafana from the Ports tab.\\n'",
+  "customizations": {
+    "vscode": {
+      "extensions": ["scalameta.metals"],
+      "settings": {
+        "files.watcherExclude": {
+          "**/target/**": true,
+          "**/frontend/node_modules/**": true
+        }
+      }
+    }
+  }
+}

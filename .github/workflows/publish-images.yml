@@ -1,0 +1,174 @@
+name: Publish workshop images
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    name: Compile and stage JVM applications
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out build sources
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            backend
+            frontend
+            project
+            shared
+            tools
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: sbt
+          cache-dependency-path: |
+            build.sbt
+            project/*.sbt
+            project/build.properties
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+        with:
+          disk-cache: false
+      - name: Stage applications without building Docker images
+        run: >-
+          sbt --batch
+          ';statusService/Docker/stage;gatewayService/Docker/stage;identityService/Docker/stage;catalogService/Docker/stage;playbackService/Docker/stage;trafficGenerator/Docker/stage'
+      - name: Archive staged images
+
+        run: |
+          tar -cf staged-images.tar \
+            target/docker/status-service \
+            target/docker/gateway-service \
+            target/docker/identity-service \
+            target/docker/catalog-service \
+            target/docker/playback-service \
+            target/docker/traffic-generator
+      - name: Share staged applications
+        uses: actions/upload-artifact@v7
+        with:
+          name: staged-jvm-images
+          path: staged-images.tar
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  publish:
+    name: Publish ${{ matrix.image }}
+    needs: stage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - image: status-service
+            context: target/docker/status-service
+            dockerfile: target/docker/status-service/Dockerfile
+            staged: true
+          - image: gateway-service
+            context: target/docker/gateway-service
+            dockerfile: target/docker/gateway-service/Dockerfile
+            staged: true
+          - image: identity-service
+            context: target/docker/identity-service
+            dockerfile: target/docker/identity-service/Dockerfile
+            staged: true
+          - image: catalog-service
+            context: target/docker/catalog-service
+            dockerfile: target/docker/catalog-service/Dockerfile
+            staged: true
+          - image: playback-service
+            context: target/docker/playback-service
+            dockerfile: target/docker/playback-service/Dockerfile
+            staged: true
+          - image: traffic-generator
+            context: target/docker/traffic-generator
+            dockerfile: target/docker/traffic-generator/Dockerfile
+            staged: true
+          - image: frontend
+            context: .
+            dockerfile: frontend/Dockerfile
+            staged: false
+          - image: outbox-init
+            context: infrastructure/debezium
+            dockerfile: infrastructure/debezium/Dockerfile
+            staged: false
+          - image: playback-ready
+            context: infrastructure/playback/ready
+            dockerfile: infrastructure/playback/ready/Dockerfile
+            staged: false
+    steps:
+      - name: Check out image build sources
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            frontend
+            project
+            shared
+            infrastructure/debezium
+            infrastructure/playback/ready
+      - name: Download staged applications
+        if: matrix.staged
+        uses: actions/download-artifact@v8
+        with:
+          name: staged-jvm-images
+      - name: Restore staged applications
+        if: matrix.staged
+        run: tar -xf staged-images.tar
+      - name: Set registry namespace
+        run: echo "IMAGE_NAMESPACE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - name: Set up ARM emulation for runtime image assembly
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate image tags and labels
+        id: metadata
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}
+          flavor: latest=false
+          tags: |
+            type=sha,format=long
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=tag
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: Build and publish both architectures
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

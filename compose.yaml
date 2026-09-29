@@ -3,8 +3,8 @@ name: typelevel-video-streaming
 services:
   traffic-generator:
     profiles: ["traffic"]
-    image: typelevel-video-streaming/traffic-generator:local
-    pull_policy: never
+    image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/traffic-generator:${IMAGE_TAG:-main}
+    pull_policy: missing
     command: ["--base-url", "http://gateway-service:8084", "--duration", "infinite"]
     environment:
       OTEL_SERVICE_NAME: traffic-generator
@@ -43,11 +43,13 @@ services:
     restart: "no"
 
   frontend:
-    image: typelevel-video-streaming/frontend:local
+    image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/frontend:${IMAGE_TAG:-main}
     build:
       context: .
       dockerfile: frontend/Dockerfile
-    pull_policy: never
+    pull_policy: missing
+    environment:
+      S3_BUCKET: ${S3_BUCKET:-videos}
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-8000}:8080"
     depends_on:
@@ -56,8 +58,8 @@ services:
     restart: unless-stopped
 
   status-service:
-    image: typelevel-video-streaming/status-service:local
-    pull_policy: never
+    image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/status-service:${IMAGE_TAG:-main}
+    pull_policy: missing
     environment:
       HOST: 0.0.0.0
       PORT: "8080"
@@ -78,8 +80,8 @@ services:
     restart: unless-stopped
 
   gateway-service:
-    image: typelevel-video-streaming/gateway-service:local
-    pull_policy: never
+    image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/gateway-service:${IMAGE_TAG:-main}
+    pull_policy: missing
     environment:
       HOST: 0.0.0.0
       PORT: "8084"
@@ -119,8 +121,10 @@ services:
     restart: unless-stopped
 
   identity-service:
-    image: typelevel-video-streaming/identity-service:local
-    pull_policy: never
+    image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/identity-service:${IMAGE_TAG:-main}
+    pull_policy: missing
+    # Match the owner of the private signing key, including Linux/Codespaces bind mounts.
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     environment:
       HOST: 0.0.0.0
       PORT: "8081"
@@ -159,8 +163,8 @@ services:
     restart: unless-stopped
 
   catalog-service:
-    image: typelevel-video-streaming/catalog-service:local
-    pull_policy: never
+    image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/catalog-service:${IMAGE_TAG:-main}
+    pull_policy: missing
     environment:
       HOST: 0.0.0.0
       PORT: "8082"
@@ -193,8 +197,8 @@ services:
     restart: unless-stopped
 
   playback-service:
-    image: typelevel-video-streaming/playback-service:local
-    pull_policy: never
+    image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/playback-service:${IMAGE_TAG:-main}
+    pull_policy: missing
     environment:
       HOST: 0.0.0.0
       PORT: "8083"
@@ -219,7 +223,7 @@ services:
       KAFKA_USER_CREATED_TOPIC: ${KAFKA_USER_CREATED_TOPIC:-identity.user-created.v1}
       JWT_PUBLIC_KEY_PATH: /run/secrets/identity-public-key.pem
       S3_ENDPOINT: ${S3_ENDPOINT:-http://seaweedfs:8333}
-      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:${SEAWEEDFS_S3_PORT:-9000}}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:${FRONTEND_PORT:-8000}}
       S3_BUCKET: ${S3_BUCKET:-videos}
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-catalogservice}
@@ -373,7 +377,8 @@ services:
     restart: unless-stopped
 
   identity-outbox-init:
-    image: typelevel-video-streaming/outbox-init:local
+    image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/outbox-init:${IMAGE_TAG:-main}
+    pull_policy: missing
     build: ./infrastructure/debezium
     environment:
       DEBEZIUM_CONNECT_URL: http://debezium-connect:8083
@@ -389,7 +394,8 @@ services:
     restart: "no"
 
   catalog-outbox-init:
-    image: typelevel-video-streaming/outbox-init:local
+    image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/outbox-init:${IMAGE_TAG:-main}
+    pull_policy: missing
     build: ./infrastructure/debezium
     environment:
       DEBEZIUM_CONNECT_URL: http://debezium-connect:8083
@@ -404,26 +410,10 @@ services:
     security_opt: ["no-new-privileges:true"]
     restart: "no"
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin-local-secret}
-      PGADMIN_DISABLE_POSTFIX: "true"
-    volumes:
-      - ./infrastructure/postgres/pgadmin/servers.json:/pgadmin4/servers.json:ro
-    tmpfs:
-      - /var/lib/pgadmin:size=128m,uid=5050,gid=0,mode=0700
-    ports:
-      - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-
   playback-ready:
     profiles: ["readiness"]
-    image: typelevel-video-streaming/playback-ready:local
+    image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/playback-ready:${IMAGE_TAG:-main}
+    pull_policy: missing
     build: ./infrastructure/playback/ready
     environment:
       POSTGRES_HOST: postgres
