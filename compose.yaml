@@ -335,7 +335,11 @@ services:
     restart: "no"
 
   debezium-connect:
-    image: quay.io/debezium/connect:3.4.3.Final
+    image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/debezium-connect:${IMAGE_TAG:-main}
+    pull_policy: missing
+    build:
+      context: ./infrastructure/debezium
+      dockerfile: Dockerfile.connect
     environment:
       BOOTSTRAP_SERVERS: kafka:9092
       GROUP_ID: identity-outbox-connect-v1
@@ -442,14 +446,13 @@ services:
 
   seaweedfs-seed:
     profiles: ["seed"]
-    image: amazon/aws-cli:2.37.4
-    entrypoint: ["/bin/bash", "/seed/seed.sh"]
+    image: curlimages/curl:8.16.0
+    entrypoint: ["/bin/sh", "/seed/seed.sh"]
     environment:
       SEED_VIDEOS: ${SEED_VIDEOS:-true}
       S3_ENDPOINT: http://seaweedfs:8333
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-catalogservice}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-catalogservice-local-secret}
-      AWS_MAX_ATTEMPTS: "1"
       S3_BUCKET: ${S3_BUCKET:-videos}
       AWS_REGION: ${AWS_REGION:-us-east-1}
     volumes:

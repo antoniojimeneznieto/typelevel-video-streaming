@@ -107,6 +107,10 @@ jobs:
             context: .
             dockerfile: frontend/Dockerfile
             staged: false
+          - image: debezium-connect
+            context: infrastructure/debezium
+            dockerfile: infrastructure/debezium/Dockerfile.connect
+            staged: false
           - image: outbox-init
             context: infrastructure/debezium
             dockerfile: infrastructure/debezium/Dockerfile

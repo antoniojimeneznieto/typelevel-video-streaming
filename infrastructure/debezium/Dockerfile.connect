@@ -1,0 +1,11 @@
+FROM quay.io/debezium/connect-base:3.4.3.Final
+
+# The PostgreSQL plugin includes the Outbox Event Router and its dependencies.
+RUN curl --fail --show-error --silent --location \
+      --proto '=https' --tlsv1.2 --retry 3 --retry-max-time 180 \
+      --connect-timeout 15 --max-time 60 \
+      https://repo.maven.apache.org/maven2/io/debezium/debezium-connector-postgres/3.4.3.Final/debezium-connector-postgres-3.4.3.Final-plugin.tar.gz \
+      -o /tmp/postgres-plugin.tar.gz \
+    && echo '7a4f5899fd31977ff1f1b7166619ed81c3df243cc3fbc29ebc7a89b5f0d61ebd  /tmp/postgres-plugin.tar.gz' | sha256sum -c - \
+    && tar -xzf /tmp/postgres-plugin.tar.gz -C "$KAFKA_CONNECT_PLUGINS_DIR" \
+    && rm /tmp/postgres-plugin.tar.gz

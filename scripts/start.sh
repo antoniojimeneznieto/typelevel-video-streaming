@@ -50,14 +50,10 @@ validate_backend_images() {
   done
 }
 
-start_storage() {
+start_infrastructure() {
+  docker compose up --detach --no-build postgres seaweedfs kafka lgtm || return "$?"
   docker compose up --detach --wait postgres seaweedfs || return "$?"
   bash "$project_directory/.devcontainer/configure-docker-network.sh" || return "$?"
-}
-
-initialize_catalog_proxy() {
-  docker compose up --detach --wait toxiproxy || return "$?"
-  docker compose run --rm --no-deps proxy-control reset || return "$?"
 }
 
 show_url() {
@@ -84,12 +80,12 @@ fi
 run_step "Downloading workshop images" bash "$script_directory/pull-images.sh"
 run_step "Checking backend launchers" validate_backend_images
 run_step "Preparing Identity signing keys" bash "$script_directory/generate-identity-keys.sh"
-run_step "Starting PostgreSQL and SeaweedFS" start_storage
+run_step "Starting PostgreSQL, SeaweedFS, Kafka, and Grafana" start_infrastructure
 run_step "Setting up the Identity outbox" bash "$script_directory/setup-identity-outbox.sh"
 run_step "Setting up the Catalog outbox" bash "$script_directory/setup-catalog-outbox.sh"
-run_step "Uploading demo videos" docker compose run --rm --no-deps seaweedfs-seed
-run_step "Initializing the catalog proxy path" initialize_catalog_proxy
 run_step "Starting application and telemetry services" docker compose up --detach --no-build --remove-orphans
+run_step "Uploading demo videos" docker compose run --rm --no-deps seaweedfs-seed
+run_step "Initializing the catalog proxy path" docker compose run --rm --no-deps proxy-control reset
 run_step "Waiting for the Identity outbox connector" bash "$script_directory/wait-outbox.sh" identity
 run_step "Waiting for the Catalog outbox connector" bash "$script_directory/wait-outbox.sh" catalog
 run_step "Waiting for Playback projections" docker compose run --rm --no-deps playback-ready

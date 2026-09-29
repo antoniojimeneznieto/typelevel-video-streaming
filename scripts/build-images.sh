@@ -10,7 +10,7 @@ Usage: ./scripts/build-images.sh [service ...]
 
 Build all workshop images, or only the named services, using the current source.
 Services: status-service gateway-service identity-service catalog-service
-          playback-service traffic-generator frontend outbox-init playback-ready
+          playback-service traffic-generator frontend debezium-connect outbox-init playback-ready
 IMAGE_PREFIX and IMAGE_TAG override the registry and version used by Compose.
 To rebuild and restart one application service: ./scripts/lab.sh rebuild catalog-service
 EOF
@@ -22,7 +22,7 @@ cd "$project_directory"
 
 if [[ $# -eq 0 ]]; then
   set -- status-service gateway-service identity-service catalog-service playback-service \
-    traffic-generator frontend outbox-init playback-ready
+    traffic-generator frontend debezium-connect outbox-init playback-ready
 fi
 
 sbt_tasks=""
@@ -37,7 +37,7 @@ for service_name in "$@"; do
     catalog-service) project_name=catalogService ;;
     playback-service) project_name=playbackService ;;
     traffic-generator) project_name=trafficGenerator ;;
-    frontend|playback-ready) compose_services+=("$service_name") ;;
+    frontend|playback-ready|debezium-connect) compose_services+=("$service_name") ;;
     outbox-init) compose_services+=(identity-outbox-init) ;;
     *) echo "Unknown service: $service_name. See --help." >&2; exit 2 ;;
   esac
