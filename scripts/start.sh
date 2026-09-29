@@ -93,8 +93,8 @@ run_step "Starting application and telemetry services" docker compose up --detac
 run_step "Waiting for the Identity outbox connector" bash "$script_directory/wait-outbox.sh" identity
 run_step "Waiting for the Catalog outbox connector" bash "$script_directory/wait-outbox.sh" catalog
 run_step "Waiting for Playback projections" docker compose run --rm --no-deps playback-ready
-run_step "Waiting for application health checks" docker compose up --detach --no-deps --no-build --wait \
-  identity-service catalog-service playback-service gateway-service frontend
+run_step "Waiting for application and Grafana health checks" docker compose up --detach --no-deps --no-build --wait \
+  identity-service catalog-service playback-service gateway-service frontend lgtm
 
 docker compose ps >> "$log_file" 2>&1 || true
 

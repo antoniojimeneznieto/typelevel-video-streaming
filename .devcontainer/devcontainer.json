@@ -35,8 +35,8 @@
     "onAutoForward": "ignore"
   },
   "updateContentCommand": "bash .devcontainer/prepare.sh",
-  "postCreateCommand": "bash scripts/pull-images.sh",
-  "postAttachCommand": "printf '\\nStart the lab: ./scripts/start.sh\\nOpen Application and Grafana from the Ports tab.\\n'",
+  "postStartCommand": "bash scripts/lab.sh start",
+  "postAttachCommand": "printf '\\nThe lab starts automatically. Once startup completes, open Application (8000) and Grafana (3000) from the Ports tab.\\n'",
   "customizations": {
     "vscode": {
       "extensions": ["scalameta.metals"],
