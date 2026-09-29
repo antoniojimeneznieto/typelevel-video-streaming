@@ -34,7 +34,6 @@
   },
   "updateContentCommand": "bash .devcontainer/prepare.sh",
   "postCreateCommand": "bash scripts/pull-images.sh",
-  "waitFor": "postCreateCommand",
   "postAttachCommand": "printf '\\nStart the lab: ./scripts/start.sh\\nOpen Application and Grafana from the Ports tab.\\n'",
   "customizations": {
     "vscode": {
