@@ -22,6 +22,7 @@ val Password4jVersion          = "1.8.4"
 val JavaJwtVersion             = "4.6.1"
 val OtelInstrumentationVersion = "2.31.1-alpha"
 val TestcontainersVersion      = "2.0.5"
+val DeclineVersion             = "2.6.2"
 
 organization := "org.typelevel.video.streaming"
 scalaVersion := ScalaLtsVersion
@@ -68,7 +69,7 @@ def serviceSettings(serviceName: String, mainClassName: String, exposedPort: Int
 
 lazy val root = project
   .in(file("."))
-  .aggregate(backend, frontend, apiContractsJS)
+  .aggregate(backend, frontend, apiContractsJS, trafficGenerator)
   .settings(noPublishSettings)
   .settings(
     name := "typelevel-video-streaming",
@@ -185,6 +186,42 @@ lazy val apiContractsMatrix = projectMatrix
 
 lazy val apiContracts   = apiContractsMatrix.jvm(ScalaLtsVersion)
 lazy val apiContractsJS = apiContractsMatrix.js(ScalaLtsVersion)
+
+lazy val trafficGenerator = project
+  .in(file("tools/traffic-generator"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
+  .dependsOn(apiContracts)
+  .settings(noPublishSettings)
+  .settings(
+    name := "traffic-generator",
+    Compile / mainClass := Some("org.typelevel.video.streaming.traffic.Main"),
+    Compile / run / fork := true,
+    Compile / run / javaOptions += "-Dcats.effect.trackFiberContext=true",
+    Universal / javaOptions += "-Dcats.effect.trackFiberContext=true",
+    dockerAlias := DockerAlias(
+      None,
+      Some("typelevel-video-streaming"),
+      "traffic-generator",
+      Some("local"),
+    ),
+    dockerBaseImage := "eclipse-temurin:17-jre-noble",
+    dockerUpdateLatest := false,
+    libraryDependencies ++= Seq(
+      "com.monovore" %% "decline" % DeclineVersion,
+      "org.typelevel" %% "cats-effect" % CatsEffectVersion,
+      "co.fs2" %% "fs2-core" % Fs2Version,
+      "org.http4s" %% "http4s-ember-client" % Http4sStableVersion,
+      "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % Smithy4sVersion,
+      "io.circe" %% "circe-core" % "0.14.16",
+      "org.typelevel" %% "otel4s-oteljava" % Otel4sVersion,
+      "org.typelevel" %% "otel4s-oteljava-context-storage" % Otel4sVersion,
+      "io.opentelemetry" % "opentelemetry-exporter-otlp" % OpenTelemetryVersion % Runtime,
+      "org.slf4j" % "slf4j-nop" % "2.0.17",
+      "org.typelevel" %% "cats-effect-testkit" % CatsEffectVersion % Test,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
+  )
 
 lazy val statusService = project
   .in(file("backend/services/status-service"))

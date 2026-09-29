@@ -1,6 +1,47 @@
 name: typelevel-video-streaming
 
 services:
+  traffic-generator:
+    profiles: ["traffic"]
+    image: typelevel-video-streaming/traffic-generator:local
+    pull_policy: never
+    command: ["--base-url", "http://gateway-service:8084", "--duration", "infinite"]
+    environment:
+      OTEL_SERVICE_NAME: traffic-generator
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_METRIC_EXPORT_INTERVAL: "5000"
+    stop_grace_period: 40s
+    restart: "no"
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    command: ["-host=0.0.0.0", "-config=/etc/toxiproxy/proxies.json"]
+    volumes:
+      - ./infrastructure/toxiproxy/proxies.json:/etc/toxiproxy/proxies.json:ro
+    healthcheck:
+      test: ["CMD", "/toxiproxy-cli", "list"]
+      start_period: 5s
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      catalog-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  proxy-control:
+    profiles: ["proxy"]
+    image: curlimages/curl:8.16.0
+    entrypoint: ["/bin/sh", "/control.sh"]
+    volumes:
+      - ./infrastructure/toxiproxy/control.sh:/control.sh:ro
+      - ./infrastructure/toxiproxy/proxies.json:/etc/toxiproxy/proxies.json:ro
+    restart: "no"
+
   frontend:
     image: typelevel-video-streaming/frontend:local
     build:
@@ -52,8 +93,10 @@ services:
       OTEL_BSP_SCHEDULE_DELAY: "5000"
       OTEL_BLRP_SCHEDULE_DELAY: "1000"
       IDENTITY_BASE_URL: http://identity-service:8081
-      CATALOG_BASE_URL: http://catalog-service:8082
+      CATALOG_BASE_URL: http://toxiproxy:8666
       PLAYBACK_BASE_URL: http://playback-service:8083
+      UPSTREAM_CONNECTION_TIMEOUT: 2 seconds
+      UPSTREAM_REQUEST_TIMEOUT: 10 seconds
     ports:
       - "127.0.0.1:${GATEWAY_PORT:-8085}:8084"
     healthcheck:
@@ -66,6 +109,8 @@ services:
       identity-service:
         condition: service_healthy
       catalog-service:
+        condition: service_healthy
+      toxiproxy:
         condition: service_healthy
       playback-service:
         condition: service_healthy
