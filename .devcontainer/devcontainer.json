@@ -9,11 +9,12 @@
       "nodeGypDependencies": false,
       "pnpmVersion": "none"
     },
-    "ghcr.io/devcontainers/features/docker-in-docker:4": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:4": {},
+    "ghcr.io/devcontainers/features/sshd:1": {}
   },
   "remoteUser": "vscode",
   "hostRequirements": {
-    "cpus": 4,
+    "cpus": 8,
     "memory": "16gb",
     "storage": "32gb"
   },
@@ -32,6 +33,8 @@
     "onAutoForward": "ignore"
   },
   "updateContentCommand": "bash .devcontainer/prepare.sh",
+  "postCreateCommand": "bash scripts/pull-images.sh",
+  "waitFor": "postCreateCommand",
   "postAttachCommand": "printf '\\nStart the lab: ./scripts/start.sh\\nOpen Application and Grafana from the Ports tab.\\n'",
   "customizations": {
     "vscode": {
