@@ -10,7 +10,7 @@
     "predev": "cd .. && sbt --batch frontend/fastLinkJS",
     "dev": "vite",
     "dev:scala": "cd .. && sbt '~frontend/fastLinkJS'",
-    "prebuild": "cd .. && sbt --batch frontend/fullLinkJS",
+    "prebuild": "cd .. && sbt --server --batch -J-Xmx2G -J-XX:+ExitOnOutOfMemoryError frontend/fullLinkJS",
     "build": "vite build",
     "preview": "vite preview",
     "test": "cd .. && sbt frontend/test"
