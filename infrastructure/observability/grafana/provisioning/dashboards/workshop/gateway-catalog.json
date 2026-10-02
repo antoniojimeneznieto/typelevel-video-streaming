@@ -1,0 +1,53 @@
+{
+  "uid": "gateway-catalog-boundary",
+  "title": "Gateway and Catalog Boundary",
+  "tags": ["workshop", "gateway", "catalog"],
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    { "title": "Workshop Traffic", "url": "/d/workshop-traffic-generator/workshop-traffic", "targetBlank": false }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Catalog read p95 across the boundary",
+      "description": "Compare the gateway server, gateway Catalog client, and Catalog server. The difference between histogram p95 values indicates where to investigate; it is not an exact per-request decomposition. Click a metric exemplar to open a representative trace.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 10 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95,sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"gateway-service\",classifier=\"/api/catalog/courses\",http_phase=\"body\"}[$__rate_interval])))", "legendFormat": "gateway server p95", "exemplar": true },
+        { "refId": "B", "expr": "histogram_quantile(0.95,sum by (le) (rate(http_client_request_duration_seconds_bucket{service_name=\"gateway-service\",classifier=\"catalog:/courses\",http_phase=\"body\"}[$__rate_interval])))", "legendFormat": "gateway Catalog client p95", "exemplar": true },
+        { "refId": "C", "expr": "histogram_quantile(0.95,sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"catalog-service\",classifier=\"/courses\",http_phase=\"body\"}[$__rate_interval])))", "legendFormat": "Catalog server p95", "exemplar": true }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Offered load and request rates",
+      "description": "One Catalog read currently makes one outbound attempt. Compare offered arrivals with sent requests, Gateway inbound, Gateway client attempts, and Catalog server requests. A missing series is unknown, not zero.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 10, "w": 24, "h": 9 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(lab_traffic_arrivals_total{operation=\"catalog-courses\"}[$__rate_interval]))", "legendFormat": "offered" },
+        { "refId": "B", "expr": "sum(rate(lab_traffic_arrivals_total{operation=\"catalog-courses\",result=\"sent\"}[$__rate_interval]))", "legendFormat": "sent" },
+        { "refId": "C", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"gateway-service\",classifier=\"/api/catalog/courses\",http_phase=\"body\"}[$__rate_interval]))", "legendFormat": "gateway inbound" },
+        { "refId": "D", "expr": "sum(rate(http_client_request_duration_seconds_count{service_name=\"gateway-service\",classifier=\"catalog:/courses\",http_phase=\"body\"}[$__rate_interval]))", "legendFormat": "gateway Catalog attempts" },
+        { "refId": "E", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"catalog-service\",classifier=\"/courses\",http_phase=\"body\"}[$__rate_interval]))", "legendFormat": "Catalog server" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "text",
+      "title": "Trace investigation",
+      "gridPos": { "x": 0, "y": 19, "w": 24, "h": 5 },
+      "options": { "mode": "markdown", "content": "Click an exemplar on the latency graph to open its Tempo trace. Compare the Gateway Catalog client span with its Catalog server child and the SQL spans beneath it. Select a trace that began within the period you are investigating." }
+    }
+  ]
+}

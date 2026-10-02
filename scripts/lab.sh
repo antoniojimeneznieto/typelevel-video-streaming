@@ -23,6 +23,7 @@ Usage:
   ./scripts/lab.sh proxy timeout --milliseconds 3000
   ./scripts/lab.sh proxy down
   ./scripts/lab.sh proxy reset
+  ./scripts/lab.sh incident start CODE
 
 start pulls published images and seeds the stack; --build builds from local source.
 rebuild builds and restarts only the named application service, leaving its dependencies running.
@@ -40,6 +41,18 @@ if [[ $# -eq 0 ]]; then
   exit 2
 fi
 container_name="typelevel-video-streaming-lab-traffic"
+
+if [[ "$1" == traffic && -z "${IMAGE_PREFIX:-}" && -z "${IMAGE_TAG:-}" ]]; then
+  # Follow the image set of the running stack after a local build, even in a new shell.
+  gateway_container="$(docker compose ps -q gateway-service 2>/dev/null || true)"
+  if [[ -n "$gateway_container" ]]; then
+    gateway_image="$(docker inspect --format '{{.Config.Image}}' "$gateway_container")"
+    if [[ "$gateway_image" =~ ^(.+)/gateway-service:([^/]+)$ ]]; then
+      export IMAGE_PREFIX="${BASH_REMATCH[1]}"
+      export IMAGE_TAG="${BASH_REMATCH[2]}"
+    fi
+  fi
+fi
 
 if [[ "$1" != help && "$1" != --help && "$1" != -h ]]; then
   source "$script_directory/images.sh"
@@ -96,6 +109,10 @@ case "$1" in
         ;;
       *) usage >&2; exit 2 ;;
     esac
+    ;;
+  incident)
+    [[ $# -eq 3 && "$2" == start && "$3" == 8f27 ]] || { usage >&2; exit 2; }
+    exec python3 "$script_directory/platform.py" _activate
     ;;
   *) usage >&2; exit 2 ;;
 esac
