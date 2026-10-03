@@ -44,8 +44,9 @@ object Main extends IOApp.Simple:
             tokenIssuer     = AccessTokenIssuerImpl(
                             privateKey,
                             config.jwt.accessTokenExpiresIn,
+                            config.workshopSubjectMigration,
                           )
-            tokenVerifier = AccessTokenVerifier.userId(
+            tokenVerifier = AccessTokenVerifier.userIdCompatible(
                               publicKey,
                               TokenIssuer.IDENTITY.stringValue,
                               TokenAudience.COURSE_PLATFORM.stringValue,

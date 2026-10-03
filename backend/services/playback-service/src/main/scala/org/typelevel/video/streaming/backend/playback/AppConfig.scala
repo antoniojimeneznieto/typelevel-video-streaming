@@ -35,6 +35,7 @@ final case class AppConfig(
     jwt: JwtConfig,
     postgres: PostgresConfig,
     kafka: KafkaConfig,
+    workshopReadMode: Boolean,
 )
 
 object AppConfig:
@@ -119,4 +120,5 @@ object AppConfig:
       jwtConfig,
       PostgresConfig.config("playback", "playback-local-secret"),
       kafkaConfig,
+      env("WORKSHOP_READ_MODE").as[Boolean].default(false),
     ).parMapN(AppConfig.apply).load[F]

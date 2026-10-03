@@ -27,7 +27,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
   ///////////////////////////////////////////////////////////////////////////////
 
   private val tokenIssuer: AccessTokenIssuer = new AccessTokenIssuer:
-    override def issue(userId: UserId, role: Role): IO[IssuedAccessToken] =
+    override def issue(userId: UserId, role: Role, email: Email): IO[IssuedAccessToken] =
       IO.pure(IssuedAccessToken(loginResponse.accessToken, loginResponse.expiresIn))
 
   private def serviceWithDatabase: Resource[

@@ -60,7 +60,8 @@ object Main extends IOApp.Simple:
 
           val routeClassifier = SmithyRouteClassifier(PlaybackService)
 
-          (HttpServer.run(config.server, app, routeClassifier), worker.run).parTupled.void
+          if config.workshopReadMode then HttpServer.run(config.server, app, routeClassifier)
+          else (HttpServer.run(config.server, app, routeClassifier), worker.run).parTupled.void
         }
       }
     }

@@ -10,7 +10,9 @@ this file is the sequence of actions to run the workshop.
 
 Scenario 1 is rehearsed on the full stack. Scenario 3 has a prebuilt exercise
 source, Identity traffic, and a workload check; its timing remains sensitive to
-host capacity. The other live rounds in
+host capacity. Scenario 4 has a rehearsed mixed-actor workload and seeded
+Playback projections; recheck it on the workshop host before presenting it.
+The other live rounds in
 [lab-scenarios.md](lab-scenarios.md) are designs, not runnable playbook steps yet.
 Do not advertise the complete two-hour sequence until those rounds and their
 reset paths have been rehearsed. Scenario 1 has not yet been calibrated on the
@@ -306,6 +308,84 @@ the lightweight operation slows under valid load. It does not edit source.
 This stops the generator. If participants changed source and rebuilt Identity,
 restore the exercise checkout or redeploy its prebuilt image before the next
 group. Do not clear telemetry history.
+
+## Round 4: stable minority-user Playback 401
+
+### Participant brief — share this paragraph only
+
+> A small, repeatable share of authenticated Playback requests returns `401`.
+> Those users can log in, and most users are unaffected. Find the compatibility
+> boundary without weakening authentication.
+
+### Facilitator preparation
+
+Build the current checkout so Identity can issue both documented subject
+formats. Playback intentionally accepts only raw UUID subjects. Its workshop
+read mode skips Kafka projection consumption; the setup command enables it, registers ten
+legitimate actors and seeds their Playback user rows directly. It assumes the
+default local Gateway port `8085`.
+
+```bash
+./scripts/lab.sh rebuild identity-service
+./scripts/lab.sh traffic build
+./scripts/lab.sh scenario4 prepare
+./scripts/lab.sh scenario4 baseline
+./scripts/lab.sh traffic status
+```
+
+The baseline sends 10 authenticated `GET /api/playback/favorites` requests per
+second from eight old-format actors. Identity authenticates all ten accounts
+during generator setup, including the two newer-format accounts, before
+starting traffic. Verify clean recent windows and `200` responses.
+
+Start the mixed workload with the neutral participant command:
+
+```bash
+./scripts/lab.sh incident start 7b42
+```
+
+The same ten requests per second now use the two newer-format actors for 20%
+of slots. Actor identities and routing remain stable. Observe roughly 20%
+`401` responses while `load_valid` or recent `window.load_valid` is true and
+there are no dropped arrivals. Do not publish token contents, subjects, user
+IDs, or actor labels as telemetry attributes.
+
+### Investigation prompts
+
+1. Does Identity login work for both groups? Is Gateway reaching Playback?
+2. Where does the Playback trace end? Do rejected requests reach repository
+   spans or SQL?
+3. Which stage of token validation differs: signature and standard claims, or
+   subject decoding? Add bounded stage reasons or small spans if needed.
+4. Inspect `AccessTokenVerifier.userId` and Playback's wiring in `Main.scala`.
+
+### Remediation and proof
+
+Change Playback's verifier wiring to `AccessTokenVerifier.userIdCompatible`.
+That decoder accepts exactly a canonical UUID or `user:` followed by a
+canonical UUID. It retains RS256 signature, issuer, audience, expiry, issued-at,
+and JWT ID checks. Rebuild Playback while keeping the mixed workload at the
+same rate:
+
+```bash
+./scripts/lab.sh rebuild playback-service
+./scripts/lab.sh traffic status
+```
+
+The rebuild can briefly produce `500` responses while the service restarts;
+judge recovery from a later fresh window. Require that window to be valid with
+all Playback requests returning `200`. Run
+the verifier suite to check malformed, expired, incorrectly signed, and
+unsupported tokens remain rejected:
+
+```bash
+sbt --batch 'runtime/testOnly *AccessTokenVerifierSuite'
+```
+
+Restore the original Playback verifier wiring before running
+`./scripts/lab.sh scenario4 restore`. It stops traffic and rebuilds Playback
+in normal projection mode. Leave the seeded accounts and projection rows in
+place; preparation is idempotent.
 
 ## If something goes wrong
 

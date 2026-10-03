@@ -14,6 +14,7 @@ final case class Config(
     reportInterval: FiniteDuration   = 5.seconds,
     profile: String                  = "catalog-courses",
     loginPercent: Int                = 10,
+    modernPercent: Int               = 20,
 ):
   require(rate > 0 && rate <= 10000, "rate must be between 1 and 10000 requests/second")
   require(duration.forall(_ > Duration.Zero), "duration must be positive")
@@ -21,8 +22,9 @@ final case class Config(
   require(requestTimeout > Duration.Zero, "request-timeout must be positive")
   require(drainTimeout > Duration.Zero, "drain-timeout must be positive")
   require(reportInterval > Duration.Zero, "report-interval must be positive")
-  require(Set("catalog-courses", "identity").contains(profile), "unsupported profile")
+  require(Set("catalog-courses", "identity", "playback").contains(profile), "unsupported profile")
   require(loginPercent >= 0 && loginPercent <= 100, "login percent must be 0 to 100")
+  require(Set(0, 20).contains(modernPercent), "modern percent must be 0 or 20")
   require(
     Config.isGatewayOrigin(baseUrl),
     "base-url must be an HTTP(S) gateway origin without credentials, path, query, or fragment",

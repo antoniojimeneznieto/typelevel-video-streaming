@@ -2,7 +2,8 @@ package org.typelevel.video.streaming.traffic
 
 import scala.concurrent.duration.Duration
 
-import cats.effect.{Console, ExitCode, IO, IOApp, Ref, Resource}
+import cats.effect.std.Console
+import cats.effect.{ExitCode, IO, IOApp, Ref, Resource}
 import cats.effect.std.Env
 import cats.syntax.all.*
 import fs2.Stream
@@ -80,7 +81,9 @@ object TrafficGeneratorMain extends IOApp:
                      yield ()
           progress = Stream.awakeEvery[IO](config.reportInterval).evalMap(_ => report("progress"))
           request <-
-            if config.profile == "identity" then
+            if config.profile == "playback" then
+              PlaybackTraffic.prepare(client, config.baseUrl, config.modernPercent)
+            else if config.profile == "identity" then
               IdentityTraffic.prepare(client, config.baseUrl, config.loginPercent)
             else IO.pure((_: Long) => CatalogTraffic.request(client, config.baseUrl))
           _ <-

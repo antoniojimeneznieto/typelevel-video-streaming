@@ -26,6 +26,7 @@ Usage:
   ./scripts/lab.sh incident start CODE
   ./scripts/lab.sh scenario3 baseline
   ./scripts/lab.sh scenario3 restore
+  ./scripts/lab.sh scenario4 prepare|baseline|restore
 
 start pulls published images and seeds the stack; --build builds from local source.
 rebuild builds and restarts only the named application service, leaving its dependencies running.
@@ -57,7 +58,7 @@ if [[ ( "$1" == traffic || "$1" == rebuild ) && -z "${IMAGE_PREFIX:-}" && -z "${
   fi
 fi
 
-if [[ "$1" != help && "$1" != --help && "$1" != -h && "$1" != scenario3 && "$1" != incident ]]; then
+if [[ "$1" != help && "$1" != --help && "$1" != -h && "$1" != scenario3 && "$1" != scenario4 && "$1" != incident ]]; then
   source "$script_directory/images.sh"
 fi
 
@@ -118,6 +119,7 @@ case "$1" in
     case "$3" in
       8f27) exec python3 "$script_directory/platform.py" _activate ;;
       3c91) exec python3 "$script_directory/scenario3.py" activate ;;
+      7b42) exec python3 "$script_directory/scenario4.py" activate ;;
       *) usage >&2; exit 2 ;;
     esac
     ;;
@@ -125,6 +127,13 @@ case "$1" in
     [[ $# -eq 2 ]] || { usage >&2; exit 2; }
     case "$2" in
       baseline|restore) exec python3 "$script_directory/scenario3.py" "$2" ;;
+      *) usage >&2; exit 2 ;;
+    esac
+    ;;
+  scenario4)
+    [[ $# -eq 2 ]] || { usage >&2; exit 2; }
+    case "$2" in
+      prepare|baseline|restore) exec python3 "$script_directory/scenario4.py" "$2" ;;
       *) usage >&2; exit 2 ;;
     esac
     ;;

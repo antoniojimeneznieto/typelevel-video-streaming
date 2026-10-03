@@ -73,10 +73,10 @@ object Cli:
       positiveDuration("drain-timeout", "Grace period after arrivals stop", defaults.drainTimeout),
       positiveDuration("report-interval", "JSON progress interval", defaults.reportInterval),
       Opts
-        .option[String]("profile", help = "catalog-courses or identity")
+        .option[String]("profile", help = "catalog-courses, identity, or playback")
         .validate(
-          "--profile must be catalog-courses or identity",
-        )(Set("catalog-courses", "identity").contains)
+          "--profile must be catalog-courses, identity, or playback",
+        )(Set("catalog-courses", "identity", "playback").contains)
         .withDefault(defaults.profile),
       Opts
         .option[Int]("login-percent", help = "Identity login share (default: 10)")
@@ -84,5 +84,9 @@ object Cli:
           "--login-percent must be between 0 and 100",
         )(n => n >= 0 && n <= 100)
         .withDefault(defaults.loginPercent),
+      Opts
+        .option[Int]("modern-percent", help = "Playback newer-subject actor share (0 or 20)")
+        .validate("--modern-percent must be 0 or 20")(n => n == 0 || n == 20)
+        .withDefault(defaults.modernPercent),
     ).mapN(Config.apply) <* Opts.help.orElse(Opts(()))
   }

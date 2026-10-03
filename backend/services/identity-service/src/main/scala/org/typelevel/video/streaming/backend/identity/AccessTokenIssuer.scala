@@ -9,11 +9,11 @@ import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.JWT
 import org.typelevel.video.streaming.backend.identity.api.{AccessToken, ExpiresInSeconds}
 import org.typelevel.video.streaming.backend.identity.auth.{TokenAudience, TokenIssuer}
-import org.typelevel.video.streaming.backend.identity.domain.{Role, UserId}
+import org.typelevel.video.streaming.backend.identity.domain.{Email, Role, UserId}
 
 trait AccessTokenIssuer:
 
-  def issue(userId: UserId, role: Role): IO[IssuedAccessToken]
+  def issue(userId: UserId, role: Role, email: Email): IO[IssuedAccessToken]
 
 final case class IssuedAccessToken(
     accessToken: AccessToken,
@@ -23,11 +23,12 @@ final case class IssuedAccessToken(
 final class AccessTokenIssuerImpl private (
     privateKey: RSAPrivateKey,
     expiresIn: ExpiresInSeconds,
+    workshopSubjectMigration: Boolean,
 ) extends AccessTokenIssuer:
 
   private val algorithm = Algorithm.RSA256(privateKey)
 
-  override def issue(userId: UserId, role: Role): IO[IssuedAccessToken] =
+  override def issue(userId: UserId, role: Role, email: Email): IO[IssuedAccessToken] =
     for
       issuedAt <- Clock[IO].realTimeInstant
       jwtId    <- IO(UUID.randomUUID())
@@ -35,7 +36,12 @@ final class AccessTokenIssuerImpl private (
                  JWT
                    .create()
                    .withIssuer(TokenIssuer.IDENTITY.stringValue)
-                   .withSubject(UserId.value(userId).toString)
+                   .withSubject(
+                     (if workshopSubjectMigration &&
+                        Email.value(email).matches("lab-playback-new-[0-9]+@example\\.invalid")
+                      then "user:"
+                      else "") + UserId.value(userId).toString,
+                   )
                    .withAudience(TokenAudience.COURSE_PLATFORM.stringValue)
                    .withClaim("role", role.stringValue)
                    .withIssuedAt(issuedAt)
@@ -53,5 +59,6 @@ object AccessTokenIssuerImpl:
   def apply(
       privateKey: RSAPrivateKey,
       expiresIn: ExpiresInSeconds,
+      workshopSubjectMigration: Boolean = false,
   ): AccessTokenIssuerImpl =
-    new AccessTokenIssuerImpl(privateKey, expiresIn)
+    new AccessTokenIssuerImpl(privateKey, expiresIn, workshopSubjectMigration)

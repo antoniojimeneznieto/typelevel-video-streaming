@@ -15,6 +15,7 @@ final class AccessTokenVerifier[Principal] private (
     issuer: String,
     audience: String,
     readPrincipal: DecodedJWT => Option[Principal],
+    readSubject: String => Option[UUID],
 ) extends BearerTokenVerifier[IO, Principal]:
 
   private val verifier = JWT
@@ -33,7 +34,7 @@ final class AccessTokenVerifier[Principal] private (
 
       for
         subject   <- Option(jwt.getSubject)
-        _         <- parseUuid(subject)
+        _         <- readSubject(subject)
         issuedAt  <- Option(jwt.getIssuedAtAsInstant)
         expiresAt <- Option(jwt.getExpiresAtAsInstant)
         if issuedAt.getEpochSecond >= 0 && expiresAt.isAfter(issuedAt)
@@ -54,7 +55,7 @@ object AccessTokenVerifier:
       issuer: String,
       audience: String,
   )(readPrincipal: DecodedJWT => Option[Principal]): AccessTokenVerifier[Principal] =
-    new AccessTokenVerifier(publicKey, issuer, audience, readPrincipal)
+    new AccessTokenVerifier(publicKey, issuer, audience, readPrincipal, parseUuid)
 
   def userId(
       publicKey: RSAPublicKey,
@@ -62,3 +63,25 @@ object AccessTokenVerifier:
       audience: String,
   ): AccessTokenVerifier[UUID] =
     apply(publicKey, issuer, audience)(jwt => Some(UUID.fromString(jwt.getSubject)))
+
+  /** Used by Identity during the subject-format migration. Playback intentionally uses userId. */
+  def userIdCompatible(
+      publicKey: RSAPublicKey,
+      issuer: String,
+      audience: String,
+  ): AccessTokenVerifier[UUID] =
+    new AccessTokenVerifier(
+      publicKey,
+      issuer,
+      audience,
+      jwt => Option(jwt.getSubject).flatMap(compatibleSubject),
+      compatibleSubject,
+    )
+
+  private def compatibleSubject(value: String): Option[UUID] =
+    parseUuid(value).orElse(
+      Option.when(value.startsWith("user:"))(value.stripPrefix("user:")).flatMap(parseUuid),
+    )
+
+  private def parseUuid(value: String): Option[UUID] =
+    Try(UUID.fromString(value)).toOption.filter(_.toString.equalsIgnoreCase(value))

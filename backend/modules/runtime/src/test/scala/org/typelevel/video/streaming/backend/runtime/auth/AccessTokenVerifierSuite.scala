@@ -65,6 +65,24 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
     }
   }
 
+  test("the migration decoder accepts only raw and user-prefixed UUID subjects") {
+    keys.flatMap { pair =>
+      val now      = Instant.now()
+      val subjects =
+        List(userId.toString, s"user:$userId", "user:bad", s"admin:$userId", s"user:user:$userId")
+      val tokens = subjects.map(subject => claims(now).withSubject(subject).sign(algorithm(pair)))
+      val compatible = AccessTokenVerifier.userIdCompatible(publicKey(pair), issuer, audience)
+      val legacy     = AccessTokenVerifier.userId(publicKey(pair), issuer, audience)
+      for
+        migrated <- tokens.traverse(compatible.verify)
+        old      <- tokens.traverse(legacy.verify)
+      yield expect.all(
+        migrated == List(Some(userId), Some(userId), None, None, None),
+        old == List(Some(userId), None, None, None, None),
+      )
+    }
+  }
+
   test("invalid claims and missing required claims are rejected") {
     keys.flatMap { pair =>
       val now           = Instant.now()
@@ -94,9 +112,11 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
         .withJWTId(jwtId)
         .sign(algorithm(pair))
 
-      tokens.traverse(AccessTokenVerifier.userId(publicKey(pair), issuer, audience).verify).map {
-        results =>
-          expect(results.forall(_.isEmpty))
+      List(
+        AccessTokenVerifier.userId(publicKey(pair), issuer, audience),
+        AccessTokenVerifier.userIdCompatible(publicKey(pair), issuer, audience),
+      ).traverse(verifier => tokens.traverse(verifier.verify)).map { results =>
+        expect(results.forall(_.forall(_.isEmpty)))
       }
     }
   }
@@ -111,9 +131,11 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
         claims(now).sign(Algorithm.none()),
       )
 
-      tokens.traverse(AccessTokenVerifier.userId(publicKey(trusted), issuer, audience).verify).map {
-        results =>
-          expect(results.forall(_.isEmpty))
+      List(
+        AccessTokenVerifier.userId(publicKey(trusted), issuer, audience),
+        AccessTokenVerifier.userIdCompatible(publicKey(trusted), issuer, audience),
+      ).traverse(verifier => tokens.traverse(verifier.verify)).map { results =>
+        expect(results.forall(_.forall(_.isEmpty)))
       }
     }
   }

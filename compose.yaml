@@ -148,6 +148,7 @@ services:
       JWT_PRIVATE_KEY_PATH: /run/secrets/identity-private-key.pem
       JWT_PUBLIC_KEY_PATH: /run/secrets/identity-public-key.pem
       JWT_ACCESS_TOKEN_EXPIRES_IN_SECONDS: "7200"
+      WORKSHOP_SUBJECT_MIGRATION: "true"
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081"]
       start_period: 5s
@@ -224,6 +225,7 @@ services:
       KAFKA_LESSON_PUBLISHED_TOPIC: ${KAFKA_LESSON_PUBLISHED_TOPIC:-catalog.lesson-published.v1}
       KAFKA_USER_CREATED_TOPIC: ${KAFKA_USER_CREATED_TOPIC:-identity.user-created.v1}
       JWT_PUBLIC_KEY_PATH: /run/secrets/identity-public-key.pem
+      WORKSHOP_READ_MODE: ${PLAYBACK_WORKSHOP_READ_MODE:-false}
       S3_ENDPOINT: ${S3_ENDPOINT:-http://seaweedfs:8333}
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:${FRONTEND_PORT:-8000}}
       S3_BUCKET: ${S3_BUCKET:-videos}
