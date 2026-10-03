@@ -33,8 +33,17 @@
       "targetBlank": false
     },
     {
-      "title": "JVM Overview",
-      "url": "/d/b91844d7-121e-4d0a-93b8-a9c1a05703b3/jvm-overview-opentelemetry",
+      "title": "Cats Effect Runtime Metrics",
+      "url": "/d/cats-effect-runtime/cats-effect-runtime-metrics",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false
+    },
+    {
+      "title": "JVM Runtime Metrics",
+      "url": "/d/jvm-runtime/jvm-runtime-metrics",
+      "includeVars": true,
+      "keepTime": true,
       "targetBlank": false
     }
   ],
