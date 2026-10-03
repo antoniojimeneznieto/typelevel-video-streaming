@@ -24,6 +24,8 @@ Usage:
   ./scripts/lab.sh proxy down
   ./scripts/lab.sh proxy reset
   ./scripts/lab.sh incident start CODE
+  ./scripts/lab.sh scenario3 baseline
+  ./scripts/lab.sh scenario3 restore
 
 start pulls published images and seeds the stack; --build builds from local source.
 rebuild builds and restarts only the named application service, leaving its dependencies running.
@@ -32,6 +34,7 @@ The traffic image is downloaded by start; traffic build rebuilds it from local s
 traffic run defaults to 3 minutes; traffic start runs in the background until stopped.
 Options include --rate 5, --duration 3m, --max-concurrent 128, --request-timeout 30s.
 traffic status shows the background container and its latest JSON reports.
+load_valid covers the entire run; window.load_valid covers each recent report interval.
 proxy commands affect only the gateway-to-catalog connection; reset restores it.
 EOF
 }
@@ -42,7 +45,7 @@ if [[ $# -eq 0 ]]; then
 fi
 container_name="typelevel-video-streaming-lab-traffic"
 
-if [[ "$1" == traffic && -z "${IMAGE_PREFIX:-}" && -z "${IMAGE_TAG:-}" ]]; then
+if [[ ( "$1" == traffic || "$1" == rebuild ) && -z "${IMAGE_PREFIX:-}" && -z "${IMAGE_TAG:-}" ]]; then
   # Follow the image set of the running stack after a local build, even in a new shell.
   gateway_container="$(docker compose ps -q gateway-service 2>/dev/null || true)"
   if [[ -n "$gateway_container" ]]; then
@@ -54,7 +57,7 @@ if [[ "$1" == traffic && -z "${IMAGE_PREFIX:-}" && -z "${IMAGE_TAG:-}" ]]; then
   fi
 fi
 
-if [[ "$1" != help && "$1" != --help && "$1" != -h ]]; then
+if [[ "$1" != help && "$1" != --help && "$1" != -h && "$1" != scenario3 && "$1" != incident ]]; then
   source "$script_directory/images.sh"
 fi
 
@@ -111,8 +114,19 @@ case "$1" in
     esac
     ;;
   incident)
-    [[ $# -eq 3 && "$2" == start && "$3" == 8f27 ]] || { usage >&2; exit 2; }
-    exec python3 "$script_directory/platform.py" _activate
+    [[ $# -eq 3 && "$2" == start ]] || { usage >&2; exit 2; }
+    case "$3" in
+      8f27) exec python3 "$script_directory/platform.py" _activate ;;
+      3c91) exec python3 "$script_directory/scenario3.py" activate ;;
+      *) usage >&2; exit 2 ;;
+    esac
+    ;;
+  scenario3)
+    [[ $# -eq 2 ]] || { usage >&2; exit 2; }
+    case "$2" in
+      baseline|restore) exec python3 "$script_directory/scenario3.py" "$2" ;;
+      *) usage >&2; exit 2 ;;
+    esac
     ;;
   *) usage >&2; exit 2 ;;
 esac
@@ -150,7 +164,8 @@ case "$action" in
   status)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }
     docker inspect --format 'state={{.State.Status}} exit_code={{.State.ExitCode}}' "$container_name"
-    exec docker logs --tail 5 "$container_name"
+    echo 'load_valid is cumulative; window.load_valid describes each report interval.'
+    docker logs --tail 200 "$container_name" 2>&1 | awk '/^\{/' | tail -5
     ;;
   stop)
     [[ $# -eq 0 ]] || { usage >&2; exit 2; }

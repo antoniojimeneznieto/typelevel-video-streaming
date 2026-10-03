@@ -27,21 +27,28 @@ object Traffic:
       Arrival(current + 1, current - next, true)
 
   def run(config: Config, request: IO[RequestResult], stats: Ref[IO, Stats]): IO[Unit] =
-    run(config, request, stats, TrafficMetrics.noop)
+    run(config, _ => request, stats, TrafficMetrics.noop)
 
   def run(
       config: Config,
       request: IO[RequestResult],
       stats: Ref[IO, Stats],
       metrics: TrafficMetrics,
+  ): IO[Unit] = run(config, _ => request, stats, metrics)
+
+  def run(
+      config: Config,
+      request: Long => IO[RequestResult],
+      stats: Ref[IO, Stats],
+      metrics: TrafficMetrics,
   ): IO[Unit] =
     Semaphore[IO](config.maxConcurrent.toLong).flatMap { permits =>
       Supervisor[IO].use { supervisor =>
-        def execute: IO[Unit] = IO
+        def execute(slot: Long): IO[Unit] = IO
           .uncancelable { poll =>
             IO.monotonic.flatMap { start =>
               poll(
-                request
+                request(slot)
                   .timeoutTo(config.requestTimeout, IO.pure(RequestResult(None, "timeout")))
                   .handleError(_ => RequestResult(None, "request_error")),
               )
@@ -75,7 +82,7 @@ object Traffic:
                    stats.update(_.start) *>
                      metrics.arrivals("sent", 1L) *>
                      metrics.started *>
-                     supervisor.supervise(execute).void
+                     supervisor.supervise(execute(a.next - 1)).void
                })
         }
 

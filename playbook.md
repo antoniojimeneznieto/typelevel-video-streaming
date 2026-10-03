@@ -8,9 +8,9 @@ this file is the sequence of actions to run the workshop.
 
 ## Current readiness
 
-Scenario 1, the Gateway–Catalog delay, is runnable on the full application
-stack. Its controller, dashboard, and automated baseline/fault/recovery check
-have passed on one local macOS setup. The remaining live rounds in
+Scenario 1 is rehearsed on the full stack. Scenario 3 has a prebuilt exercise
+source, Identity traffic, and a workload check; its timing remains sensitive to
+host capacity. The other live rounds in
 [lab-scenarios.md](lab-scenarios.md) are designs, not runnable playbook steps yet.
 Do not advertise the complete two-hour sequence until those rounds and their
 reset paths have been rehearsed. Scenario 1 has not yet been calibrated on the
@@ -210,6 +210,102 @@ facilitator escape hatch; follow it with the participant rollback command so
 the local change ledger also records the repair. Let a new healthy telemetry
 window accumulate before repeating the round. Do not clear Grafana history to
 make the next run look clean.
+
+## Round 3: Identity compute starvation
+
+### Participant brief — share this paragraph only
+
+> Authentication activity increased. Logins and unrelated lightweight Identity
+> requests became slow, while PostgreSQL appears healthy. Explain where the
+> delay occurs and make lightweight requests responsive under the same load.
+
+### Facilitator preparation
+
+Build the full stack from this checkout before the workshop so the checked-in
+Identity exercise source is in the image. It runs synchronous password
+verification in `IO.delay` from startup. Build the generator and start baseline:
+
+```bash
+./scripts/lab.sh traffic build
+./scripts/lab.sh scenario3 baseline
+./scripts/lab.sh traffic status
+```
+
+The baseline sends 30 requests per second through Gateway, with 5% logins and
+95% authenticated `GET /users/me` requests from one synthetic actor. The
+generator registers that actor once, then obtains a token. Keep its JSON
+reports; the `operations` field separates login and current-user duration.
+Allow at least 30 seconds for warmup. `load_valid` covers the entire generator
+run; `window.load_valid` covers the latest reporting interval. Record any
+earlier dropped arrivals, then use clean recent windows to assess ongoing load.
+The Compose Identity service is limited
+to four CPUs and configured with two Cats Effect compute workers for this
+exercise. Calibrate on the actual laptop before presenting it.
+
+Activate the login-heavy mix with the neutral command:
+
+```bash
+./scripts/lab.sh incident start 3c91
+```
+
+This stops the baseline generator and starts a new one at the **same total rate**,
+now 70% logins. Record the workload change time. Wait at least 25 seconds and
+inspect `./scripts/lab.sh traffic status`. Require clean recent windows with
+`window.load_valid=true`, no failures, and no new dropped arrivals before
+interpreting latency. This is a
+workload activation, so a brief gap between the two generator containers is
+expected.
+
+### Investigation prompts
+
+1. Are both `POST /auth/login` and `GET /users/me` affected? Does the latter
+   perform password hashing?
+2. Where do Gateway and Identity server spans spend time? Are SQL and session
+   acquisition spans large enough to account for it?
+3. Are Identity's CPU, JVM thread, and Cats Effect starvation signals elevated?
+4. Inspect `PasswordHasher.scala`: on which Cats Effect executor does the
+   synchronous Argon2 verification run?
+
+The generator summary gives independent offered, completed, dropped, and
+per-operation latency evidence. Filter HTTP dashboard panels by Identity route
+and compare a recent window. Use fresh traces from both Identity operations;
+traces locate the service, and source/runtime evidence explains the scheduler
+pressure. Do not put the lab actor, token, or password in telemetry.
+
+### Participant remediation and proof
+
+The core round ends when participants identify the `IO.delay` boundary and
+explain the unrelated request slowdown with telemetry and source evidence.
+For groups with time to implement the fix, change verification to `IO.blocking`
+in `backend/services/identity-service/src/main/scala/org/typelevel/video/streaming/backend/identity/PasswordHasher.scala`. Keep the existing
+`permits.permit.use` around both hash and verify. The semaphore limits
+concurrent Argon2 operations to four. Review the source diff, then deploy it:
+
+```bash
+./scripts/lab.sh rebuild identity-service
+```
+
+Keep the 30 requests per second, 70% login workload running across the rebuild.
+After warmup, require a fresh sustained window with `load_valid=true`, no
+drops, and a lower `identity-current-user` latency. Check fresh traces and SQL
+timing. In one local rehearsal of the checked-in exercise image, current-user
+mean latency moved from 9.6 ms in the light mix to 61.5 ms in the heavy mix;
+both samples used valid load. These are local calibration examples, not
+universal thresholds.
+
+The facilitator can run `./scripts/check-scenario3.py` before the session. It
+runs light and heavy samples against the prebuilt exercise image and checks that
+the lightweight operation slows under valid load. It does not edit source.
+
+### Reset for the next group
+
+```bash
+./scripts/lab.sh scenario3 restore
+```
+
+This stops the generator. If participants changed source and rebuilt Identity,
+restore the exercise checkout or redeploy its prebuilt image before the next
+group. Do not clear telemetry history.
 
 ## If something goes wrong
 

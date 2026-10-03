@@ -3,6 +3,7 @@ package org.typelevel.video.streaming.backend.identity.service
 import java.nio.charset.StandardCharsets
 
 import cats.effect.IO
+import cats.effect.std.Semaphore
 import cats.syntax.all.*
 import com.password4j.types.Argon2
 import com.password4j.{Argon2Function, SaltGenerator}
@@ -16,30 +17,37 @@ trait PasswordHasher:
 
 final class PasswordHasherImpl private (
     function: Argon2Function,
+    permits: Semaphore[IO],
 ) extends PasswordHasher:
 
   override def hash(password: NewPassword): IO[PasswordHash] =
-    IO.blocking {
-      function
-        .hash(
-          NewPassword.value(password).getBytes(StandardCharsets.UTF_8),
-          SaltGenerator.generate(16),
-        )
-        .getResult
-    }.flatMap { hash =>
-      PasswordHash(hash)
-        .leftMap(new IllegalStateException(_))
-        .liftTo[IO]
-    }
+    permits.permit
+      .use(_ =>
+        IO.blocking {
+          function
+            .hash(
+              NewPassword.value(password).getBytes(StandardCharsets.UTF_8),
+              SaltGenerator.generate(16),
+            )
+            .getResult
+        },
+      )
+      .flatMap { hash =>
+        PasswordHash(hash)
+          .leftMap(new IllegalStateException(_))
+          .liftTo[IO]
+      }
 
   override def verify(password: Password, hash: PasswordHash): IO[Boolean] =
-    IO.blocking {
-      val encodedHash = PasswordHash.value(hash)
+    permits.permit.use(_ =>
+      IO.delay {
+        val encodedHash = PasswordHash.value(hash)
 
-      Argon2Function
-        .getInstanceFromHash(encodedHash)
-        .check(Password.value(password), encodedHash)
-    }
+        Argon2Function
+          .getInstanceFromHash(encodedHash)
+          .check(Password.value(password), encodedHash)
+      },
+    )
 
 object PasswordHasherImpl:
 
@@ -48,13 +56,17 @@ object PasswordHasherImpl:
   private val Parallelism  = 1
   private val OutputLength = 32
 
-  def apply(): PasswordHasherImpl =
-    new PasswordHasherImpl(
-      Argon2Function.getInstance(
-        MemoryKiB,
-        Iterations,
-        Parallelism,
-        OutputLength,
-        Argon2.ID,
+  def create(maxConcurrent: Int = 4): IO[PasswordHasherImpl] =
+    require(maxConcurrent > 0, "maxConcurrent must be positive")
+    Semaphore[IO](maxConcurrent.toLong).map(permits =>
+      new PasswordHasherImpl(
+        Argon2Function.getInstance(
+          MemoryKiB,
+          Iterations,
+          Parallelism,
+          OutputLength,
+          Argon2.ID,
+        ),
+        permits,
       ),
     )

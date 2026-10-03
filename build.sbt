@@ -198,7 +198,7 @@ lazy val trafficGenerator = project
   .settings(noPublishSettings)
   .settings(
     name := "traffic-generator",
-    Compile / mainClass := Some("org.typelevel.video.streaming.traffic.Main"),
+    Compile / mainClass := Some("org.typelevel.video.streaming.traffic.TrafficGeneratorMain"),
     Compile / run / fork := true,
     Compile / run / javaOptions += "-Dcats.effect.trackFiberContext=true",
     Universal / javaOptions += "-Dcats.effect.trackFiberContext=true",
@@ -218,6 +218,7 @@ lazy val trafficGenerator = project
       "org.http4s" %% "http4s-ember-client" % Http4sStableVersion,
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % Smithy4sVersion,
       "io.circe" %% "circe-core" % "0.14.16",
+      "io.circe" %% "circe-parser" % "0.14.16",
       "org.typelevel" %% "otel4s-oteljava" % Otel4sVersion,
       "org.typelevel" %% "otel4s-oteljava-context-storage" % Otel4sVersion,
       "io.opentelemetry" % "opentelemetry-exporter-otlp" % OpenTelemetryVersion % Runtime,

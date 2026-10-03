@@ -157,12 +157,13 @@ comparatively healthy. Runtime scheduling metrics and starvation logs point
 inside the process; a thread dump or profile places compute workers in Argon2.
 Source inspection reveals the `IO.delay` boundary.
 
-**Fix and proof:** Move the synchronous password operation to `IO.blocking` and
-bound hashing concurrency so the blocking pool cannot create uncontrolled CPU
-and memory pressure. Review the patch and deploy the corrected version. Repeat
-the same login-heavy workload long enough to rule out temporary relief from a
-restart; lightweight requests must remain responsive and hashing concurrency
-must stay bounded.
+**Diagnosis and optional fix:** The core round ends when participants identify
+the synchronous password operation inside `IO.delay` and explain why unrelated
+Identity calls slow under login load. If time and skill permit, move verification
+to `IO.blocking` while keeping hashing concurrency bounded. Review the patch,
+deploy the corrected version, and repeat the same login-heavy workload long
+enough to rule out temporary relief from a restart. Lightweight requests should
+remain responsive and hashing concurrency must stay bounded.
 
 **Takeaway:** Traces identify the service; runtime evidence explains scheduler
 pressure within it. Moving work off compute threads does not add CPU capacity,

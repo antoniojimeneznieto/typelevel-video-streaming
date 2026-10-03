@@ -122,6 +122,7 @@ services:
 
   identity-service:
     image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/identity-service:${IMAGE_TAG:-main}
+    cpus: 4.0
     pull_policy: missing
     # Match the owner of the private signing key, including Linux/Codespaces bind mounts.
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
@@ -129,6 +130,7 @@ services:
       HOST: 0.0.0.0
       PORT: "8081"
       OTEL_SERVICE_NAME: identity-service
+      JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=2
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_LOGS_EXPORTER: otlp

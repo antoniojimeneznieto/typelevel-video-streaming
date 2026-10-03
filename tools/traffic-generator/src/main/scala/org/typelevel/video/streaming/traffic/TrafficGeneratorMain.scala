@@ -2,7 +2,7 @@ package org.typelevel.video.streaming.traffic
 
 import scala.concurrent.duration.Duration
 
-import cats.effect.{ExitCode, IO, IOApp, Ref}
+import cats.effect.{Console, ExitCode, IO, IOApp, Ref, Resource}
 import cats.effect.std.Env
 import cats.syntax.all.*
 import fs2.Stream
@@ -13,19 +13,19 @@ import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.oteljava.context.{Context, IOLocalContextStorage}
 import org.typelevel.otel4s.oteljava.OtelJava
 
-object Main extends IOApp:
+object TrafficGeneratorMain extends IOApp:
   private given LocalProvider[IO, Context] = IOLocalContextStorage.localProvider[IO]
 
   def run(args: List[String]): IO[ExitCode] =
     Cli.command.parse(args) match
       case Left(help) if help.errors.isEmpty => IO.println(help).as(ExitCode.Success)
-      case Left(help) => IO.consoleForIO.errorln(help).as(ExitCode(2))
+      case Left(help) => Console[IO].errorln(help).as(ExitCode(2))
       case Right(config) => runTraffic(config)
 
   private def runTraffic(config: Config): IO[ExitCode] =
-    val telemetry = cats.effect.Resource.eval(Env[IO].get("OTEL_EXPORTER_OTLP_ENDPOINT")).flatMap {
+    val telemetry = Resource.eval(Env[IO].get("OTEL_EXPORTER_OTLP_ENDPOINT")).flatMap {
       case Some(_) =>
-        cats.effect.Resource.eval(Env[IO].get("HOSTNAME")).flatMap { hostname =>
+        Resource.eval(Env[IO].get("HOSTNAME")).flatMap { hostname =>
           OtelJava
             .autoConfigured[IO](
               _.addPropertiesSupplier(() =>
@@ -41,7 +41,7 @@ object Main extends IOApp:
             )
             .map(_.meterProvider)
         }
-      case None => cats.effect.Resource.pure[IO, MeterProvider[IO]](MeterProvider.noop[IO])
+      case None => Resource.pure[IO, MeterProvider[IO]](MeterProvider.noop[IO])
     }
 
     (
@@ -56,28 +56,37 @@ object Main extends IOApp:
     ).tupled
       .use { (provider, client) =>
         for
-          metrics <- TrafficMetrics.create(provider)
-          stats   <- Ref.of[IO, Stats](Stats())
-          start   <- IO.monotonic
-          report   = (kind: String) =>
-                     (stats.get, IO.monotonic, IO.realTime)
-                       .mapN((s, now, wallTime) =>
-                         s.json(kind, now - start)
-                           .deepMerge(
-                             Json.obj(
-                               "timestamp_epoch_ms" -> Json.fromLong(wallTime.toMillis),
-                               "requested_rate" -> Json.fromInt(config.rate),
-                               "max_concurrent" -> Json.fromInt(config.maxConcurrent),
-                             ),
-                           )
-                           .noSpaces,
-                       )
-                       .flatMap(IO.println)
+          metrics  <- TrafficMetrics.create(provider, config.profile)
+          stats    <- Ref.of[IO, Stats](Stats())
+          previous <- Ref.of[IO, Stats](Stats())
+          start    <- IO.monotonic
+          report    = (kind: String) =>
+                     for
+                       s        <- stats.get
+                       prior    <- previous.getAndSet(s)
+                       now      <- IO.monotonic
+                       wallTime <- IO.realTime
+                       json      = s.json(kind, now - start, config.profile)
+                                .deepMerge(
+                                  Json.obj(
+                                    "timestamp_epoch_ms" -> Json.fromLong(wallTime.toMillis),
+                                    "requested_rate" -> Json.fromInt(config.rate),
+                                    "max_concurrent" -> Json.fromInt(config.maxConcurrent),
+                                    "window" -> s.window(prior),
+                                  ),
+                                )
+                                .noSpaces
+                       _ <- IO.println(json)
+                     yield ()
           progress = Stream.awakeEvery[IO](config.reportInterval).evalMap(_ => report("progress"))
-          _       <-
+          request <-
+            if config.profile == "identity" then
+              IdentityTraffic.prepare(client, config.baseUrl, config.loginPercent)
+            else IO.pure((_: Long) => CatalogTraffic.request(client, config.baseUrl))
+          _ <-
             Stream
               .eval(
-                Traffic.run(config, CatalogTraffic.request(client, config.baseUrl), stats, metrics),
+                Traffic.run(config, request, stats, metrics),
               )
               .concurrently(progress)
               .compile

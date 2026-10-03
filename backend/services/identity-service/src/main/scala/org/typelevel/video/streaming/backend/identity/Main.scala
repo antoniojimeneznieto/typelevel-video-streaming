@@ -40,7 +40,7 @@ object Main extends IOApp.Simple:
             publicKey      <- RsaKeyLoader.publicKey(config.jwt.publicKeyPath)
             requestContext <- IOLocalRequestContext.create[UUID]
             repository      = new IdentityRepositoryImpl(sessions)
-            passwordHasher  = PasswordHasherImpl()
+            passwordHasher <- PasswordHasherImpl.create()
             tokenIssuer     = AccessTokenIssuerImpl(
                             privateKey,
                             config.jwt.accessTokenExpiresIn,

@@ -38,8 +38,9 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
       sessions  <- sessionPool
       session   <- sessions
       context   <- Resource.eval(IOLocalRequestContext.create[UUID])
+      hasher    <- Resource.eval(PasswordHasherImpl.create())
       repository = new IdentityRepositoryImpl(sessions)
-      service    = new IdentityServiceImpl(repository, PasswordHasherImpl(), tokenIssuer, context)
+      service    = new IdentityServiceImpl(repository, hasher, tokenIssuer, context)
     yield (service, repository, session, context)
 
   ///////////////////////////////////////////////////////////////////////////////

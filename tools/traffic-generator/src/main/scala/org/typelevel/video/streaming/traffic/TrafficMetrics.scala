@@ -20,7 +20,6 @@ trait TrafficMetrics:
   def cancelled: IO[Unit]
 
 object TrafficMetrics:
-  private val operation = Attribute("operation", "catalog-courses")
 
   val noop: TrafficMetrics = new TrafficMetrics:
     def arrivals(result: String, count: Long): IO[Unit]                     = IO.unit
@@ -28,7 +27,7 @@ object TrafficMetrics:
     def completed(result: RequestResult, elapsed: FiniteDuration): IO[Unit] = IO.unit
     def cancelled: IO[Unit]                                                 = IO.unit
 
-  def create(provider: MeterProvider[IO]): IO[TrafficMetrics] =
+  def create(provider: MeterProvider[IO], profile: String = "catalog-courses"): IO[TrafficMetrics] =
     for
       meter    <- provider.get("org.typelevel.video.streaming.traffic")
       arrivals <- meter
@@ -59,7 +58,7 @@ object TrafficMetrics:
                   .withUnit("{request}")
                   .withDescription("Generator requests currently in flight")
                   .create
-    yield Live(arrivals, requests, cancellations, duration, active)
+    yield Live(arrivals, requests, cancellations, duration, active, Attribute("operation", profile))
 
   private def statusClass(status: Option[Int]): String =
     status.fold("none")(code => if code >= 100 && code < 600 then s"${code / 100}xx" else "other")
@@ -70,6 +69,7 @@ object TrafficMetrics:
       cancellationsCounter: Counter[IO, Long],
       durationHistogram: Histogram[IO, Double],
       activeCounter: UpDownCounter[IO, Long],
+      operation: Attribute[String],
   ) extends TrafficMetrics:
     def arrivals(result: String, count: Long): IO[Unit] =
       if count == 0 then IO.unit
@@ -79,7 +79,7 @@ object TrafficMetrics:
 
     def completed(result: RequestResult, elapsed: FiniteDuration): IO[Unit] =
       val attributes = List(
-        operation,
+        Attribute("operation", result.operation),
         Attribute("outcome", result.outcome),
         Attribute("status_class", statusClass(result.status)),
       )
