@@ -51,8 +51,13 @@ object LabCliSuite extends SimpleIOSuite {
         List("incident", "start", "8f27"),
         List("scenario3", "baseline"),
         List("scenario4", "prepare"),
+        List("scenario5", "prepare"),
+        List("scenario5", "baseline"),
+        List("scenario5", "rebuild"),
+        List("incident", "start", "d5e0"),
         List("verify", "scenario1"),
         List("verify", "scenario3"),
+        List("verify", "scenario5"),
       )
       expect(commands.forall(LabCliParser.command.parse(_).isRight))
     }

@@ -51,6 +51,34 @@ object CatalogTrafficSuite extends SimpleIOSuite:
     yield expect.all(result == RequestResult(Some(503), "http_error"), count == 1)
   }
 
+  test("soak profile has a stable empty-search minority and independent path reads") {
+    val operations = (0L until 100L).map(CatalogTraffic.soakOperation)
+    IO.pure(expect.all(
+      operations.count(_ == "catalog-empty-search") == 2,
+      operations.count(_ == "catalog-learning-paths") == 10,
+      operations.count(_ == "catalog-courses") == 88,
+    ))
+  }
+
+  test("soak empty search uses a valid filter and returns a successful empty page") {
+    for
+      seen <- Ref.of[IO, Option[Request[IO]]](None)
+      client = Client[IO](req =>
+                 Resource.eval(
+                   seen.set(Some(req)).as(
+                     Response[IO](Status.Ok)
+                       .withEntity("""{"items":[],"total":0,"limit":10,"offset":0}"""),
+                   ),
+                 ),
+               )
+      result  <- CatalogTraffic.soakRequest(client, uri"http://gateway.test", 49L)
+      request <- seen.get
+    yield expect.all(
+      result == RequestResult(Some(200), "success", "catalog-empty-search"),
+      request.exists(_.uri.query.params.get("q").contains("no-course-matches-lab-2026")),
+    )
+  }
+
   test("a malformed successful response fails typed decoding") {
     val client = Client[IO](_ => Resource.pure(Response[IO](Status.Ok).withEntity("{}")))
     CatalogTraffic.request(client, uri"http://gateway.test").map { result =>

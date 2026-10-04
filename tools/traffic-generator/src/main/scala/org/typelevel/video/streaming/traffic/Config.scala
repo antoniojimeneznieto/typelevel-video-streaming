@@ -22,7 +22,10 @@ final case class Config(
   require(requestTimeout > Duration.Zero, "request-timeout must be positive")
   require(drainTimeout > Duration.Zero, "drain-timeout must be positive")
   require(reportInterval > Duration.Zero, "report-interval must be positive")
-  require(Set("catalog-courses", "identity", "playback").contains(profile), "unsupported profile")
+  require(
+    Set("catalog-courses", "catalog-soak", "identity", "playback").contains(profile),
+    "unsupported profile",
+  )
   require(loginPercent >= 0 && loginPercent <= 100, "login percent must be 0 to 100")
   require(Set(0, 20).contains(modernPercent), "modern percent must be 0 or 20")
   require(

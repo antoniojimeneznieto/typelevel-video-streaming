@@ -238,4 +238,30 @@ private[lab] object LabScenarios {
         IO.println("Scenario 4 traffic stopped")
     case _ => IO.raiseError(new IllegalArgumentException("Unknown Scenario 4 action"))
   }
+
+  def scenario5(root: Path, action: String): IO[Unit] = action match {
+    case "prepare" | "rebuild" =>
+      LabCommands.rebuild(root, "catalog-service", Map("CATALOG_POSTGRES_MAX_CONNECTIONS" -> "6"))
+    case "baseline" =>
+      LabCommands.trafficStart(
+        root,
+        Seq("--profile", "catalog-courses", "--rate", "5", "--request-timeout", "10s"),
+      )
+    case "activate" =>
+      LabCommands.stopTraffic(root) *>
+        LabCommands.trafficStart(
+          root,
+          Seq("--profile", "catalog-soak", "--rate", "5", "--request-timeout", "10s"),
+        ) *>
+        IO.println("Search workload rollout applied")
+    case "restore" =>
+      LabCommands.stopTraffic(root) *>
+        LabCommands.rebuild(
+          root,
+          "catalog-service",
+          Map("CATALOG_POSTGRES_MAX_CONNECTIONS" -> "10"),
+        ) *>
+        IO.println("Scenario 5 traffic stopped; Catalog pool restored")
+    case _ => IO.raiseError(new IllegalArgumentException("Unknown Scenario 5 action"))
+  }
 }

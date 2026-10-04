@@ -335,16 +335,16 @@ optional track that starts Kafka, Debezium, and the Playback projection worker.
 
 ## Implementation and acceptance
 
-Build the selected rounds before broadening the old scenario bank. The current
-FS2 generator sends Catalog reads only; it needs typed operation mixes, token
-handling, and deterministic actors. Gateway needs bounded retry behavior and
-per-attempt metrics/spans. Catalog needs the admission limit. The Identity and
-Playback exercise versions, Catalog's leaky exercise version and fixed patch,
-Playback workshop mode, seed data, participant change/rollback interface,
-dashboards, and facilitator controls remain to be implemented. Round 5 also
-requires measured session-acquisition wait, pool capacity, and waiter evidence.
-Existing `./scripts/lab.sh` traffic and proxy commands are foundations, not the
-complete participant experience.
+Build the selected rounds before broadening the old scenario bank. Rounds 1, 3,
+and 4 have runnable workflows. Round 5 now has a leaky exercise source, a
+deterministic Catalog operation mix, session acquisition and oldest-wait
+metrics, checked-out/waiting/capacity metrics, a dashboard, facilitator
+controls, and an automated fault rehearsal. Its fault and minimal repair passed one local
+full-stack rehearsal. It still needs calibration on the minimum supported
+workshop hosts, a distributable corrected image, and focused error/cancellation
+finalization tests for the participant repair. Round 2 still needs
+Gateway bounded retry behavior, per-attempt evidence, and Catalog admission
+limits. The additional exercises remain outside the live implementation scope.
 
 The additional exercises have their own prerequisites: confirm Gateway's
 connection-error response mapping for the short comparison, and expose

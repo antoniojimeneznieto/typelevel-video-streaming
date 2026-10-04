@@ -1,0 +1,64 @@
+{
+  "uid": "catalog-sessions",
+  "title": "Catalog Sessions",
+  "tags": ["workshop", "catalog", "postgresql"],
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    { "title": "Workshop Traffic", "url": "/d/workshop-traffic-generator/workshop-traffic", "targetBlank": false }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Catalog session pool occupancy",
+      "description": "The exercise pool has six slots. Compare the current Catalog instance after a rebuild; older instance series can remain in the telemetry history.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 9 },
+      "targets": [
+        { "refId": "A", "expr": "catalog_session_active{service_name=\"catalog-service\"}", "legendFormat": "{{service_instance_id}} checked out" },
+        { "refId": "B", "expr": "catalog_session_waiting{service_name=\"catalog-service\"}", "legendFormat": "{{service_instance_id}} waiting" },
+        { "refId": "C", "expr": "catalog_session_capacity{service_name=\"catalog-service\"}", "legendFormat": "{{service_instance_id}} capacity" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Session acquisition p95",
+      "description": "Completed session checkouts only. This series can disappear when the pool is fully exhausted; use oldest active wait below for requests still queued.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 9, "w": 12, "h": 9 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95,sum by (le) (rate(catalog_session_acquire_duration_seconds_bucket{service_name=\"catalog-service\"}[$__rate_interval])))", "legendFormat": "acquire p95" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Catalog route p95",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 9, "w": 12, "h": 9 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95,sum by (le,classifier) (rate(http_server_request_duration_seconds_bucket{service_name=\"catalog-service\",classifier=~\"/courses|/learning-paths\",http_phase=\"body\"}[$__rate_interval])))", "legendFormat": "{{classifier}}" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Oldest active session wait",
+      "description": "This live wait age rises while Catalog requests remain queued for a session, even before an acquisition completes or times out.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 18, "w": 24, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "catalog_session_wait_max_age_seconds{service_name=\"catalog-service\"}", "legendFormat": "{{service_instance_id}} oldest wait" }
+      ]
+    }
+  ]
+}

@@ -345,4 +345,100 @@ private[lab] object LabVerify {
       _ <- IO.println("Scenario 3 workload check passed")
     } yield ()
   }
+
+  private def catalogSample(root: Path, profile: String, duration: String): IO[Json] =
+    LabCommands
+      .trafficRunCaptured(
+        root,
+        Seq(
+          "--profile",
+          profile,
+          "--rate",
+          "5",
+          "--duration",
+          duration,
+          "--request-timeout",
+          "10s",
+        ),
+      )
+      .flatMap(summary)
+
+  private def operationMean(report: Json, operation: String): IO[Double] =
+    IO.fromEither(
+      report.hcursor.downField("operations").downField(operation).get[Double]("latency_mean_ms"),
+    )
+
+  def scenario5(root: Path, grafana: String): IO[Unit] = {
+    val client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()
+    val source = root.resolve(
+      "backend/services/catalog-service/src/main/scala/org/typelevel/video/streaming/backend/catalog/CatalogRepository.scala",
+    )
+    val check = for {
+      content <- LabIo.read(source)
+      _       <- requireThat(
+             content.contains("sessions.allocated"),
+             "The checked-out Catalog source is not the exercise version",
+           )
+      _        <- LabCommands.stopTraffic(root)
+      _        <- LabScenarios.scenario5(root, "prepare")
+      instance <- LabIo
+                    .run(
+                      root,
+                      Seq(
+                        "docker",
+                        "inspect",
+                        "--format",
+                        "{{.Config.Hostname}}",
+                        "typelevel-video-streaming-catalog-service-1",
+                      ),
+                      capture = true,
+                    )
+                    .map(_.trim)
+      active =
+        s"""catalog_session_active{service_name="catalog-service",service_instance_id="$instance"}"""
+      waitAge =
+        s"""catalog_session_wait_max_age_seconds{service_name="catalog-service",service_instance_id="$instance"}"""
+      baseline <- catalogSample(root, "catalog-courses", "25s")
+      _        <- requireThat(
+             baseline.hcursor.get[Boolean]("load_valid").contains(true) &&
+               baseline.hcursor.get[Long]("failed").contains(0L),
+             s"Scenario 5 baseline was unhealthy: ${baseline.noSpaces}",
+           )
+      baselineActive <- metric(client, grafana, active)
+      baselineWait   <- metric(client, grafana, waitAge)
+      _              <- requireThat(
+             baselineActive < 1 && baselineWait < 0.5,
+             "Catalog retained a baseline session or waiter",
+           )
+      fault       <- catalogSample(root, "catalog-soak", "95s")
+      _           <- IO.sleep(8.seconds)
+      faultActive <- metric(client, grafana, active)
+      faultWait   <- metric(client, grafana, waitAge)
+      pathsBefore <- operationMean(baseline, "catalog-courses")
+      pathsAfter  <- operationMean(fault, "catalog-learning-paths")
+      _           <- IO.println(
+             Json
+               .obj(
+                 "baseline" -> baseline,
+                 "fault" -> fault,
+                 "baseline_active" -> Json.fromDoubleOrNull(baselineActive),
+                 "fault_active" -> Json.fromDoubleOrNull(faultActive),
+                 "baseline_wait_age_seconds" -> Json.fromDoubleOrNull(baselineWait),
+                 "fault_wait_age_seconds" -> Json.fromDoubleOrNull(faultWait),
+               )
+               .noSpaces,
+           )
+      _ <- requireThat(
+             fault.hcursor.get[Boolean]("load_valid").contains(true) &&
+               fault.hcursor.get[Long]("failed").exists(_ > 0) &&
+               faultActive >= 5 &&
+               faultWait > baselineWait + 5 &&
+               pathsAfter > pathsBefore * 2 &&
+               pathsAfter > 1000,
+             "Scenario 5 did not show valid-load pool depletion and unrelated read slowdown",
+           )
+      _ <- IO.println("Scenario 5 pool-depletion check passed")
+    } yield ()
+    check.guarantee(LabScenarios.scenario5(root, "restore"))
+  }
 }

@@ -105,6 +105,25 @@ object TrafficSuite extends SimpleIOSuite:
     )
   }
 
+  test("timeouts retain the operation selected for each arrival") {
+    TestControl.executeEmbed(
+      for
+        stats <- Ref.of[IO, Stats](Stats())
+        _     <- Traffic.run(
+               Config(rate = 2, duration = Some(1.second), requestTimeout = 100.millis),
+               (_: Long) => IO.never[RequestResult],
+               stats,
+               TrafficMetrics.noop,
+               slot => if slot == 0 then "catalog-learning-paths" else "catalog-empty-search",
+             )
+        s <- stats.get
+      yield expect.all(
+        s.operations.get("catalog-learning-paths").exists(_.count == 1),
+        s.operations.get("catalog-empty-search").exists(_.count == 1),
+      ),
+    )
+  }
+
   test("a short drain deadline cancels outstanding requests and awaits their finalizers") {
     TestControl.executeEmbed(
       for

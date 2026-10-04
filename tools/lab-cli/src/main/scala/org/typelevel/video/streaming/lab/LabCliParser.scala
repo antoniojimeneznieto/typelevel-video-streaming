@@ -22,8 +22,10 @@ private[lab] enum LabAction {
   case Incident(code: String, milliseconds: Option[Int])
   case Scenario3(action: String)
   case Scenario4(action: String)
+  case Scenario5(action: String)
   case VerifyScenario1(grafana: String, rate: Int, window: Int)
   case VerifyScenario3
+  case VerifyScenario5(grafana: String)
 }
 
 final private[lab] case class TrafficOptions(
@@ -82,8 +84,8 @@ private[lab] object LabCliParser {
     Opts.option[String]("report-interval", help = "Progress report interval").orNone,
     Opts
       .option[String]("profile", help = "Traffic profile")
-      .validate("--profile must be catalog-courses, identity, or playback")(
-        Set("catalog-courses", "identity", "playback"),
+      .validate("--profile must be catalog-courses, catalog-soak, identity, or playback")(
+        Set("catalog-courses", "catalog-soak", "identity", "playback"),
       )
       .orNone,
     Opts
@@ -155,7 +157,9 @@ private[lab] object LabCliParser {
     (
       Opts
         .argument[String]("CODE")
-        .validate("CODE must be 8f27, 3c91, or 7b42")(Set("8f27", "3c91", "7b42")),
+        .validate("CODE must be 8f27, 3c91, 7b42, or d5e0")(
+          Set("8f27", "3c91", "7b42", "d5e0"),
+        ),
       Opts
         .option[Int]("milliseconds", help = "Catalog delay for incident 8f27 (1–9999)")
         .validate("--milliseconds must be between 1 and 9999")(n => n >= 1 && n <= 9999)
@@ -202,6 +206,24 @@ private[lab] object LabCliParser {
       })
   }
 
+  private val scenario5 = Command("scenario5", "Control the Catalog session exercise") {
+    Opts.subcommand(Command("prepare", "Rebuild Catalog with a small session pool") {
+      Opts(Scenario5("prepare"))
+    }) orElse
+      Opts.subcommand(Command("rebuild", "Rebuild Catalog after a source fix") {
+        Opts(Scenario5("rebuild"))
+      }) orElse
+      Opts.subcommand(Command("baseline", "Start healthy Catalog reads") {
+        Opts(Scenario5("baseline"))
+      }) orElse
+      Opts.subcommand(Command("activate", "Start the mixed Catalog workload") {
+        Opts(Scenario5("activate"))
+      }) orElse
+      Opts.subcommand(Command("restore", "Stop traffic and restore the normal pool size") {
+        Opts(Scenario5("restore"))
+      })
+  }
+
   private val verify = Command("verify", "Rehearse an exercise against the running stack") {
     Opts.subcommand(Command("scenario1", "Check fault, rollback, metrics, and traces") {
       (
@@ -218,6 +240,12 @@ private[lab] object LabCliParser {
     }) orElse
       Opts.subcommand(Command("scenario3", "Check light and heavy Identity mixes") {
         Opts(VerifyScenario3)
+      }) orElse
+      Opts.subcommand(Command("scenario5", "Check Catalog pool depletion") {
+        Opts
+          .option[String]("grafana", help = "Grafana URL")
+          .withDefault("http://localhost:3000")
+          .map(VerifyScenario5.apply)
       })
   }
 
@@ -243,6 +271,7 @@ private[lab] object LabCliParser {
         Opts.subcommand(incident) orElse
         Opts.subcommand(scenario3) orElse
         Opts.subcommand(scenario4) orElse
+        Opts.subcommand(scenario5) orElse
         Opts.subcommand(verify) orElse
         Opts.help.map(_ => Changes),
     ).mapN((root, action) => LabConfig(Paths.get(root).toAbsolutePath.normalize(), action))

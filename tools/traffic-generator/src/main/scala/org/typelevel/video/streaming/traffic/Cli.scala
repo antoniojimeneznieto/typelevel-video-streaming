@@ -73,10 +73,10 @@ object Cli:
       positiveDuration("drain-timeout", "Grace period after arrivals stop", defaults.drainTimeout),
       positiveDuration("report-interval", "JSON progress interval", defaults.reportInterval),
       Opts
-        .option[String]("profile", help = "catalog-courses, identity, or playback")
+        .option[String]("profile", help = "catalog-courses, catalog-soak, identity, or playback")
         .validate(
-          "--profile must be catalog-courses, identity, or playback",
-        )(Set("catalog-courses", "identity", "playback").contains)
+          "--profile must be catalog-courses, catalog-soak, identity, or playback",
+        )(Set("catalog-courses", "catalog-soak", "identity", "playback").contains)
         .withDefault(defaults.profile),
       Opts
         .option[Int]("login-percent", help = "Identity login share (default: 10)")

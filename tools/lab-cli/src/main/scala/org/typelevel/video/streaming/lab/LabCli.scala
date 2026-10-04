@@ -41,11 +41,14 @@ object LabCli
             LabScenarios.activatePlatform(root, milliseconds.getOrElse(750))
           case LabAction.Incident("3c91", _) => LabScenarios.scenario3(root, "activate")
           case LabAction.Incident("7b42", _) => LabScenarios.scenario4(root, "activate")
+          case LabAction.Incident("d5e0", _) => LabScenarios.scenario5(root, "activate")
           case LabAction.Scenario3(action) => LabScenarios.scenario3(root, action)
           case LabAction.Scenario4(action) => LabScenarios.scenario4(root, action)
+          case LabAction.Scenario5(action) => LabScenarios.scenario5(root, action)
           case LabAction.VerifyScenario1(grafana, rate, window) =>
             LabVerify.scenario1(root, grafana, rate, window)
           case LabAction.VerifyScenario3 => LabVerify.scenario3(root)
+          case LabAction.VerifyScenario5(grafana) => LabVerify.scenario5(root, grafana)
           case _ => IO.raiseError(new IllegalArgumentException("Unknown incident code"))
         })
     }

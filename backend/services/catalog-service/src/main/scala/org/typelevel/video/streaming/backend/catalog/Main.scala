@@ -22,17 +22,21 @@ object Main extends IOApp.Simple:
 
       AppConfig.load[IO].flatMap { config =>
         Postgres.sessionPool[IO](config.postgres).use { sessions =>
-          val repository = new CatalogRepositoryImpl(sessions)
-          val service    = new CatalogServiceImpl(repository)
+          CatalogSessionMetrics
+            .instrument(sessions, otel.meterProvider, config.postgres.maxConnections)
+            .flatMap { measuredSessions =>
+              val repository = new CatalogRepositoryImpl(measuredSessions)
+              val service    = new CatalogServiceImpl(repository)
 
-          SimpleRestJsonBuilder
-            .routes(service)
-            .resource
-            .use { catalogRoutes =>
-              val app: HttpApp[IO] = catalogRoutes.orNotFound
-              val routeClassifier  = SmithyRouteClassifier(CatalogService)
+              SimpleRestJsonBuilder
+                .routes(service)
+                .resource
+                .use { catalogRoutes =>
+                  val app: HttpApp[IO] = catalogRoutes.orNotFound
+                  val routeClassifier  = SmithyRouteClassifier(CatalogService)
 
-              HttpServer.run(config.server, app, routeClassifier)
+                  HttpServer.run(config.server, app, routeClassifier)
+                }
             }
         }
       }

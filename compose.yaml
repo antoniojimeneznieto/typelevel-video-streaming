@@ -185,7 +185,7 @@ services:
       POSTGRES_USER: catalog
       POSTGRES_DB: catalog
       POSTGRES_PASSWORD: ${CATALOG_POSTGRES_PASSWORD:-catalog-local-secret}
-      POSTGRES_MAX_CONNECTIONS: "10"
+      POSTGRES_MAX_CONNECTIONS: ${CATALOG_POSTGRES_MAX_CONNECTIONS:-10}
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8082"]
       start_period: 5s

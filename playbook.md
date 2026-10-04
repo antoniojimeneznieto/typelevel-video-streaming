@@ -12,7 +12,8 @@ Scenario 1 is rehearsed on the full stack. Scenario 3 has a prebuilt exercise
 source, Identity traffic, and a workload check; its timing remains sensitive to
 host capacity. Scenario 4 has a rehearsed mixed-actor workload and seeded
 Playback projections; recheck it on the workshop host before presenting it.
-The other live rounds in
+Scenario 5 has an exercise source, deterministic mixed workload, pool telemetry,
+and one full-stack rehearsal; calibrate it on the minimum supported hosts. The other live rounds in
 [lab-scenarios.md](lab-scenarios.md) are designs, not runnable playbook steps yet.
 Do not advertise the complete two-hour sequence until those rounds and their
 reset paths have been rehearsed. Scenario 1 has not yet been calibrated on the
@@ -392,6 +393,126 @@ Restore the original Playback verifier wiring before running
 `./scripts/lab.sh scenario4 restore`. It stops traffic and rebuilds Playback
 in normal projection mode. Leave the seeded accounts and projection rows in
 place; preparation is idempotent.
+
+## Round 5: Catalog PostgreSQL session depletion
+
+### Participant brief — share this paragraph only
+
+> Catalog starts healthy, then gradually slows until unrelated reads also wait
+> for database access. A restart gives only temporary relief. Find the request
+> pattern that consumes capacity and prove a durable repair.
+
+### Facilitator preparation
+
+The exercise Catalog source in this checkout manually allocates a Skunk session
+for `ListCourses`. A valid empty search returns `200` but fails to return the
+session. Nonempty searches, errors, and cancellation return their sessions.
+The `catalog-soak` generator profile sends 5 requests per second: 88% normal
+course reads, 10% LearningPath reads, and 2% empty course searches, in a fixed
+50-slot pattern. The empty search query matches none of the seeded courses.
+Keep this mechanism private until the walkthrough.
+
+Before attendees join, run `./scripts/lab.sh traffic build` and
+`./scripts/lab.sh verify scenario5`. The rehearsal rebuilds Catalog with six
+sessions, samples healthy and mixed workloads for about two minutes, checks
+pool depletion in Grafana and unrelated read slowdown, then restores the
+normal pool size. It needs a running stack and Grafana at `localhost:3000`;
+pass `--grafana URL` for a forwarded endpoint. A failed rehearsal needs
+investigation before presenting the round.
+
+Build the current exercise image and start a healthy window:
+
+```bash
+./scripts/lab.sh scenario5 prepare
+./scripts/lab.sh scenario5 baseline
+./scripts/lab.sh traffic status
+```
+
+`prepare` sets Catalog's pool to six sessions. Allow 30–40 seconds of baseline
+traffic and confirm a recent `window.load_valid=true`, successful requests,
+near-zero acquisition time, and pool occupancy that returns to zero. Open the
+**Catalog Sessions** dashboard from Workshop Overview. Record the baseline and
+the activation time; keep the same 5 requests per second through the round.
+The dashboard legend includes the Catalog instance ID. After a rebuild, use
+the new instance's series for recovery; old series remain in telemetry history.
+
+Activate the mixed search workload with the neutral command:
+
+```bash
+./scripts/lab.sh incident start d5e0
+```
+
+The generator switches profiles with a short gap. An empty search appears every
+ten seconds at this rate, so the six-session pool should drain progressively
+over about a minute. Watch at least two complete 50-slot cycles before
+concluding anything. The generator has a ten-second request deadline; after
+depletion, requests time out while the offered rate remains five per second.
+Check `window.load_valid` and dropped arrivals before interpreting the
+latency. This timing is a starting point and must be calibrated on the actual
+workshop host.
+
+### Investigation prompts
+
+1. Which operation first precedes each step in checked-out session count?
+   Does it return an HTTP error or a normal empty page?
+2. When later course and LearningPath reads slow, is time spent acquiring a
+   session or executing SQL after one is acquired?
+3. Compare `catalog.session.active`, `catalog.session.waiting`, and
+   `catalog.session.wait.max_age` on the dashboard with fresh traces and Skunk
+   SQL spans. The acquisition-duration histogram includes completed waits but
+   cannot time requests still queued indefinitely. A span without SQL may be
+   waiting for a session.
+4. Inspect `CatalogRepositoryImpl.listCourses`. What happens to the release
+   action on every successful, empty, failed, and cancelled path?
+
+The generator's `operations` JSON object separates normal course reads,
+LearningPath reads, and empty searches. The dashboard's bounded route labels
+show that the effect spreads beyond the triggering operation. A Catalog
+restart temporarily empties the pool, but the same mixed workload drains it
+again; do not accept a restart or larger pool as remediation.
+
+### Participant remediation and proof
+
+Replace manual `sessions.allocated` handling in `listCourses` with
+`sessions.use`, keeping the existing select/count queries and page result.
+Add a focused repository test covering nonempty and empty results, query
+failure, and cancellation with a small instrumented session resource: each
+acquisition must have one release. Review the diff, then rebuild with the same
+six-session pool while mixed traffic continues:
+
+The facilitator's reviewed minimal correction is in
+`infrastructure/lab/solutions/scenario5.patch`. Keep it out of the attendee
+brief; it also switches the existing Catalog service tests back to a pooled
+session fixture so Skunk's leak detector checks empty-result finalization.
+
+```bash
+./scripts/lab.sh scenario5 rebuild
+./scripts/lab.sh traffic status
+```
+
+The rebuild briefly interrupts requests. Start judging only after a fresh
+post-rebuild window. Run the identical mixed workload for at least two minutes:
+pool occupancy must return after requests, acquisition wait must stay bounded,
+and both normal course and LearningPath reads must remain responsive. Require
+recent valid generator windows without new dropped arrivals. Keep a fault trace
+and a recovery trace for the group walkthrough.
+
+On one local full-stack rehearsal, the exercise version filled all six sessions
+and timed out 175 of 475 requests over a 95-second mixed run, with valid offered
+load. The minimal repair completed 600 of 600 requests over a 120-second run,
+including 12 empty searches and 60 LearningPath reads, with zero failures and
+zero sessions checked out afterward. These are calibration examples, not
+portable thresholds.
+
+### Reset for the next group
+
+```bash
+./scripts/lab.sh scenario5 restore
+```
+
+This stops traffic and restores Catalog's normal ten-session setting. Restore
+the exercise source checkout or redeploy its prebuilt image before the next
+group. Leave Grafana history in place.
 
 ## If something goes wrong
 

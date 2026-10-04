@@ -85,11 +85,21 @@ object TrafficGeneratorMain extends IOApp:
               PlaybackTraffic.prepare(client, config.baseUrl, config.modernPercent)
             else if config.profile == "identity" then
               IdentityTraffic.prepare(client, config.baseUrl, config.loginPercent)
+            else if config.profile == "catalog-soak" then
+              IO.pure((slot: Long) => CatalogTraffic.soakRequest(client, config.baseUrl, slot))
             else IO.pure((_: Long) => CatalogTraffic.request(client, config.baseUrl))
+          operationForSlot = (slot: Long) =>
+                               config.profile match
+                                 case "catalog-soak" => CatalogTraffic.soakOperation(slot)
+                                 case "identity" =>
+                                   if slot % 100 < config.loginPercent then "identity-login"
+                                   else "identity-current-user"
+                                 case "playback" => "playback-favorites"
+                                 case _ => "catalog-courses"
           _ <-
             Stream
               .eval(
-                Traffic.run(config, request, stats, metrics),
+                Traffic.run(config, request, stats, metrics, operationForSlot),
               )
               .concurrently(progress)
               .compile

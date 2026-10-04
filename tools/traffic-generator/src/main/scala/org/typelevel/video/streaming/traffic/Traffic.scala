@@ -41,6 +41,14 @@ object Traffic:
       request: Long => IO[RequestResult],
       stats: Ref[IO, Stats],
       metrics: TrafficMetrics,
+  ): IO[Unit] = run(config, request, stats, metrics, _ => "catalog-courses")
+
+  def run(
+      config: Config,
+      request: Long => IO[RequestResult],
+      stats: Ref[IO, Stats],
+      metrics: TrafficMetrics,
+      operationForSlot: Long => String,
   ): IO[Unit] =
     Semaphore[IO](config.maxConcurrent.toLong).flatMap { permits =>
       Supervisor[IO].use { supervisor =>
@@ -49,8 +57,11 @@ object Traffic:
             IO.monotonic.flatMap { start =>
               poll(
                 request(slot)
-                  .timeoutTo(config.requestTimeout, IO.pure(RequestResult(None, "timeout")))
-                  .handleError(_ => RequestResult(None, "request_error")),
+                  .timeoutTo(
+                    config.requestTimeout,
+                    IO.pure(RequestResult(None, "timeout", operationForSlot(slot))),
+                  )
+                  .handleError(_ => RequestResult(None, "request_error", operationForSlot(slot))),
               )
                 .onCancel(
                   stats.update(s => s.copy(cancelled = s.cancelled + 1)) *> metrics.cancelled,
