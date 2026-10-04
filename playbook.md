@@ -90,7 +90,7 @@ Before admitting participants, run the automated rehearsal on the same image
 set they will use:
 
 ```bash
-./scripts/check-scenario1.py
+./scripts/lab.sh verify scenario1
 ```
 
 It takes roughly two minutes at its default observation windows, starts and
@@ -100,6 +100,8 @@ fresh recovery trace. A failure means the round needs investigation before it
 is presented. The script prints the metric values and trace IDs it observed.
 The independent generator summary is available with
 `docker logs typelevel-video-streaming-lab-traffic` after the run.
+Use `--grafana URL`, `--rate N`, and `--window SECONDS` when the local defaults
+do not match the rehearsal environment; the window must be at least 35 seconds.
 
 ## Round 1: slow Catalog-facing requests
 
@@ -299,7 +301,7 @@ mean latency moved from 9.6 ms in the light mix to 61.5 ms in the heavy mix;
 both samples used valid load. These are local calibration examples, not
 universal thresholds.
 
-The facilitator can run `./scripts/check-scenario3.py` before the session. It
+The facilitator can run `./scripts/lab.sh verify scenario3` before the session. It
 runs light and heavy samples against the prebuilt exercise image and checks that
 the lightweight operation slows under valid load. It does not edit source.
 

@@ -43,6 +43,9 @@ object LabCli
           case LabAction.Incident("7b42", _) => LabScenarios.scenario4(root, "activate")
           case LabAction.Scenario3(action) => LabScenarios.scenario3(root, action)
           case LabAction.Scenario4(action) => LabScenarios.scenario4(root, action)
+          case LabAction.VerifyScenario1(grafana, rate, window) =>
+            LabVerify.scenario1(root, grafana, rate, window)
+          case LabAction.VerifyScenario3 => LabVerify.scenario3(root)
           case _ => IO.raiseError(new IllegalArgumentException("Unknown incident code"))
         })
     }

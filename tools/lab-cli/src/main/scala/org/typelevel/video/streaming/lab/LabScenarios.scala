@@ -19,9 +19,9 @@ import java.util.UUID
 private[lab] object LabScenarios {
   private val idTime = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss").withZone(ZoneOffset.UTC)
 
-  private def ledger(
+  private def ledger[A](
       root: Path,
-  )(use: (Vector[Json], Vector[Json] => IO[Unit]) => IO[Unit]): IO[Unit] = {
+  )(use: (Vector[Json], Vector[Json] => IO[Unit]) => IO[A]): IO[A] = {
     val dir = root.resolve(".lab")
     LabIo.createDirectories(dir) *>
       Files[IO]
@@ -41,8 +41,8 @@ private[lab] object LabScenarios {
               else IO.pure(Vector.empty[Json])
             save = (updated: Vector[Json]) =>
                      LabIo.writeAtomic(state, Json.fromValues(updated).spaces2 + "\n")
-            _ <- use(changes, save)
-          } yield ()
+            result <- use(changes, save)
+          } yield result
         }
   }
 
@@ -79,27 +79,31 @@ private[lab] object LabScenarios {
       }
   }
 
-  def activatePlatform(root: Path, milliseconds: Int): IO[Unit] = ledger(root) { (changes, save) =>
-    IO.raiseWhen(changes.exists(change => field(change, "status") == "active"))(
-      new IllegalArgumentException("traffic policy is already active; roll it back first"),
-    ) *>
-      LabCommands.proxy(root, "latency", Some(milliseconds)) *>
-      IO.defer {
-        val id = s"traffic-policy-${idTime.format(Instant.now())}-" +
-          UUID.randomUUID().toString.take(6)
-        val change = Json.fromJsonObject(
-          JsonObject(
-            "id" -> Json.fromString(id),
-            "title" -> Json.fromString("East-west traffic policy rollout"),
-            "applied_at" -> Json.fromString(Instant.now().toString),
-            "status" -> Json.fromString("active"),
-            "configuration" -> Json.obj("catalog_egress_delay_ms" -> Json.fromInt(milliseconds)),
-            "previous_configuration" -> Json.obj("catalog_egress_delay_ms" -> Json.fromInt(0)),
-          ),
-        )
-        save(changes :+ change) *> IO.println(s"Applied $id")
-      }
-  }
+  private[lab] def activatePlatformChange(root: Path, milliseconds: Int): IO[String] =
+    ledger(root) { (changes, save) =>
+      IO.raiseWhen(changes.exists(change => field(change, "status") == "active"))(
+        new IllegalArgumentException("traffic policy is already active; roll it back first"),
+      ) *>
+        LabCommands.proxy(root, "latency", Some(milliseconds)) *>
+        IO.defer {
+          val id = s"traffic-policy-${idTime.format(Instant.now())}-" +
+            UUID.randomUUID().toString.take(6)
+          val change = Json.fromJsonObject(
+            JsonObject(
+              "id" -> Json.fromString(id),
+              "title" -> Json.fromString("East-west traffic policy rollout"),
+              "applied_at" -> Json.fromString(Instant.now().toString),
+              "status" -> Json.fromString("active"),
+              "configuration" -> Json.obj("catalog_egress_delay_ms" -> Json.fromInt(milliseconds)),
+              "previous_configuration" -> Json.obj("catalog_egress_delay_ms" -> Json.fromInt(0)),
+            ),
+          )
+          save(changes :+ change).as(id)
+        }
+    }
+
+  def activatePlatform(root: Path, milliseconds: Int): IO[Unit] =
+    activatePlatformChange(root, milliseconds).flatMap(id => IO.println(s"Applied $id"))
 
   private[lab] def playbackEventId(id: UUID): UUID = {
     // Preserve the Python uuid5(NAMESPACE_URL, name) seed IDs.

@@ -2,6 +2,8 @@ package org.typelevel.video.streaming.lab
 
 import cats.effect.IO
 import fs2.io.file.Files
+import io.circe.Json
+import io.circe.parser.parse
 import weaver.SimpleIOSuite
 
 import java.util.UUID
@@ -49,6 +51,8 @@ object LabCliSuite extends SimpleIOSuite {
         List("incident", "start", "8f27"),
         List("scenario3", "baseline"),
         List("scenario4", "prepare"),
+        List("verify", "scenario1"),
+        List("verify", "scenario3"),
       )
       expect(commands.forall(LabCliParser.command.parse(_).isRight))
     }
@@ -104,5 +108,51 @@ object LabCliSuite extends SimpleIOSuite {
       LabScenarios.playbackEventId(UUID.fromString("00000000-0000-0000-0000-000000000001")) ==
         UUID.fromString("8ef5d215-a090-5746-a73e-801b1cada4d5")
     ))
+  }
+
+  test("rehearsal options validate windows and rates") {
+    IO.pure {
+      val valid = LabCliParser.command.parse(List("verify", "scenario1", "--grafana",
+        "http://localhost:3100", "--rate", "7", "--window", "45"))
+      val invalidWindow = LabCliParser.command.parse(List("verify", "scenario1", "--window", "20"))
+      val invalidRate = LabCliParser.command.parse(List("verify", "scenario1", "--rate", "0"))
+      expect(valid.exists(_.action == LabAction.VerifyScenario1("http://localhost:3100", 7, 45)) &&
+        invalidWindow.isLeft && invalidRate.isLeft)
+    }
+  }
+
+  test("Scenario 1 rehearsal rejects invalid generator load and diverging rates") {
+    val values = Map(
+      "offered" -> 5.0, "sent" -> 5.0, "gateway_rate" -> 5.0,
+      "client_rate" -> 5.0, "catalog_rate" -> 5.0,
+    )
+    val valid = Json.obj("load_valid" -> Json.True, "failed" -> Json.fromInt(0))
+    val invalid = Json.obj("load_valid" -> Json.False, "failed" -> Json.fromInt(0))
+    for {
+      good <- LabVerify.checkWindow("baseline", 5, values, valid).attempt
+      badLoad <- LabVerify.checkWindow("baseline", 5, values, invalid).attempt
+      badRate <- LabVerify.checkWindow("baseline", 5, values.updated("client_rate", 2.0), valid).attempt
+    } yield expect(good.isRight && badLoad.isLeft && badRate.isLeft)
+  }
+
+  test("Scenario 1 trace check requires a slow Gateway boundary and a Catalog child") {
+    IO.pure {
+      val trace = parse("""{
+        "batches": [
+          {"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"gateway-service"}}]},
+           "scopeSpans":[{"spans":[{"name":"GET /courses","spanId":"client",
+             "startTimeUnixNano":"1000000000","endTimeUnixNano":"1750000000"}]}]},
+          {"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"catalog-service"}}]},
+           "scopeSpans":[{"spans":[{"name":"GET /courses","spanId":"server",
+             "parentSpanId":"client","startTimeUnixNano":"1700000000",
+             "endTimeUnixNano":"1730000000"}]}]}
+        ]
+      }""").toOption.get
+      val slow = LabVerify.matchingBoundaryTrace("trace-1", trace, slow = true)
+      val fast = LabVerify.matchingBoundaryTrace("trace-1", trace, slow = false)
+      expect(slow.exists { case (id, clientMs, serverMs) =>
+        id == "trace-1" && clientMs == 750.0 && serverMs == 30.0
+      } && fast.isEmpty)
+    }
   }
 }

@@ -19,6 +19,7 @@ private[lab] object LabIo {
       args: Seq[String],
       environment: Map[String, String] = Map.empty,
       capture: Boolean                 = false,
+      allowFailure: Boolean            = false,
   ): IO[String] = {
     val processBuilder = builder(root, args, environment)
     val configured     = if capture then
@@ -30,7 +31,7 @@ private[lab] object LabIo {
           if capture then process.stdout.through(text.utf8.decode).compile.string
           else IO.pure("")
         code <- process.exitValue
-        _    <- IO.raiseWhen(code != 0)(
+        _    <- IO.raiseWhen(code != 0 && !allowFailure)(
                new IllegalStateException(
                  s"${args.head} exited with $code${if capture then s": ${output.trim}" else ""}",
                ),

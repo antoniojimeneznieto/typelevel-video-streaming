@@ -22,6 +22,8 @@ private[lab] enum LabAction {
   case Incident(code: String, milliseconds: Option[Int])
   case Scenario3(action: String)
   case Scenario4(action: String)
+  case VerifyScenario1(grafana: String, rate: Int, window: Int)
+  case VerifyScenario3
 }
 
 final private[lab] case class TrafficOptions(
@@ -200,6 +202,25 @@ private[lab] object LabCliParser {
       })
   }
 
+  private val verify = Command("verify", "Rehearse an exercise against the running stack") {
+    Opts.subcommand(Command("scenario1", "Check fault, rollback, metrics, and traces") {
+      (
+        Opts.option[String]("grafana", help = "Grafana URL").withDefault("http://localhost:3000"),
+        Opts
+          .option[Int]("rate", help = "Catalog requests per second")
+          .validate("--rate must be positive")(_ > 0)
+          .withDefault(5),
+        Opts
+          .option[Int]("window", help = "Observation window in seconds")
+          .validate("--window must be at least 35 seconds")(_ >= 35)
+          .withDefault(40),
+      ).mapN(VerifyScenario1.apply)
+    }) orElse
+      Opts.subcommand(Command("scenario3", "Check light and heavy Identity mixes") {
+        Opts(VerifyScenario3)
+      })
+  }
+
   val opts: Opts[LabConfig] =
     (
       Opts
@@ -222,6 +243,7 @@ private[lab] object LabCliParser {
         Opts.subcommand(incident) orElse
         Opts.subcommand(scenario3) orElse
         Opts.subcommand(scenario4) orElse
+        Opts.subcommand(verify) orElse
         Opts.help.map(_ => Changes),
     ).mapN((root, action) => LabConfig(Paths.get(root).toAbsolutePath.normalize(), action))
 

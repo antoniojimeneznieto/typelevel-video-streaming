@@ -83,6 +83,8 @@ The change list and inspection command give participants a reviewable route to
 remediation. Run traffic separately with `./scripts/lab.sh traffic start --rate 5`
 and stop it with `./scripts/lab.sh traffic stop`. Facilitator setup and reset
 controls are documented in [Scenario 1](docs/observability/scenario-1.md).
+Facilitators can rehearse the first and third exercises with
+`./scripts/lab.sh verify scenario1` and `./scripts/lab.sh verify scenario3`.
 
 The scenario controller is a packaged JVM command. Build its ZIP with
 `sbt --batch 'labCli/Universal/packageBin'`; CI uploads the same ZIP as the

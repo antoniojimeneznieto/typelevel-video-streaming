@@ -93,25 +93,33 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
     LabIo.run(root, Seq("bash", "scripts/build-images.sh", "traffic-generator"), env).void
   }
 
-  def trafficRun(root: Path, options: Seq[String]): IO[Unit] = withImages(root, true) { env =>
-    LabIo
-      .run(
-        root,
-        Seq(
-          "docker",
-          "compose",
-          "run",
-          "--rm",
-          "--no-deps",
-          "-T",
-          "traffic-generator",
-          "--base-url",
-          gateway,
-        ) ++ options,
-        env,
-      )
-      .void
-  }
+  private def runTraffic(root: Path, options: Seq[String], capture: Boolean): IO[String] =
+    imageEnvironment(root, true).flatMap { env =>
+      LabIo
+        .run(
+          root,
+          Seq(
+            "docker",
+            "compose",
+            "run",
+            "--rm",
+            "--no-deps",
+            "-T",
+            "traffic-generator",
+            "--base-url",
+            gateway,
+          ) ++ options,
+          env,
+          capture      = capture,
+          allowFailure = capture,
+        )
+    }
+
+  def trafficRun(root: Path, options: Seq[String]): IO[Unit] =
+    runTraffic(root, options, capture = false).void
+
+  def trafficRunCaptured(root: Path, options: Seq[String]): IO[String] =
+    runTraffic(root, options, capture = true)
 
   def trafficStart(root: Path, options: Seq[String]): IO[Unit] = withImages(root, true) { env =>
     LabIo
