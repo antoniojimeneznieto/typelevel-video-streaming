@@ -75,6 +75,10 @@ The startup log path is printed by the script. Do not start a group exercise
 until startup and readiness checks complete.
 Traffic commands use the running Gateway container's image prefix and tag by
 default, so a locally built stack uses its local generator image in a new shell.
+All lab commands use the Scala lab CLI. `./scripts/lab.sh` stages it with sbt on
+first use. CI also provides a `lab-cli-jvm` ZIP artifact;
+its `bin/lab-cli --root /path/to/checkout` launcher can run from outside the
+checkout, with Java 17+ installed.
 
 Open the application at `http://localhost:8000` and Grafana at
 `http://localhost:3000` (`admin` / `admin` in the local stack). In Codespaces,
@@ -157,9 +161,9 @@ per-request gap.
 Participants inspect and remediate through:
 
 ```bash
-./bin/platform changes
-./bin/platform inspect CHANGE_ID
-./bin/platform rollback CHANGE_ID
+./scripts/lab.sh platform changes
+./scripts/lab.sh platform inspect CHANGE_ID
+./scripts/lab.sh platform rollback CHANGE_ID
 ```
 
 `CHANGE_ID` is the value printed at activation or listed by `changes`.
@@ -207,7 +211,7 @@ After recovery has been demonstrated:
 
 `proxy status` must show `enabled: true` and an empty `toxics` list. If a
 participant did not complete rollback, use their change ID with
-`./bin/platform rollback CHANGE_ID` first. `./scripts/lab.sh proxy reset` is a
+`./scripts/lab.sh platform rollback CHANGE_ID` first. `./scripts/lab.sh proxy reset` is a
 facilitator escape hatch; follow it with the participant rollback command so
 the local change ledger also records the repair. Let a new healthy telemetry
 window accumulate before repeating the round. Do not clear Grafana history to
@@ -395,9 +399,9 @@ place; preparation is idempotent.
 | No traffic series | Check `./scripts/lab.sh traffic status` and `docker logs typelevel-video-streaming-lab-traffic`; confirm the generator is running and `load_valid=true`. |
 | Traffic drops or failures | Stop the round, inspect the generator JSON report and service health, and reduce the offered rate only for a new baseline/fault/recovery run. Do not change it mid-round. |
 | Metrics are absent but requests complete | Check Grafana freshness and the generator JSON independently. Missing telemetry is unknown, not zero requests. |
-| Fault command says a policy is already active | Inspect `./bin/platform changes`; roll back the active change before retrying activation. |
+| Fault command says a policy is already active | Inspect `./scripts/lab.sh platform changes`; roll back the active change before retrying activation. |
 | Rollback succeeded but old slow traces remain | Select traces whose start times are after rollback and compare a fresh metrics window. |
-| Proxy state and change ledger disagree | Use `./bin/platform rollback CHANGE_ID` to reconcile both. Reserve direct `proxy reset` for facilitator recovery. |
+| Proxy state and change ledger disagree | Use `./scripts/lab.sh platform rollback CHANGE_ID` to reconcile both. Reserve direct `proxy reset` for facilitator recovery. |
 
 Use `./scripts/lab.sh stop` only after the session or when intentionally
 clearing the full ephemeral stack. It stops the application and its data

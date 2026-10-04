@@ -74,12 +74,20 @@ provided by the facilitator:
 
 ```bash
 ./scripts/lab.sh incident start CODE
-./bin/platform changes
-./bin/platform inspect CHANGE_ID
-./bin/platform rollback CHANGE_ID
+./scripts/lab.sh platform changes
+./scripts/lab.sh platform inspect CHANGE_ID
+./scripts/lab.sh platform rollback CHANGE_ID
 ```
 
 The change list and inspection command give participants a reviewable route to
 remediation. Run traffic separately with `./scripts/lab.sh traffic start --rate 5`
 and stop it with `./scripts/lab.sh traffic stop`. Facilitator setup and reset
 controls are documented in [Scenario 1](docs/observability/scenario-1.md).
+
+The scenario controller is a packaged JVM command. Build its ZIP with
+`sbt --batch 'labCli/Universal/packageBin'`; CI uploads the same ZIP as the
+`lab-cli-jvm` artifact. After unpacking, run
+`bin/lab-cli --root /path/to/typelevel-video-streaming platform changes`.
+The command needs Java 17+ and a checkout containing the lab scripts and Compose
+configuration. In a checkout, `./scripts/lab.sh` stages the Scala CLI on first use
+and runs all lab commands.

@@ -12,7 +12,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LAB = ROOT / "scripts/lab.sh"
-PLATFORM = ROOT / "bin/platform"
 CONTAINER = "typelevel-video-streaming-lab-traffic"
 
 METRICS = {
@@ -125,7 +124,7 @@ def main():
         assert fault["gateway_p95"] > baseline["gateway_p95"] + 0.4
         assert fault["catalog_p95"] < 0.15
         boundary_trace(args.grafana, fault_start, slow=True)
-        command(str(PLATFORM), "rollback", change_id)
+        command(str(LAB), "platform", "rollback", change_id)
         recovery_start = int(time.time())
         recovery = observe("recovery", args.grafana, args.rate, args.window)
         assert recovery["client_p95"] < 0.2 and recovery["gateway_p95"] < 0.2

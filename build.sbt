@@ -73,7 +73,7 @@ def serviceSettings(serviceName: String, mainClassName: String, exposedPort: Int
 
 lazy val root = project
   .in(file("."))
-  .aggregate(backend, frontend, apiContractsJS, trafficGenerator)
+  .aggregate(backend, frontend, apiContractsJS, trafficGenerator, labCli)
   .settings(noPublishSettings)
   .settings(
     name := "typelevel-video-streaming",
@@ -224,6 +224,23 @@ lazy val trafficGenerator = project
       "io.opentelemetry" % "opentelemetry-exporter-otlp" % OpenTelemetryVersion % Runtime,
       "org.slf4j" % "slf4j-nop" % "2.0.17",
       "org.typelevel" %% "cats-effect-testkit" % CatsEffectVersion % Test,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
+  )
+
+lazy val labCli = project
+  .in(file("tools/lab-cli"))
+  .enablePlugins(JavaAppPackaging)
+  .settings(noPublishSettings)
+  .settings(
+    name := "lab-cli",
+    Compile / mainClass := Some("org.typelevel.video.streaming.lab.LabCli"),
+    libraryDependencies ++= Seq(
+      "com.monovore" %% "decline-effect" % "2.6.1",
+      "co.fs2" %% "fs2-io" % Fs2Version,
+      "io.circe" %% "circe-core" % "0.14.16",
+      "io.circe" %% "circe-parser" % "0.14.16",
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
     testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
