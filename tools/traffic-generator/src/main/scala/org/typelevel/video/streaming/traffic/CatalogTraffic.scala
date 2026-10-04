@@ -15,15 +15,20 @@ object CatalogTraffic:
     requestOperation(client, gateway, "catalog-courses", None)
 
   private[traffic] def soakOperation(slot: Long): String =
-    if slot % 50 == 49 then "catalog-empty-search"
-    else if slot % 10 == 0 then "catalog-learning-paths"
+    if slot % 10 == 0 then "catalog-learning-paths"
     else "catalog-courses"
 
   def soakRequest(client: Client[IO], gateway: Uri, slot: Long): IO[RequestResult] =
     val operation = soakOperation(slot)
-    val query     = Option.when(operation == "catalog-empty-search")(
-      SearchQuery("no-course-matches-lab-2026").toOption.get,
-    )
+    val query     =
+      if operation == "catalog-learning-paths" then None
+      else
+        (slot % 50 match
+          case 49 => Some("Kubernetes")
+          case n if n % 5 == 1 => Some("Scala")
+          case n if n % 5 == 2 => Some("Cats Effect")
+          case _ => None
+        ).map(value => SearchQuery(value).toOption.get)
     requestOperation(client, gateway, operation, query)
 
   private def requestOperation(

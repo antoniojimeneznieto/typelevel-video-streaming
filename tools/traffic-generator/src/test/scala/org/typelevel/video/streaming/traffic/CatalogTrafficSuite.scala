@@ -51,31 +51,36 @@ object CatalogTrafficSuite extends SimpleIOSuite:
     yield expect.all(result == RequestResult(Some(503), "http_error"), count == 1)
   }
 
-  test("soak profile has a stable empty-search minority and independent path reads") {
+  test("soak profile reports course searches under one operation and independent path reads") {
     val operations = (0L until 100L).map(CatalogTraffic.soakOperation)
-    IO.pure(expect.all(
-      operations.count(_ == "catalog-empty-search") == 2,
-      operations.count(_ == "catalog-learning-paths") == 10,
-      operations.count(_ == "catalog-courses") == 88,
-    ))
+    IO.pure(
+      expect.all(
+        operations.count(_ == "catalog-learning-paths") == 10,
+        operations.count(_ == "catalog-courses") == 90,
+      ),
+    )
   }
 
-  test("soak empty search uses a valid filter and returns a successful empty page") {
+  test("soak searches mix matching and unmatched filters under the course operation") {
     for
-      seen <- Ref.of[IO, Option[Request[IO]]](None)
+      seen  <- Ref.of[IO, Vector[Request[IO]]](Vector.empty)
       client = Client[IO](req =>
                  Resource.eval(
-                   seen.set(Some(req)).as(
-                     Response[IO](Status.Ok)
-                       .withEntity("""{"items":[],"total":0,"limit":10,"offset":0}"""),
-                   ),
+                   seen
+                     .update(_ :+ req)
+                     .as(
+                       Response[IO](Status.Ok)
+                         .withEntity("""{"items":[],"total":0,"limit":10,"offset":0}"""),
+                     ),
                  ),
                )
-      result  <- CatalogTraffic.soakRequest(client, uri"http://gateway.test", 49L)
-      request <- seen.get
+      matching <- CatalogTraffic.soakRequest(client, uri"http://gateway.test", 1L)
+      missing  <- CatalogTraffic.soakRequest(client, uri"http://gateway.test", 49L)
+      requests <- seen.get
     yield expect.all(
-      result == RequestResult(Some(200), "success", "catalog-empty-search"),
-      request.exists(_.uri.query.params.get("q").contains("no-course-matches-lab-2026")),
+      matching == RequestResult(Some(200), "success", "catalog-courses"),
+      missing == RequestResult(Some(200), "success", "catalog-courses"),
+      requests.map(_.uri.query.params.get("q")) == Vector(Some("Scala"), Some("Kubernetes")),
     )
   }
 

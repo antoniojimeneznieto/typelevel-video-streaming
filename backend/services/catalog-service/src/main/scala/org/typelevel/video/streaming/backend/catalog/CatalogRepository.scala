@@ -27,10 +27,7 @@ final class CatalogRepositoryImpl(
           yield (rows, total)
         }.onCancel(release)
           .handleErrorWith(error => release *> IO.raiseError(error))
-          .flatMap { (rows, total) =>
-            val page = CoursePage(toCourses(rows), total, filter.limit, filter.offset)
-            (if rows.nonEmpty then release else IO.unit).as(page)
-          }
+          .flatMap((rows, total) => coursePage(rows, total, filter, release))
       }
     }
 
@@ -41,6 +38,16 @@ final class CatalogRepositoryImpl(
         total <- session.unique(countLearningPaths)(filter)
       yield LearningPathPage(toLearningPaths(rows), total, filter.limit, filter.offset)
     }
+
+  private def coursePage(
+      rows: List[CourseRow],
+      total: TotalCount,
+      filter: CourseFilter,
+      release: IO[Unit],
+  ): IO[CoursePage] =
+    val page = CoursePage(toCourses(rows), total, filter.limit, filter.offset)
+    if rows.isEmpty then IO.pure(page)
+    else release.as(page)
 
 object CatalogRepositoryImpl:
 

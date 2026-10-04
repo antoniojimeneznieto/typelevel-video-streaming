@@ -407,9 +407,11 @@ place; preparation is idempotent.
 The exercise Catalog source in this checkout manually allocates a Skunk session
 for `ListCourses`. A valid empty search returns `200` but fails to return the
 session. Nonempty searches, errors, and cancellation return their sessions.
-The `catalog-soak` generator profile sends 5 requests per second: 88% normal
-course reads, 10% LearningPath reads, and 2% empty course searches, in a fixed
-50-slot pattern. The empty search query matches none of the seeded courses.
+The `catalog-soak` generator profile sends 5 requests per second: 90% course
+reads and 10% LearningPath reads, in a fixed 50-slot pattern. Course reads mix
+unfiltered and matching searches with a 2% unmatched search. The unmatched
+query is a plausible course topic absent from the seeded catalog. All course
+reads share the same generator operation label.
 Keep this mechanism private until the walkthrough.
 
 Before attendees join, run `./scripts/lab.sh traffic build` and
@@ -453,8 +455,9 @@ workshop host.
 
 ### Investigation prompts
 
-1. Which operation first precedes each step in checked-out session count?
-   Does it return an HTTP error or a normal empty page?
+1. Which course request pattern precedes each step in checked-out session
+   count? Replay suspected searches: do they return an HTTP error or a normal
+   empty page?
 2. When later course and LearningPath reads slow, is time spent acquiring a
    session or executing SQL after one is acquired?
 3. Compare `catalog.session.active`, `catalog.session.waiting`, and
@@ -465,9 +468,11 @@ workshop host.
 4. Inspect `CatalogRepositoryImpl.listCourses`. What happens to the release
    action on every successful, empty, failed, and cancelled path?
 
-The generator's `operations` JSON object separates normal course reads,
-LearningPath reads, and empty searches. The dashboard's bounded route labels
-show that the effect spreads beyond the triggering operation. A Catalog
+The generator's `operations` JSON object separates course reads from
+LearningPath reads; it does not identify empty searches. Compare searches and
+their responses while watching session occupancy to find the pattern. The
+dashboard's bounded route labels show that the effect spreads beyond the
+triggering operation. A Catalog
 restart temporarily empties the pool, but the same mixed workload drains it
 again; do not accept a restart or larger pool as remediation.
 

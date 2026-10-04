@@ -114,12 +114,12 @@ object TrafficSuite extends SimpleIOSuite:
                (_: Long) => IO.never[RequestResult],
                stats,
                TrafficMetrics.noop,
-               slot => if slot == 0 then "catalog-learning-paths" else "catalog-empty-search",
+               slot => if slot == 0 then "catalog-learning-paths" else "catalog-courses",
              )
         s <- stats.get
       yield expect.all(
         s.operations.get("catalog-learning-paths").exists(_.count == 1),
-        s.operations.get("catalog-empty-search").exists(_.count == 1),
+        s.operations.get("catalog-courses").exists(_.count == 1),
       ),
     )
   }
