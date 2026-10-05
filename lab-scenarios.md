@@ -75,11 +75,12 @@ healthy under continuing traffic; old in-flight traces may retain the fault.
 | 4 | Stable minority-user Playback failure | Add manual otel4s instrumentation where default spans stop answering the question. |
 | 5 | PostgreSQL session leak in Catalog | Distinguish session-acquisition wait from SQL execution and repair resource lifetime. |
 
-Three rounds now involve source fixes. Prepare faulty and corrected images with
-reviewable diffs, timebox each investigation and walkthrough, and calibrate the
-session-leak soak so round 5 has time to show both depletion and sustained
-recovery. Local compilation remains available, but should not be required to
-keep the two-hour session on schedule.
+Three rounds involve participant source edits and rebuilds. Keep faulty source
+as the default; isolate rounds through fresh services and prescribed requests.
+Provide reviewable facilitator fallback patches. Timebox investigation, compilation
+and walkthrough, and calibrate the session-leak soak so round 5 can show both
+depletion and sustained recovery. Rehearse build times before claiming that the
+complete sequence fits the two-hour session.
 
 ### Round 1 — Gateway–Catalog network delay
 
@@ -191,7 +192,12 @@ signature/claims validation and subject decoding. Compare failing and healthy
 traces. Do not add token contents, subject values, user IDs, or cohort flags to
 telemetry.
 
-**Fix and proof:** Deploy a bounded subject decoder accepting exactly the two
+**Required diagnostic checkpoint:** Deploy instrumentation while retaining the
+faulty decoder. Capture a new rejected trace that distinguishes successful JWT
+verification from failed subject decoding, and a successful control trace.
+Explain the evidence before changing the decoder.
+
+**Fix and proof:** Retain the diagnostics and deploy a bounded subject decoder accepting exactly the two
 documented forms. Keep signature, issuer, audience, and expiry checks unchanged.
 Repeat the identical mixed-actor workload: both legitimate groups succeed and
 aggregate `401` rate returns to baseline. Negative checks still reject

@@ -1,0 +1,55 @@
+diff --git a/backend/services/catalog-service/src/main/scala/org/typelevel/video/streaming/backend/catalog/CatalogRepository.scala b/backend/services/catalog-service/src/main/scala/org/typelevel/video/streaming/backend/catalog/CatalogRepository.scala
+--- a/backend/services/catalog-service/src/main/scala/org/typelevel/video/streaming/backend/catalog/CatalogRepository.scala
++++ b/backend/services/catalog-service/src/main/scala/org/typelevel/video/streaming/backend/catalog/CatalogRepository.scala
+@@ -18,17 +18,11 @@
+ ) extends CatalogRepository:
+ 
+   override def listCourses(filter: CourseFilter): IO[CoursePage] =
+-    sessions.allocated.flatMap { case (session, release) =>
+-      IO.uncancelable { poll =>
+-        poll {
+-          for
+-            rows  <- session.execute(selectCourses)(filter)
+-            total <- session.unique(countCourses)(filter)
+-          yield (rows, total)
+-        }.onCancel(release)
+-          .handleErrorWith(error => release *> IO.raiseError(error))
+-          .flatMap((rows, total) => coursePage(rows, total, filter, release))
+-      }
++    sessions.use { session =>
++      for
++        rows  <- session.execute(selectCourses)(filter)
++        total <- session.unique(countCourses)(filter)
++      yield CoursePage(toCourses(rows), total, filter.limit, filter.offset)
+     }
+ 
+   override def listLearningPaths(filter: LearningPathFilter): IO[LearningPathPage] =
+@@ -38,16 +32,6 @@
+         total <- session.unique(countLearningPaths)(filter)
+       yield LearningPathPage(toLearningPaths(rows), total, filter.limit, filter.offset)
+     }
+-
+-  private def coursePage(
+-      rows: List[CourseRow],
+-      total: TotalCount,
+-      filter: CourseFilter,
+-      release: IO[Unit],
+-  ): IO[CoursePage] =
+-    val page = CoursePage(toCourses(rows), total, filter.limit, filter.offset)
+-    if rows.isEmpty then IO.pure(page)
+-    else release.as(page)
+ 
+ object CatalogRepositoryImpl:
+ 
+diff --git a/backend/services/catalog-service/src/test/scala/org/typelevel/video/streaming/backend/catalog/CatalogServiceImplSuite.scala b/backend/services/catalog-service/src/test/scala/org/typelevel/video/streaming/backend/catalog/CatalogServiceImplSuite.scala
+--- a/backend/services/catalog-service/src/test/scala/org/typelevel/video/streaming/backend/catalog/CatalogServiceImplSuite.scala
++++ b/backend/services/catalog-service/src/test/scala/org/typelevel/video/streaming/backend/catalog/CatalogServiceImplSuite.scala
+@@ -14,7 +14,7 @@ object CatalogServiceImplSuite extends SimpleIOSuite with CatalogFixture:
+   ///////////////////////////////////////////////////////////////////////////////
+
+   private def serviceWithDatabase: Resource[IO, CatalogService[IO]] =
+-    isolatedSessions.map(sessions => new CatalogServiceImpl(new CatalogRepositoryImpl(sessions)))
++    sessionPool.map(sessions => new CatalogServiceImpl(new CatalogRepositoryImpl(sessions)))
+
+   ///////////////////////////////////////////////////////////////////////////////
+   // tests

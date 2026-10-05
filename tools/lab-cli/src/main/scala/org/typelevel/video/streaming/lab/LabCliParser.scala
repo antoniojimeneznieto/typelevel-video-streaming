@@ -7,6 +7,7 @@ import java.nio.file.{Path, Paths}
 
 private[lab] enum LabAction {
   case Start(build: Boolean)
+  case Prepare(round: Int)
   case Rebuild(service: String)
   case Status
   case Stop
@@ -257,6 +258,14 @@ private[lab] object LabCliParser {
       Opts.subcommand(Command("start", "Start the workshop stack") {
         Opts.flag("build", help = "Build local images before starting").orFalse.map(Start.apply)
       }) orElse
+        Opts.subcommand(
+          Command("prepare", "Reset transient state before a controlled workshop round") {
+            Opts
+              .argument[Int]("ROUND")
+              .validate("ROUND must be 1, 3, 4, or 5; round 2 is not implemented")(Set(1, 3, 4, 5))
+              .map(Prepare.apply)
+          },
+        ) orElse
         Opts.subcommand(Command("rebuild", "Rebuild and restart one application service") {
           Opts
             .argument[String]("SERVICE")

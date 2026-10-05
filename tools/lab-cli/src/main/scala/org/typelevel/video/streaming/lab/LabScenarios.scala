@@ -51,6 +51,19 @@ private[lab] object LabScenarios {
       .get[String](key)
       .getOrElse(throw new IllegalStateException(s"Missing $key in change ledger"))
 
+  /** Facilitator reset: preserve history and reconcile it only after the proxy reset succeeds. */
+  def resetPlatform(root: Path): IO[Unit] = ledger(root) { (changes, save) =>
+    LabCommands.proxy(root, "reset", None) *> save(changes.map { change =>
+      if field(change, "status") == "active" then
+        change.mapObject(
+          _.add("status", Json.fromString("rolled_back"))
+            .add("rolled_back_at", Json.fromString(Instant.now().toString))
+            .add("rollback_reason", Json.fromString("workshop preparation")),
+        )
+      else change
+    })
+  }
+
   def platform(root: Path, action: String, id: Option[String]): IO[Unit] = ledger(root) {
     (changes, save) =>
       if action == "changes" then
@@ -64,6 +77,8 @@ private[lab] object LabScenarios {
         val index = changes.indexWhere(change => field(change, "id") == id.get)
         IO.raiseWhen(index < 0)(new IllegalArgumentException("unknown change ID")) *>
           (if action == "inspect" then IO.println(changes(index).spaces2)
+           else if field(changes(index), "status") == "rolled_back" then
+             IO.println(s"Already rolled back ${id.get}")
            else
              LabCommands.proxy(root, "reset", None) *>
                save(

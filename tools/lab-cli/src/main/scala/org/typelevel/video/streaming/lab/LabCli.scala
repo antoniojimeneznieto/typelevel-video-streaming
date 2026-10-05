@@ -25,6 +25,7 @@ object LabCli
           case LabAction.Start(build) =>
             LabIo.run(root, Seq("bash", "scripts/start.sh") ++ Option.when(build)("--build")).void
           case LabAction.Rebuild(service) => LabCommands.rebuild(root, service)
+          case LabAction.Prepare(round) => LabPreparation.prepare(root, round)
           case LabAction.Status => LabCommands.status(root)
           case LabAction.Stop => LabCommands.stopStack(root)
           case LabAction.TrafficBuild => LabCommands.trafficBuild(root)

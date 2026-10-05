@@ -10,15 +10,14 @@ import org.typelevel.otel4s.metrics.{
   MeterProvider,
   UpDownCounter,
 }
-import skunk.Session
 
 /** Measures pool acquisition separately from SQL execution. */
 private[catalog] object CatalogSessionMetrics:
-  def instrument(
-      sessions: Resource[IO, Session[IO]],
+  def instrument[A](
+      sessions: Resource[IO, A],
       provider: MeterProvider[IO],
       maxConnections: Int,
-  ): IO[Resource[IO, Session[IO]]] =
+  ): IO[Resource[IO, A]] =
     for
       meter       <- provider.get("org.typelevel.video.streaming.catalog.sessions")
       acquisition <- meter
@@ -59,24 +58,26 @@ private[catalog] object CatalogSessionMetrics:
   private def age(starts: Map[Long, FiniteDuration], now: FiniteDuration): Double =
     starts.valuesIterator.minOption.fold(0.0)(oldest => (now - oldest).toNanos.toDouble / 1e9)
 
-  private def measured(
-      sessions: Resource[IO, Session[IO]],
+  private def measured[A](
+      sessions: Resource[IO, A],
       acquisition: Histogram[IO, Double],
       active: UpDownCounter[IO, Long],
       waiting: UpDownCounter[IO, Long],
       oldestWait: Gauge[IO, Double],
       nextWaitId: Ref[IO, Long],
       waitStarts: Ref[IO, Map[Long, FiniteDuration]],
-  ): Resource[IO, Session[IO]] =
+  ): Resource[IO, A] =
     Resource
-      .make {
+      .makeFull[IO, (A, IO[Unit])] { poll =>
         for
           start  <- IO.monotonic
           id     <- nextWaitId.getAndUpdate(_ + 1)
           starts <- waitStarts.updateAndGet(_.updated(id, start))
           _      <- oldestWait.record(age(starts, start))
           _      <- waiting.inc()
-          pair   <- sessions.allocated.guarantee(
+          // Keep bookkeeping and ownership transfer masked, but preserve the pool's
+          // cancelable acquisition while a request waits for an available session.
+          pair <- poll(sessions.allocated).guarantee(
                     IO.monotonic.flatMap { end =>
                       waitStarts.updateAndGet(_ - id).flatMap { remaining =>
                         oldestWait.record(age(remaining, end))

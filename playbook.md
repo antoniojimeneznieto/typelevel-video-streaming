@@ -104,6 +104,61 @@ The independent generator summary is available with
 Use `--grafana URL`, `--rate N`, and `--window SECONDS` when the local defaults
 do not match the rehearsal environment; the window must be at least 35 seconds.
 
+## Controlled workshop isolation
+
+The checked-in source retains the intentional defects. Before each round, run
+`./scripts/lab.sh prepare ROUND` (supported rounds: 1, 3, 4, 5). This stops the
+named workshop generator, restarts the existing Identity, Catalog, Playback and
+Gateway containers, waits for their health checks, and resets the Catalog proxy
+and active platform ledger entries. Round 4 additionally performs actor/read-mode
+setup; round 5 rebuilds Catalog with six sessions. Those existing setup steps
+still compile local source. Start the stack before running preparation.
+
+Use only the round's prescribed requests. Stop any separately launched foreground
+generators and avoid browsing/searching during the demonstration: an arbitrary
+empty Catalog search can activate the leak before round 5. Startup controls do
+not make the faulty application safe for arbitrary exploration.
+
+Preparation preserves the images and settings of restarted containers. It does
+not revert source repairs or restore an original faulty image. Before repeating
+an exercise after a repair, restore its intended source and rebuild the affected
+service. Never run preparation between fault and recovery measurements: restarting
+Catalog temporarily relieves the leak and invalidates that comparison.
+
+`.lab/preparation.json` records the round, completion status, container IDs and
+image IDs. A failed preparation is not a ready baseline; resolve the failure and
+rerun it. A completed preparation confirms container health and the Catalog proxy
+request only. Check the round's functional baseline, generator reports and fresh
+telemetry before activating the incident; TCP health alone is insufficient.
+
+### Source repair and facilitator fallback
+
+Participants edit source, review their diff, rebuild the affected service, and
+prove recovery under the same workload. The source fixes in rounds 3–5 are part
+of completing the exercise. Facilitators may use these fallback patches if a
+group gets stuck, after reviewing any participant edits:
+
+- `infrastructure/lab/solutions/scenario3.patch`: move verification to `IO.blocking`.
+- `infrastructure/lab/solutions/scenario4-diagnostics.patch`: add bounded validation-stage events, retaining the faulty decoder.
+- `infrastructure/lab/solutions/scenario4.patch`: wire the compatible subject decoder **after** the diagnostic patch.
+- `infrastructure/lab/solutions/scenario5.patch`: scope Catalog session ownership.
+
+Run `git apply --check PATCH` before `git apply PATCH`, substituting the chosen
+path. Do not force a patch over participant changes. Round 4 has two ordered patches. Review diagnostic evidence before applying the
+decoder correction; when resetting, reverse the decoder patch before the diagnostic patch.
+A successful patch application is not recovery proof: follow the round's rebuild
+and verification steps.
+
+To repeat after using a fallback, first stop the generator and review `git diff`.
+Use `git apply --reverse --check PATCH` followed by `git apply --reverse PATCH`
+only if that exact patch is still present and reversing it will preserve other
+work. For hand-written repairs, restore only the reviewed exercise edits manually.
+Rebuild the affected service, then run preparation and the baseline again.
+
+Generic `lab.sh rebuild` preserves the deployed Catalog pool size and Playback
+workshop mode. Explicit scenario prepare/restore settings override these values.
+If there is no existing container, Compose defaults apply.
+
 ## Round 1: slow Catalog-facing requests
 
 ### Participant brief — share this paragraph only
@@ -118,7 +173,7 @@ do not match the rehearsal environment; the window must be at least 35 seconds.
 First restore a healthy proxy and start one continuous Catalog-read stream:
 
 ```bash
-./scripts/lab.sh proxy reset
+./scripts/lab.sh prepare 1
 ./scripts/lab.sh traffic start --rate 5
 ./scripts/lab.sh traffic status
 ```
@@ -236,6 +291,7 @@ verification in `IO.delay` from startup. Build the generator and start baseline:
 
 ```bash
 ./scripts/lab.sh traffic build
+./scripts/lab.sh prepare 3
 ./scripts/lab.sh scenario3 baseline
 ./scripts/lab.sh traffic status
 ```
@@ -283,9 +339,9 @@ pressure. Do not put the lab actor, token, or password in telemetry.
 
 ### Participant remediation and proof
 
-The core round ends when participants identify the `IO.delay` boundary and
-explain the unrelated request slowdown with telemetry and source evidence.
-For groups with time to implement the fix, change verification to `IO.blocking`
+Participants identify the `IO.delay` boundary, explain the unrelated request
+slowdown with telemetry and source evidence, then implement and verify the repair.
+Change verification to `IO.blocking`
 in `backend/services/identity-service/src/main/scala/org/typelevel/video/streaming/backend/identity/PasswordHasher.scala`. Keep the existing
 `permits.permit.use` around both hash and verify. The semaphore limits
 concurrent Argon2 operations to four. Review the source diff, then deploy it:
@@ -335,7 +391,7 @@ default local Gateway port `8085`.
 ```bash
 ./scripts/lab.sh rebuild identity-service
 ./scripts/lab.sh traffic build
-./scripts/lab.sh scenario4 prepare
+./scripts/lab.sh prepare 4
 ./scripts/lab.sh scenario4 baseline
 ./scripts/lab.sh traffic status
 ```
@@ -363,12 +419,43 @@ IDs, or actor labels as telemetry attributes.
 2. Where does the Playback trace end? Do rejected requests reach repository
    spans or SQL?
 3. Which stage of token validation differs: signature and standard claims, or
-   subject decoding? Add bounded stage reasons or small spans if needed.
+   subject decoding? Add bounded stage reasons or small spans, then use a new
+   rejected trace to demonstrate the failing stage. This step is required.
 4. Inspect `AccessTokenVerifier.userId` and Playback's wiring in `Main.scala`.
 
-### Remediation and proof
+### Step 1: diagnostic telemetry and proof
 
-Change Playback's verifier wiring to `AccessTokenVerifier.userIdCompatible`.
+Keep the original decoder. Add bounded validation-stage events or spans to the
+existing Playback request trace. Do not export tokens, subjects, user IDs, actor
+labels, JWT claims, or verification exception messages. Do not weaken validation
+or change which requests succeed as part of this step.
+
+The facilitator fallback `scenario4-diagnostics.patch` adds these events with
+`auth.result=accepted|rejected`:
+
+| Event | Meaning |
+| --- | --- |
+| `auth.jwt.verify` | Signature and the JWT library's configured claim checks |
+| `auth.subject.decode` | Application subject-format decoding |
+| `auth.claims.validate` | Additional date-order and canonical JWT-ID checks |
+| `auth.principal.decode` | Application principal construction |
+
+Later stages are absent when an earlier stage rejects. A successful
+`auth.jwt.verify` does not imply that all application checks succeeded. These
+are diagnostic events, not measurements of stage duration.
+
+Rebuild Playback with diagnostics while the same mixed workload continues.
+After restart/warmup, capture a fresh successful trace and a rejected trace.
+**Required checkpoint before the decoder repair:** the rejected trace shows
+`auth.jwt.verify=accepted` followed by `auth.subject.decode=rejected`; rejection
+still occurs at approximately the same workload share. Record the trace IDs and
+explain why database work is not reached. The successful trace must show the
+validation path completing. A source inspection or aggregate 401 rate alone
+does not complete this checkpoint.
+
+### Step 2: decoder repair and recovery proof
+
+Keep the diagnostic telemetry. Change Playback's verifier wiring to `AccessTokenVerifier.userIdCompatible`.
 That decoder accepts exactly a canonical UUID or `user:` followed by a
 canonical UUID. It retains RS256 signature, issuer, audience, expiry, issued-at,
 and JWT ID checks. Rebuild Playback while keeping the mixed workload at the
@@ -381,7 +468,10 @@ same rate:
 
 The rebuild can briefly produce `500` responses while the service restarts;
 judge recovery from a later fresh window. Require that window to be valid with
-all Playback requests returning `200`. Run
+all Playback requests returning `200`. Capture fresh traces showing accepted
+subject decoding and principal construction, including a controlled replay from
+a previously rejected actor. Keep actor-to-trace correlation local to the
+exercise; do not add identifying telemetry labels. Run
 the verifier suite to check malformed, expired, incorrectly signed, and
 unsupported tokens remain rejected:
 
@@ -389,8 +479,10 @@ unsupported tokens remain rejected:
 sbt --batch 'runtime/testOnly *AccessTokenVerifierSuite'
 ```
 
-Restore the original Playback verifier wiring before running
-`./scripts/lab.sh scenario4 restore`. It stops traffic and rebuilds Playback
+Restore the original Playback verifier wiring and remove the exercise-added
+diagnostics before repeating the instrumentation lesson. If using fallback
+patches, reverse the decoder patch first, then the diagnostic patch. Run
+`./scripts/lab.sh scenario4 restore` after restoring the source. It stops traffic and rebuilds Playback
 in normal projection mode. Leave the seeded accounts and projection rows in
 place; preparation is idempotent.
 
@@ -425,7 +517,7 @@ investigation before presenting the round.
 Build the current exercise image and start a healthy window:
 
 ```bash
-./scripts/lab.sh scenario5 prepare
+./scripts/lab.sh prepare 5
 ./scripts/lab.sh scenario5 baseline
 ./scripts/lab.sh traffic status
 ```

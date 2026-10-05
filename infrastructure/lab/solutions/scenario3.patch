@@ -1,0 +1,11 @@
+--- a/backend/services/identity-service/src/main/scala/org/typelevel/video/streaming/backend/identity/PasswordHasher.scala
++++ b/backend/services/identity-service/src/main/scala/org/typelevel/video/streaming/backend/identity/PasswordHasher.scala
+@@ -40,7 +40,7 @@
+ 
+   override def verify(password: Password, hash: PasswordHash): IO[Boolean] =
+     permits.permit.use(_ =>
+-      IO.delay {
++      IO.blocking {
+         val encodedHash = PasswordHash.value(hash)
+ 
+         Argon2Function
