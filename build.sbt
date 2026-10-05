@@ -221,7 +221,7 @@ lazy val trafficGenerator = project
       "org.typelevel" %% "otel4s-oteljava" % Otel4sVersion,
       "org.typelevel" %% "otel4s-oteljava-context-storage" % Otel4sVersion,
       "io.opentelemetry" % "opentelemetry-exporter-otlp" % OpenTelemetryVersion % Runtime,
-      "org.slf4j" % "slf4j-nop" % "2.0.17",
+      "org.slf4j" % "slf4j-nop" % "2.0.20",
       "org.typelevel" %% "cats-effect-testkit" % CatsEffectVersion % Test,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
