@@ -260,13 +260,13 @@ private[lab] object LabScenarios {
     case "baseline" =>
       LabCommands.trafficStart(
         root,
-        Seq("--profile", "catalog-courses", "--rate", "5", "--request-timeout", "10s"),
+        Seq("--profile", "catalog-courses", "--rate", "5", "--request-timeout", "15s"),
       )
     case "activate" =>
       LabCommands.stopTraffic(root) *>
         LabCommands.trafficStart(
           root,
-          Seq("--profile", "catalog-soak", "--rate", "5", "--request-timeout", "10s"),
+          Seq("--profile", "catalog-soak", "--rate", "5", "--request-timeout", "15s"),
         ) *>
         IO.println("Search workload rollout applied")
     case "restore" =>

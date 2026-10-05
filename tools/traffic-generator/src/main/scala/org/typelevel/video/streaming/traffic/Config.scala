@@ -15,7 +15,9 @@ final case class Config(
     profile: String                  = "catalog-courses",
     loginPercent: Int                = 10,
     modernPercent: Int               = 20,
+    setupTimeout: FiniteDuration     = 60.seconds,
 ):
+  require(setupTimeout > Duration.Zero, "setup-timeout must be positive")
   require(rate > 0 && rate <= 10000, "rate must be between 1 and 10000 requests/second")
   require(duration.forall(_ > Duration.Zero), "duration must be positive")
   require(maxConcurrent > 0, "max-concurrent must be positive")

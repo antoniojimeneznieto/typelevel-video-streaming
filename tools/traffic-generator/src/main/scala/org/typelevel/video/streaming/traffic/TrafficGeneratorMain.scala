@@ -60,6 +60,7 @@ object TrafficGeneratorMain extends IOApp:
           metrics  <- TrafficMetrics.create(provider, config.profile)
           stats    <- Ref.of[IO, Stats](Stats())
           previous <- Ref.of[IO, Stats](Stats())
+          request  <- prepareRequest(config, client)
           start    <- IO.monotonic
           report    = (kind: String) =>
                      for
@@ -80,14 +81,6 @@ object TrafficGeneratorMain extends IOApp:
                        _ <- IO.println(json)
                      yield ()
           progress = Stream.awakeEvery[IO](config.reportInterval).evalMap(_ => report("progress"))
-          request <-
-            if config.profile == "playback" then
-              PlaybackTraffic.prepare(client, config.baseUrl, config.modernPercent)
-            else if config.profile == "identity" then
-              IdentityTraffic.prepare(client, config.baseUrl, config.loginPercent)
-            else if config.profile == "catalog-soak" then
-              IO.pure((slot: Long) => CatalogTraffic.soakRequest(client, config.baseUrl, slot))
-            else IO.pure((_: Long) => CatalogTraffic.request(client, config.baseUrl))
           operationForSlot = (slot: Long) =>
                                config.profile match
                                  case "catalog-soak" => CatalogTraffic.soakOperation(slot)
@@ -111,3 +104,24 @@ object TrafficGeneratorMain extends IOApp:
           else if result.failed > 0 then ExitCode(1)
           else ExitCode.Success
       }
+
+  private[traffic] def prepareRequest(
+      config: Config,
+      client: org.http4s.client.Client[IO],
+  ): IO[Long => IO[RequestResult]] =
+    val prepare =
+      if config.profile == "playback" then
+        PlaybackTraffic.prepare(client, config.baseUrl, config.modernPercent)
+      else if config.profile == "identity" then
+        IdentityTraffic.prepare(client, config.baseUrl, config.loginPercent)
+      else if config.profile == "catalog-soak" then
+        IO.pure((slot: Long) => CatalogTraffic.soakRequest(client, config.baseUrl, slot))
+      else IO.pure((_: Long) => CatalogTraffic.request(client, config.baseUrl))
+    prepare.timeoutTo(
+      config.setupTimeout,
+      IO.raiseError(
+        new java.util.concurrent.TimeoutException(
+          s"Actor preparation exceeded ${config.setupTimeout}; measured traffic did not start",
+        ),
+      ),
+    )

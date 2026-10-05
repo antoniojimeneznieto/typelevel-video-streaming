@@ -40,6 +40,7 @@ final private[lab] case class TrafficOptions(
     profile: Option[String],
     loginPercent: Option[Int],
     modernPercent: Option[Int],
+    setupTimeout: Option[String] = None,
 ) {
   def arguments: Seq[String] = Seq(
     baseUrl.map("--base-url" -> _),
@@ -47,6 +48,7 @@ final private[lab] case class TrafficOptions(
     duration.map("--duration" -> _),
     maxConcurrent.map(value => "--max-concurrent" -> value.toString),
     requestTimeout.map("--request-timeout" -> _),
+    setupTimeout.map("--setup-timeout" -> _),
     drainTimeout.map("--drain-timeout" -> _),
     reportInterval.map("--report-interval" -> _),
     profile.map("--profile" -> _),
@@ -97,6 +99,7 @@ private[lab] object LabCliParser {
       .option[Int]("modern-percent", help = "Playback modern subject share")
       .validate("--modern-percent must be 0 or 20")(n => n == 0 || n == 20)
       .orNone,
+    Opts.option[String]("setup-timeout", help = "Total actor preparation timeout").orNone,
   ).mapN(TrafficOptions.apply)
 
   private val traffic = Command("traffic", "Build, run, and inspect traffic") {

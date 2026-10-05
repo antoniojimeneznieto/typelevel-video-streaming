@@ -1,5 +1,7 @@
 package org.typelevel.video.streaming.backend.gateway
 
+import scala.concurrent.duration.Duration
+
 import cats.effect.{IO, Resource}
 import org.http4s.client.Client
 import org.http4s.client.middleware.Metrics
@@ -14,7 +16,12 @@ private[gateway] object GatewayClient:
   def resource(
       config: UpstreamConfig,
   )(using TracerProvider[IO], MeterProvider[IO]): Resource[IO, Client[IO]] =
-    EmberClientBuilder.default[IO].build.evalMap(instrument(_, config))
+    EmberClientBuilder
+      .default[IO]
+      // GatewayRoutes applies the configured response deadline across the exchange.
+      .withTimeout(Duration.Inf)
+      .build
+      .evalMap(instrument(_, config))
 
   def instrument(
       client: Client[IO],

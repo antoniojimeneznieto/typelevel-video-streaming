@@ -55,6 +55,23 @@ diagnostic sections below are facilitator controls. The source and facilitator
 documents are in the repository, so the exercise code is a presentation aid,
 not a secrecy mechanism.
 
+### Request deadlines
+
+Gateway reads `UPSTREAM_REQUEST_TIMEOUT` (default `10 seconds`, positive and
+finite). Native http4s `Timeout` middleware bounds the time to produce the
+upstream response, including connection and pool waits and transport attempts.
+Expiry cancels the handler and returns HTTP 504. It does not bound subsequent
+response-body streaming; the generator's request deadline covers body
+consumption. Ember has no separately configured connection timeout.
+Cancellation of downstream service work still needs a running-lab rehearsal.
+
+The traffic generator bounds actor preparation with `--setup-timeout` (default
+`60s` for the whole setup). Expiry fails the command before measured traffic
+starts. Setup time is excluded from the traffic measurement window. Existing
+`--request-timeout` and `--drain-timeout` govern measured requests and shutdown.
+Keep the generator deadline longer than Gateway's when recording Gateway's
+failure status. Round 5 uses `15s` against Gateway's `10s`.
+
 ## Before the session
 
 From the repository root, on every machine that will run the lab:
@@ -539,8 +556,9 @@ Activate the mixed search workload with the neutral command:
 The generator switches profiles with a short gap. An empty search appears every
 ten seconds at this rate, so the six-session pool should drain progressively
 over about a minute. Watch at least two complete 50-slot cycles before
-concluding anything. The generator has a ten-second request deadline; after
-depletion, requests time out while the offered rate remains five per second.
+concluding anything. Gateway has a ten-second upstream response deadline; the
+generator allows fifteen seconds so it can normally observe Gateway's HTTP 504
+after depletion. The offered rate remains five per second.
 Check `window.load_valid` and dropped arrivals before interpreting the
 latency. This timing is a starting point and must be calibrated on the actual
 workshop host.

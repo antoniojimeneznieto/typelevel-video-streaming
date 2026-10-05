@@ -358,7 +358,7 @@ private[lab] object LabVerify {
           "--duration",
           duration,
           "--request-timeout",
-          "10s",
+          "15s",
         ),
       )
       .flatMap(summary)

@@ -97,7 +97,6 @@ services:
       IDENTITY_BASE_URL: http://identity-service:8081
       CATALOG_BASE_URL: http://toxiproxy:8666
       PLAYBACK_BASE_URL: http://playback-service:8083
-      UPSTREAM_CONNECTION_TIMEOUT: 2 seconds
       UPSTREAM_REQUEST_TIMEOUT: 10 seconds
     ports:
       - "127.0.0.1:${GATEWAY_PORT:-8085}:8084"

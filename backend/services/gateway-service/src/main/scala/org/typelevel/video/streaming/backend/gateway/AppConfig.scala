@@ -1,5 +1,7 @@
 package org.typelevel.video.streaming.backend.gateway
 
+import scala.concurrent.duration.*
+
 import cats.effect.Async
 import cats.syntax.all.*
 import ciris.{ConfigDecoder, ConfigValue, Effect, env}
@@ -12,7 +14,9 @@ final case class UpstreamConfig(
     identity: Uri,
     catalog: Uri,
     playback: Uri,
-)
+    requestTimeout: FiniteDuration = 10.seconds,
+):
+  require(requestTimeout > Duration.Zero, "upstream request timeout must be positive")
 
 final case class AppConfig(
     server: HttpServerConfig,
@@ -32,11 +36,19 @@ object AppConfig:
       }
       .redacted
 
+  private[gateway] val positiveDuration: ConfigDecoder[String, FiniteDuration] =
+    ConfigDecoder[String, FiniteDuration].mapOption("positive finite duration") { duration =>
+      Option.when(duration > Duration.Zero)(duration)
+    }
+
   private val upstreamConfig: ConfigValue[Effect, UpstreamConfig] =
     (
       env("IDENTITY_BASE_URL").as[Uri].default(uri"http://localhost:8081"),
       env("CATALOG_BASE_URL").as[Uri].default(uri"http://localhost:8082"),
       env("PLAYBACK_BASE_URL").as[Uri].default(uri"http://localhost:8083"),
+      env("UPSTREAM_REQUEST_TIMEOUT")
+        .as[FiniteDuration](using positiveDuration)
+        .default(10.seconds),
     ).parMapN(UpstreamConfig.apply)
 
   def load[F[_]: Async]: F[AppConfig] =

@@ -88,5 +88,6 @@ object Cli:
         .option[Int]("modern-percent", help = "Playback newer-subject actor share (0 or 20)")
         .validate("--modern-percent must be 0 or 20")(n => n == 0 || n == 20)
         .withDefault(defaults.modernPercent),
+      positiveDuration("setup-timeout", "Total actor preparation deadline", defaults.setupTimeout),
     ).mapN(Config.apply) <* Opts.help.orElse(Opts(()))
   }
