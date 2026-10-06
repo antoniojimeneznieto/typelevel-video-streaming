@@ -311,8 +311,11 @@ lazy val identityService = project
       "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
       "com.password4j" % "password4j" % Password4jVersion,
+      "org.typelevel" %% "otel4s-oteljava-metrics-testkit" % Otel4sVersion % Test,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
+    Test / fork := true,
+    Test / javaOptions += "-Dcats.effect.trackFiberContext=true",
     testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
 

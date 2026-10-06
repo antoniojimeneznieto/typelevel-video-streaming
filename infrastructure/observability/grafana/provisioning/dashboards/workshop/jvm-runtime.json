@@ -55,7 +55,9 @@
   "gnetId": 17582,
   "graphTooltip": 0,
   "id": null,
-  "links": [],
+  "links": [
+    { "title": "Workshop Overview", "url": "/d/workshop-overview/workshop-overview", "targetBlank": false, "keepTime": true }
+  ],
   "liveNow": false,
   "panels": [
     {

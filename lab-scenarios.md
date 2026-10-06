@@ -148,23 +148,26 @@ Password4j Argon2 verification runs in `IO.delay` on Cats Effect compute workers
 The initial traffic mix uses few logins. Activation changes the generator to a
 calibrated login-heavy mix while retaining lightweight Identity calls and a
 stable aggregate offered rate. Use a consistent CPU limit and hashing cost;
-avoid synthetic sleeps or a failure-named flag. The current application already
-uses `IO.blocking`, so preparing this exercise requires a reviewable scenario
-source version.
+avoid synthetic sleeps or a failure-named flag. Keep faulty source as the
+exercise default and preserve fixed-name password verification telemetry in
+both the faulty and repaired versions.
 
 **How participants identify it:** Login latency rises first and unrelated
-Identity requests slow as well. SQL execution and session acquisition remain
-comparatively healthy. Runtime scheduling metrics and starvation logs point
-inside the process; a thread dump or profile places compute workers in Argon2.
-Source inspection reveals the `IO.delay` boundary.
+Identity requests slow as well. Login traces show password verification work;
+current-user traces have no password verification and act as a control.
+Compare password work and permit wait, SQL, runtime scheduling, CPU, and
+container health before reading source. A thread dump or profile can place
+compute workers in Argon2 when exported telemetry is insufficient. Source
+inspection then confirms the `IO.delay` boundary.
 
-**Diagnosis and optional fix:** The core round ends when participants identify
-the synchronous password operation inside `IO.delay` and explain why unrelated
-Identity calls slow under login load. If time and skill permit, move verification
-to `IO.blocking` while keeping hashing concurrency bounded. Review the patch,
-deploy the corrected version, and repeat the same login-heavy workload long
-enough to rule out temporary relief from a restart. Lightweight requests should
-remain responsive and hashing concurrency must stay bounded.
+**Diagnosis and fix:** Participants identify the synchronous password operation
+inside `IO.delay` and explain why unrelated Identity calls slow under login
+load. They then move verification to `IO.blocking` while keeping hashing
+concurrency bounded. Review the source edit, deploy the corrected version, and
+repeat the same login-heavy workload long enough to rule out temporary relief
+from a restart. Lightweight requests should remain responsive and hashing
+concurrency must stay bounded. Calibrate the rate so Identity, telemetry export,
+and Grafana remain usable on the host.
 
 **Takeaway:** Traces identify the service; runtime evidence explains scheduler
 pressure within it. Moving work off compute threads does not add CPU capacity,

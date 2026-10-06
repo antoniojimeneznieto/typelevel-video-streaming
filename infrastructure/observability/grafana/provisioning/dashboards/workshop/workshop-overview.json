@@ -28,6 +28,12 @@
       "targetBlank": false
     },
     {
+      "title": "Identity Investigation",
+      "url": "/d/identity-investigation/identity-investigation",
+      "targetBlank": false,
+      "keepTime": true
+    },
+    {
       "title": "PostgreSQL and Skunk",
       "url": "/d/catalog-sessions/catalog-sessions",
       "targetBlank": false

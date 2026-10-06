@@ -9,6 +9,7 @@
   "editable": false,
   "graphTooltip": 1,
   "links": [
+    { "title": "Workshop Overview", "url": "/d/workshop-overview/workshop-overview", "targetBlank": false, "keepTime": true },
     { "title": "Workshop Traffic", "url": "/d/workshop-traffic-generator/workshop-traffic", "targetBlank": false }
   ],
   "panels": [

@@ -443,6 +443,13 @@ The Compose Identity service is limited
 to four CPUs and configured with two Cats Effect compute workers for this
 exercise. Calibrate on the actual laptop before presenting it.
 
+Before activation, confirm Grafana loads and the telemetry container is
+healthy. Keep `docker compose ps` and a brief `docker stats --no-stream` sample
+for Identity and LGTM with the generator report. If the dashboard or exporter
+becomes unresponsive, stop the round-3 generator with
+`./scripts/lab.sh scenario3 restore`; do not treat missing telemetry as a
+healthy result.
+
 Activate the login-heavy mix with the neutral command:
 
 ```bash
@@ -459,19 +466,27 @@ expected.
 
 ### Investigation prompts
 
-1. Are both `POST /auth/login` and `GET /users/me` affected? Does the latter
-   perform password hashing?
-2. Where do Gateway and Identity server spans spend time? Are SQL and session
-   acquisition spans large enough to account for it?
-3. Are Identity's CPU, JVM thread, and Cats Effect starvation signals elevated?
-4. Inspect `PasswordHasher.scala`: on which Cats Effect executor does the
-   synchronous Argon2 verification run?
+1. From Workshop Overview, open **Identity Investigation**. Compare Identity
+   `POST /auth/login` and `GET /users/me` p95 in the same 60-second window.
+   Does the lightweight route slow even though it has no password verification
+   span?
+2. Open a fresh login exemplar from that graph. Compare the Gateway and Identity
+   server spans with the SQL, password permit-wait, and password verification
+   work spans. Open a current-user exemplar as a control. The password spans
+   identify the expensive operation; short SQL children alone cannot prove
+   where the rest of a request waited.
+3. Compare password verification duration, permit wait, and active verifications
+   on the Identity dashboard. Follow its links to the Identity Cats Effect and
+   JVM views. Check the selected service and current instance, then compare
+   scheduler drift/starvation, CPU, and thread signals with the route delay.
+4. Only after recording the telemetry diagnosis, inspect `PasswordHasher.scala`:
+   on which Cats Effect executor does synchronous Argon2 verification run?
 
 The generator summary gives independent offered, completed, dropped, and
-per-operation latency evidence. Filter HTTP dashboard panels by Identity route
-and compare a recent window. Use fresh traces from both Identity operations;
-traces locate the service, and source/runtime evidence explains the scheduler
-pressure. Do not put the lab actor, token, or password in telemetry.
+per-operation latency evidence. The new password spans and metrics contain
+fixed operation names and durations only; they do not export the lab actor,
+token, password, or hash. Spans can lag or disappear under saturation, so use
+the generator report, runtime metrics, and container health together.
 
 ### Participant remediation and proof
 
@@ -479,7 +494,7 @@ Participants identify the `IO.delay` boundary, explain the unrelated request
 slowdown with telemetry and source evidence, then implement and verify the repair.
 Change verification to `IO.blocking`
 in `backend/services/identity-service/src/main/scala/org/typelevel/video/streaming/backend/identity/PasswordHasher.scala`. Keep the existing
-`permits.permit.use` around both hash and verify. The semaphore limits
+permit ownership around both hash and verify. The semaphore limits
 concurrent Argon2 operations to four. Review the source diff, then deploy it:
 
 ```bash

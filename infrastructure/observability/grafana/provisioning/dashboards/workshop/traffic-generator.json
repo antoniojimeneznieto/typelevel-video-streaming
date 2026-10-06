@@ -9,6 +9,9 @@
   "time": { "from": "now-15m", "to": "now" },
   "editable": false,
   "graphTooltip": 1,
+  "links": [
+    { "title": "Workshop Overview", "url": "/d/workshop-overview/workshop-overview", "targetBlank": false, "keepTime": true }
+  ],
   "panels": [
     {
       "id": 1,
