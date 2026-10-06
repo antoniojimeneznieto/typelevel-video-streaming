@@ -546,6 +546,9 @@ near-zero acquisition time, and pool occupancy that returns to zero. Open the
 the activation time; keep the same 5 requests per second through the round.
 The dashboard legend includes the Catalog instance ID. After a rebuild, use
 the new instance's series for recovery; old series remain in telemetry history.
+The oldest-wait age is calculated at each metric collection: it grows while
+a request stays queued and returns to zero when no requests are waiting.
+Canceling the oldest waiter can lower the age to that of the next waiter.
 
 Activate the mixed search workload with the neutral command:
 

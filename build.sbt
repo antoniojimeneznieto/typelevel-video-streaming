@@ -335,8 +335,11 @@ lazy val catalogService = project
       "com.comcast" %% "ip4s-core" % Ip4sVersion,
       "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
+      "org.typelevel" %% "otel4s-oteljava-metrics-testkit" % Otel4sVersion % Test,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
+    Test / fork := true,
+    Test / javaOptions += "-Dcats.effect.trackFiberContext=true",
     testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
 

@@ -24,7 +24,7 @@ object Main extends IOApp.Simple:
         Postgres.sessionPool[IO](config.postgres).use { sessions =>
           CatalogSessionMetrics
             .instrument(sessions, otel.meterProvider, config.postgres.maxConnections)
-            .flatMap { measuredSessions =>
+            .use { measuredSessions =>
               val repository = new CatalogRepositoryImpl(measuredSessions)
               val service    = new CatalogServiceImpl(repository)
 

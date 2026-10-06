@@ -3,13 +3,7 @@ package org.typelevel.video.streaming.backend.catalog
 import scala.concurrent.duration.FiniteDuration
 
 import cats.effect.{IO, Ref, Resource}
-import org.typelevel.otel4s.metrics.{
-  BucketBoundaries,
-  Gauge,
-  Histogram,
-  MeterProvider,
-  UpDownCounter,
-}
+import org.typelevel.otel4s.metrics.{BucketBoundaries, Histogram, MeterProvider, UpDownCounter}
 
 /** Measures pool acquisition separately from SQL execution. */
 private[catalog] object CatalogSessionMetrics:
@@ -17,9 +11,9 @@ private[catalog] object CatalogSessionMetrics:
       sessions: Resource[IO, A],
       provider: MeterProvider[IO],
       maxConnections: Int,
-  ): IO[Resource[IO, A]] =
+  ): Resource[IO, Resource[IO, A]] =
     for
-      meter       <- provider.get("org.typelevel.video.streaming.catalog.sessions")
+      meter       <- provider.get("org.typelevel.video.streaming.catalog.sessions").toResource
       acquisition <- meter
                        .histogram[Double]("catalog.session.acquire.duration")
                        .withUnit("s")
@@ -29,31 +23,42 @@ private[catalog] object CatalogSessionMetrics:
                            5.0, 10.0, 30.0),
                        )
                        .create
+                       .toResource
       active <- meter
                   .upDownCounter[Long]("catalog.session.active")
                   .withUnit("{session}")
                   .withDescription("Catalog sessions checked out from the pool")
                   .create
+                  .toResource
       capacity <- meter
                     .upDownCounter[Long]("catalog.session.capacity")
                     .withUnit("{session}")
                     .withDescription("Configured Catalog PostgreSQL session pool capacity")
                     .create
+                    .toResource
       waiting <- meter
                    .upDownCounter[Long]("catalog.session.waiting")
                    .withUnit("{request}")
                    .withDescription("Catalog requests waiting for a database session")
                    .create
-      oldestWait <- meter
-                      .gauge[Double]("catalog.session.wait.max_age")
-                      .withUnit("s")
-                      .withDescription("Age of the oldest request waiting for a Catalog session")
-                      .create
-      nextWaitId <- Ref.of[IO, Long](0L)
-      waitStarts <- Ref.of[IO, Map[Long, FiniteDuration]](Map.empty)
-      _          <- capacity.add(maxConnections.toLong)
-      _          <- oldestWait.record(0.0)
-    yield measured(sessions, acquisition, active, waiting, oldestWait, nextWaitId, waitStarts)
+                   .toResource
+      nextWaitId <- Ref.of[IO, Long](0L).toResource
+      waitStarts <- Ref.of[IO, Map[Long, FiniteDuration]](Map.empty).toResource
+      _          <- meter
+             .observableGauge[Double]("catalog.session.wait.max_age")
+             .withUnit("s")
+             .withDescription("Age of the oldest request waiting for a Catalog session")
+             .createWithCallback { measurement =>
+               for
+                 starts <- waitStarts.get
+                 now    <- IO.monotonic
+                 _      <- measurement.record(age(starts, now))
+               yield ()
+             }
+      _ <- Resource.make(capacity.add(maxConnections.toLong))(_ =>
+             capacity.add(-maxConnections.toLong),
+           )
+    yield measured(sessions, acquisition, active, waiting, nextWaitId, waitStarts)
 
   private def age(starts: Map[Long, FiniteDuration], now: FiniteDuration): Double =
     starts.valuesIterator.minOption.fold(0.0)(oldest => (now - oldest).toNanos.toDouble / 1e9)
@@ -63,25 +68,22 @@ private[catalog] object CatalogSessionMetrics:
       acquisition: Histogram[IO, Double],
       active: UpDownCounter[IO, Long],
       waiting: UpDownCounter[IO, Long],
-      oldestWait: Gauge[IO, Double],
       nextWaitId: Ref[IO, Long],
       waitStarts: Ref[IO, Map[Long, FiniteDuration]],
   ): Resource[IO, A] =
     Resource
       .makeFull[IO, (A, IO[Unit])] { poll =>
         for
-          start  <- IO.monotonic
-          id     <- nextWaitId.getAndUpdate(_ + 1)
-          starts <- waitStarts.updateAndGet(_.updated(id, start))
-          _      <- oldestWait.record(age(starts, start))
-          _      <- waiting.inc()
+          start <- IO.monotonic
+          id    <- nextWaitId.getAndUpdate(_ + 1)
+          _     <- waitStarts.update(_.updated(id, start))
+          _     <- waiting.inc()
           // Keep bookkeeping and ownership transfer masked, but preserve the pool's
           // cancelable acquisition while a request waits for an available session.
           pair <- poll(sessions.allocated).guarantee(
                     IO.monotonic.flatMap { end =>
-                      waitStarts.updateAndGet(_ - id).flatMap { remaining =>
-                        oldestWait.record(age(remaining, end))
-                      } *> acquisition.record((end - start).toNanos.toDouble / 1e9)
+                      waitStarts.update(_ - id) *>
+                        acquisition.record((end - start).toNanos.toDouble / 1e9)
                     } *> waiting.dec(),
                   )
           _ <- active.inc()
