@@ -53,7 +53,7 @@ private[lab] object LabScenarios {
 
   /** Facilitator reset: preserve history and reconcile it only after the proxy reset succeeds. */
   def resetPlatform(root: Path): IO[Unit] = ledger(root) { (changes, save) =>
-    LabCommands.proxy(root, "reset", None) *> save(changes.map { change =>
+    LabCommands.proxy(root, "reset", None, quiet = true) *> save(changes.map { change =>
       if field(change, "status") == "active" then
         change.mapObject(
           _.add("status", Json.fromString("rolled_back"))
@@ -80,7 +80,7 @@ private[lab] object LabScenarios {
            else if field(changes(index), "status") == "rolled_back" then
              IO.println(s"Already rolled back ${id.get}")
            else
-             LabCommands.proxy(root, "reset", None) *>
+             LabCommands.proxy(root, "reset", None, quiet = true) *>
                save(
                  changes.updated(
                    index,
@@ -94,12 +94,16 @@ private[lab] object LabScenarios {
       }
   }
 
-  private[lab] def activatePlatformChange(root: Path, milliseconds: Int): IO[String] =
+  private[lab] def activatePlatformChange(
+      root: Path,
+      milliseconds: Int,
+      verbose: Boolean = false,
+  ): IO[String] =
     ledger(root) { (changes, save) =>
       IO.raiseWhen(changes.exists(change => field(change, "status") == "active"))(
         new IllegalArgumentException("traffic policy is already active; roll it back first"),
       ) *>
-        LabCommands.proxy(root, "latency", Some(milliseconds)) *>
+        LabCommands.proxy(root, "latency", Some(milliseconds), quiet = !verbose) *>
         IO.defer {
           val id = s"traffic-policy-${idTime.format(Instant.now())}-" +
             UUID.randomUUID().toString.take(6)
@@ -117,8 +121,10 @@ private[lab] object LabScenarios {
         }
     }
 
-  def activatePlatform(root: Path, milliseconds: Int): IO[Unit] =
-    activatePlatformChange(root, milliseconds).flatMap(id => IO.println(s"Applied $id"))
+  def activatePlatform(root: Path, milliseconds: Int, verbose: Boolean = false): IO[Unit] =
+    activatePlatformChange(root, milliseconds, verbose).flatMap { id =>
+      IO.println(if verbose then s"Applied $id" else "Applied traffic policy")
+    }
 
   private[lab] def playbackEventId(id: UUID): UUID = {
     // Preserve the Python uuid5(NAMESPACE_URL, name) seed IDs.

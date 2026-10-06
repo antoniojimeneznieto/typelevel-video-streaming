@@ -24,7 +24,13 @@ else
   if [[ -z "$launcher" || ! -x "$launcher" ]] ||
     [[ -z "$staged_jar" ]] ||
     [[ -n "$(find "$project_directory/tools/lab-cli/src" "$project_directory/build.sbt" -type f -newer "$staged_jar" -print -quit 2>/dev/null)" ]]; then
-    (cd "$project_directory" && sbt --batch 'labCli/stage') >&2
+    build_log="$(mktemp)"
+    if ! (cd "$project_directory" && sbt --batch 'labCli/stage') >"$build_log" 2>&1; then
+      cat "$build_log" >&2
+      rm -f "$build_log"
+      exit 1
+    fi
+    rm -f "$build_log"
     launcher="$(find_launcher)"
   fi
 fi

@@ -236,7 +236,12 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
         case _ => IO.unit
       }
 
-  def proxy(root: Path, action: String, milliseconds: Option[Int]): IO[Unit] =
+  def proxy(
+      root: Path,
+      action: String,
+      milliseconds: Option[Int],
+      quiet: Boolean = false,
+  ): IO[Unit] =
     withImages(root, false) { env =>
       LabIo
         .run(
@@ -252,6 +257,7 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
             action,
           ) ++ milliseconds.map(_.toString),
           env,
+          capture = quiet,
         )
         .void
     }

@@ -173,6 +173,22 @@ object LabCliSuite extends SimpleIOSuite {
     }
   }
 
+  test("incident control details require an explicit facilitator flag") {
+    IO.pure(
+      expect(
+        LabCliParser.command
+          .parse(List("incident", "start", "8f27"))
+          .exists(_.action == LabAction.Incident("8f27", None, false)),
+      ) &&
+        expect(
+          LabCliParser.command
+            .parse(List("incident", "start", "8f27", "--verbose"))
+            .exists(_.action == LabAction.Incident("8f27", None, true)),
+        ) &&
+        expect(LabCliParser.command.parse(List("incident", "start", "3c91", "--verbose")).isLeft),
+    )
+  }
+
   test("Decline rejects invalid incident combinations and reports help") {
     IO.pure {
       val invalidCode  = LabCliParser.command.parse(List("incident", "activate", "wrong"))

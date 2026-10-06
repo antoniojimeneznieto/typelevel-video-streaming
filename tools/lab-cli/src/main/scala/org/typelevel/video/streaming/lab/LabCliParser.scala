@@ -20,7 +20,7 @@ private[lab] enum LabAction {
   case Changes
   case Inspect(id: String)
   case Rollback(id: String)
-  case Incident(code: String, milliseconds: Option[Int])
+  case Incident(code: String, milliseconds: Option[Int], verbose: Boolean = false)
   case Scenario3(action: String)
   case Scenario4(action: String)
   case Scenario5(action: String)
@@ -168,9 +168,11 @@ private[lab] object LabCliParser {
         .option[Int]("milliseconds", help = "Catalog delay for incident 8f27 (1–9999)")
         .validate("--milliseconds must be between 1 and 9999")(n => n >= 1 && n <= 9999)
         .orNone,
+      Opts.flag("verbose", help = "Show facilitator control details for incident 8f27").orFalse,
     ).mapN(Incident.apply)
-      .validate("--milliseconds is only valid for incident 8f27") {
-        case Incident(code, milliseconds) => code == "8f27" || milliseconds.isEmpty
+      .validate("--milliseconds and --verbose are only valid for incident 8f27") {
+        case Incident(code, milliseconds, verbose) =>
+          code == "8f27" || (milliseconds.isEmpty && !verbose)
         case _ => false
       }
 

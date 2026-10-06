@@ -6,6 +6,9 @@ diagnosis. Share only the **participant brief** in the round section with
 attendees. [lab-scenarios.md](lab-scenarios.md) is the scenario specification;
 this file is the sequence of actions to run the workshop.
 
+Workshop-wide ideas from live testing are collected in
+[Global lab ideas](docs/lab-global-ideas.md) for a joint review after testing.
+
 ## Current readiness
 
 Scenario 1 is rehearsed on the full stack. Scenario 3 has a prebuilt exercise
@@ -43,6 +46,81 @@ Use a shared worksheet with these fields: symptom and affected users; first
 abnormal signal; adjacent layers ruled out; decisive trace or log evidence;
 change inspected; fix; recovery evidence; and transfer lesson.
 
+### Participant onboarding — share before the first round
+
+Open with: **You do not need to know this system in advance to investigate a
+failure when you have good telemetry.** Use the evidence to discover the request
+path, narrow the affected boundary, and test an explanation. Source and platform
+history are available when the evidence points there.
+
+Give a short tool tour before announcing any incident:
+
+- **Workshop Overview:** find affected services and routes, then follow dashboard links.
+- **Gateway and Catalog Boundary:** compare caller/server timings and request rates.
+- **Tempo:** follow an exemplar to a trace; inspect child spans and SQL timings.
+- **Platform CLI:** review recent changes, inspect a candidate, and roll back a
+  change when the evidence supports it. These commands are available in every round;
+  their availability does not imply a platform change caused every incident.
+
+Provide this command card to participants (replace `CHANGE_ID` with an actual ID):
+
+```bash
+./scripts/lab.sh help
+./scripts/lab.sh platform --help
+./scripts/lab.sh platform changes
+./scripts/lab.sh platform inspect CHANGE_ID
+./scripts/lab.sh platform rollback CHANGE_ID
+./scripts/lab.sh traffic status
+```
+
+Demonstrate help and navigation before the fault; do not demonstrate a rollback
+as part of onboarding. Ask participants to record a hypothesis and supporting
+trace before changing anything. Keep facilitator activation and solution notes
+separate from this card.
+
+### Teach concepts when participants use them
+
+Use short explanations beside the live evidence. Allow roughly three minutes
+of distributed teaching in round 1, then 30–60 seconds for each later round's
+new concept. Include these pauses in rehearsal timing. Preparation and rebuild
+waits are useful opportunities, but check readiness separately: finishing an
+explanation does not mean the system has finished warming up.
+
+| Moment | Short explanation to say or demonstrate |
+| --- | --- |
+| Round 1 baseline is warming up (30–45s) | “A metric summarizes observations over time. Each labeled series describes a group, such as one service and route. These graphs help us see when behavior changes and who is affected.” Point to the axes, units, route, and time range. |
+| First latency comparison (30s) | “This p95 estimates the duration below which 95% of the observed requests fall. Here it is calculated from histogram buckets over the last 60 seconds.” Contrast it with the mean and explain that it is a population summary. |
+| First exemplar click (20–30s) | “An exemplar connects an individual measurement to its trace. It gives us a request to inspect from this period.” The linked request is not necessarily the p95 request or representative of every request. |
+| First trace opens (45s) | “A trace follows one request across instrumented operations. Each span records an operation's timing and context; parent/child relationships help us reconstruct the path.” Show the caller, server child, and SQL spans. Nested or overlapping spans must not simply be added together. |
+| Rollback and recovery window (30s) | “New requests can be healthy while a rolling metric still includes old slow requests. Check a fresh trace now, then check sustained recovery after the window clears.” Use the same offered load and verify errors and drops too. |
+
+After each explanation, hand the investigation back with an evidence question:
+“What can we conclude from this view, and what should we inspect next?” Teach
+how to read the view before pointing out the incident-specific abnormality.
+If a hint is needed, record it separately from concept teaching during rehearsal.
+
+Introduce later concepts only when they become useful:
+
+- **Round 3 — runtime signals:** request duration shows the symptom; CPU,
+  scheduling, and unrelated lightweight requests help test whether execution
+  capacity is constrained. Correlation is a lead to investigate, not proof.
+- **Round 4 — diagnostic coverage:** a trace can contain a successful early
+  check and a failed later stage. An uninstrumented stage leaves a gap in our
+  explanation. Teach this when participants inspect the authorization evidence;
+  leave the missing stage for them to identify and instrument.
+- **Round 5 — gauges and completed observations:** a gauge describes current
+  state, such as queued requests. A duration histogram in this lab records waits
+  after they end, so it cannot by itself show how long still-queued requests have
+  been waiting. Introduce this when comparing queue depth, oldest-wait age, and
+  acquisition duration, without naming the leaking branch.
+
+Explain logs when opening one: “A log records a discrete event and its context;
+a trace ID can connect that event to the request.” Use an actual relevant event
+if available. Do not manufacture a logging detour just to cover every signal.
+Keep API details, histogram mathematics, sampling configuration, and telemetry
+pipeline internals for questions or the debrief unless needed to interpret the
+current evidence.
+
 ### Delivery formats
 
 | Format | Who types the incident command? | What attendees need |
@@ -78,17 +156,24 @@ From the repository root, on every machine that will run the lab:
 
 ```bash
 bash scripts/setup.sh --check
-./scripts/lab.sh start
+./scripts/lab.sh start --build
 ./scripts/lab.sh status
 ./scripts/lab.sh proxy check
 ```
 
+Use `./scripts/lab.sh start --build` in place of `start` when running an
+unpublished branch or commit. The image workflow publishes automatically from
+`main` and version tags; a feature branch's commit-tagged images usually do
+not exist in GHCR. Build before attendees arrive, since this can take several
+minutes. The later `status` and `proxy check` steps are the same either way.
+
 The setup check expects a JDK 17+, sbt, Docker Compose v2, Docker Buildx, and a
 running Docker daemon. `start` launches the full application, including
 PostgreSQL, Kafka, Debezium, SeaweedFS, frontend, Toxiproxy, and LGTM. It
-normally pulls images tagged for the current Git commit. If that tag is not
-available or cannot be accessed, build this checkout locally with
-`./scripts/lab.sh start --build`; allow substantially more preparation time.
+normally pulls images tagged for the current Git commit. If the pull fails,
+check the printed tag and startup log. An `unauthorized` response can mean the
+tag is unavailable or that registry access is required. Retry with `--build`
+for this checkout when the image has not been published.
 The startup log path is printed by the script. Do not start a group exercise
 until startup and readiness checks complete.
 Traffic commands use the running Gateway container's image prefix and tag by
@@ -195,7 +280,8 @@ First restore a healthy proxy and start one continuous Catalog-read stream:
 ./scripts/lab.sh traffic status
 ```
 
-Allow **at least 40 seconds** for JVM warmup and a healthy metrics window.
+Allow **at least 75 seconds** for JVM warmup and a full 60-second metrics window;
+extend warmup if the baseline is still changing.
 Record the time, Gateway server p95, Gateway Catalog client p95, Catalog server
 p95, and the four rates on the dashboard: offered, Gateway inbound, Gateway
 Catalog client, and Catalog server. Check the generator report for
@@ -209,9 +295,12 @@ individual laptops, announce the code and have attendees type it:
 ./scripts/lab.sh incident start 8f27
 ```
 
-The command prints a neutral change ID. It does not print the proxy setting.
-Note the activation time privately. Allow about 40 seconds before comparing a
-clean fault window; dashboard rate queries need time to accumulate data.
+The command prints only `Applied traffic policy` on success. Facilitators can
+use `incident start 8f27 --verbose` to show control details; do not project that
+output. Participants discover change IDs through `platform changes`.
+Note the activation time privately. Allow at least 75 seconds before comparing a
+clean fault window; the boundary dashboard uses a fixed 60-second lookback
+plus telemetry export and refresh delay.
 
 ### Investigation prompts
 
@@ -241,7 +330,8 @@ Participants inspect and remediate through:
 ./scripts/lab.sh platform rollback CHANGE_ID
 ```
 
-`CHANGE_ID` is the value printed at activation or listed by `changes`.
+`CHANGE_ID` is the value listed by `platform changes` (also printed during
+facilitator activation with `--verbose`).
 Rollback reconciles the proxy to the healthy mapping and can be repeated.
 Participant remediation is the rollback, not a direct proxy reset.
 
@@ -264,7 +354,9 @@ timebox on the machines used for the workshop.
 
 ### Recovery and group walkthrough
 
-Keep the same traffic running for **at least 40 seconds** after rollback.
+Keep the same traffic running for **at least 75 seconds** after rollback.
+Inspect fresh post-rollback traces immediately, then allow the 60-second
+boundary window and export/refresh delay to clear before judging its p95.
 Compare a recent recovery window with the recorded baseline: Gateway server
 and client latency return near their healthy range, Catalog remains healthy,
 rates remain aligned, and a **new** trace has a short client/server gap. Old
@@ -274,6 +366,33 @@ Have participants explain the cause using a trace and at least one rate
 comparison. Close with the lesson: a slow dependency call does not establish
 that the dependency's own work is slow; adjacent client and server spans locate
 time at their boundary.
+
+### Calibration evidence — 2026-10-06
+
+The facilitator reported activation around 19:10 and rollback around 19:19
+(displayed local time), with a healthy exemplar around 19:20 but the aggregate
+latency graph recovering several minutes later. Preserve exact ledger timestamps
+and trace start times on the next pass; terminal prompt time can precede command
+execution and the ledger uses UTC.
+
+![Round 1 boundary timing and aligned rates](docs/scenario1-gateway-catalog-boundary.png)
+
+This capture shows slow Gateway client timing with a fast Catalog server and
+aligned request rates. A fresh healthy trace after rollback demonstrates that
+request's recovery; it does not require a historical p95 window to clear at once.
+The running Grafana data source was subsequently observed with a 60-second
+configured interval, while Gateway metric samples were five seconds apart.
+With `$__rate_interval`, that configuration creates a minimum four-minute window.
+The boundary dashboard now uses a fixed 60-second window for both latency and
+rates. Rehearse again to measure its recovery-display delay. The overview still
+uses adaptive windows; use Query Inspector to record their expanded duration.
+
+![Round 1 workshop overview](docs/scenario1-workshop-overview.png)
+
+Overview follow-ups: the overall request rate sums service hops (about 10/s for
+5 user requests/s through two services); absent error series currently display
+`No data`/`No telemetry`; the heatmap needs query/rendering review. Do not interpret
+those labels as confirmed telemetry loss or use the total as the offered rate.
 
 ### Reset for the next group
 
@@ -636,7 +755,8 @@ group. Leave Grafana history in place.
 
 | Symptom | Facilitator action |
 | --- | --- |
-| Startup cannot pull the commit-tagged images | Check registry access and the printed startup log; use `./scripts/lab.sh start --build` before the session if the tag is unavailable. |
+| Startup cannot pull the commit-tagged images | Check the branch, image tag, registry access, and printed startup log. Images are published automatically from `main` and version tags. For an unpublished checkout, rerun `./scripts/lab.sh start --build`, then run `status` and `proxy check`. |
+| Scenario 1 verification says the generator lost or failed requests | Inspect the printed generator JSON and `docker logs typelevel-video-streaming-lab-traffic` for drops, failures, and scheduler delay warnings. A cumulative `load_valid=false` means at least one arrival was lost during that run, even if the latest window is clean. Let the host settle and repeat the rehearsal with the same rate; keep the failed run's evidence. |
 | No traffic series | Check `./scripts/lab.sh traffic status` and `docker logs typelevel-video-streaming-lab-traffic`; confirm the generator is running and `load_valid=true`. |
 | Traffic drops or failures | Stop the round, inspect the generator JSON report and service health, and reduce the offered rate only for a new baseline/fault/recovery run. Do not change it mid-round. |
 | Metrics are absent but requests complete | Check Grafana freshness and the generator JSON independently. Missing telemetry is unknown, not zero requests. |
@@ -649,6 +769,105 @@ clearing the full ephemeral stack. It stops the application and its data
 containers, so it is not a between-round reset.
 
 ## Handoff record for the next facilitator
+
+### Live calibration protocol
+
+For a workshop simulation, follow presentation order: rounds 1, 3, 4, then 5
+among the currently runnable rounds. Round 2 still needs implementation; record
+that omission when timing the workshop. Round 5 is the final live incident.
+The detailed round-5 procedure below can also be used independently to check
+session metrics and timeout behavior. For each runnable round, do a technical
+pass with facilitator notes, followed by a timed participant pass using only
+the brief and investigation prompts. Record every hint needed and every step
+where the next action was unclear.
+
+Keep one evidence folder per run, outside the tracked source tree if convenient.
+Record the commit, source diff (including participant repair), deployed image
+IDs, OS/CPU, Docker CPU and memory allocation, delivery format, and workload
+settings. Save `.lab/preparation.json` after preparation. Record timestamps in
+UTC and use absolute Grafana time ranges so screenshots and traces align.
+Capture evidence before profile switches, preparation, restore, or rebuild:
+the generator container can be replaced, and service instance IDs change.
+
+For round 5, use this sequence alongside the commands above:
+
+| Phase | Action and evidence |
+| --- | --- |
+| Prepare | Start the current build, build the generator, run `prepare 5`, and check stack status. Confirm fresh telemetry and capacity six. Keep arbitrary browser searches out of the rehearsal. |
+| Baseline | Run `scenario5 baseline` for at least 40 seconds. Save generator logs, a Catalog Sessions screenshot, and a healthy course trace. Record successes, drops, acquisition wait, and occupancy. |
+| Activate | Record the exact UTC time of `incident start d5e0`. Keep 5 requests/s. Record first persistent occupancy increase, capacity exhaustion, first queued request, and first HTTP 504. About one minute to depletion is a hypothesis to measure. |
+| Diagnose | Capture occupancy rising toward six and waiting requests appearing. Save a triggering empty-result request/response and a slow unrelated LearningPath trace. Identify acquisition waiting versus SQL execution; note any evidence unavailable until a span finishes. |
+| Check deadlines | Distinguish Gateway HTTP 504 near 10 seconds from generator timeout near 15 seconds using status/outcome counts and request evidence. Record whether downstream waits actually finish after the response deadline. |
+| Check cleanup | Save fault evidence, stop traffic, and wait through request/drain deadlines plus telemetry export delay. Record whether waiting and oldest-wait age return to zero. Leaked active sessions may remain at six. If waits persist, record duration and traces before resetting. |
+| Resume fault | Restart the mixed workload with `incident start d5e0` without preparing/restarting Catalog. Record this intentional interruption. Confirm the depleted state before the repair. |
+| Repair | Edit source, save the diff, and run `scenario5 rebuild`. Record rebuild duration and the new Catalog instance ID. Exclude the deployment interruption from recovery assessment. |
+| Recovery | Observe at least 120 seconds of the same mixed workload after readiness. Save two generator reports bracketing this window, pool graphs, and fresh course and LearningPath traces. Require no new failures/drops, bounded waits, and sessions returning after requests. |
+| Reset | Save evidence before `scenario5 restore`. Restore faulty exercise source deliberately, then prepare a new round and confirm a healthy baseline. Record reset time and any manual steps. |
+
+The cleanup pause is a calibration check; omit it from the timed participant
+pass, where mixed traffic should continue through diagnosis and repair.
+Repeat the technical run at least twice on the intended host before publishing
+a timing range. Repeat on the minimum supported host before claiming support
+for that environment. If load is invalid, keep the failed run's evidence and
+change settings only for a new complete run.
+
+While requests remain queued, oldest-wait age should advance between collections.
+It can drop when the oldest request leaves, and can settle into a repeating
+pattern if deadlines cancel old waiters while new requests arrive. Do not require
+an indefinitely increasing line. Missing/stale telemetry does not prove cleanup.
+
+Save raw generator output at each phase, for example:
+
+```bash
+docker logs --timestamps typelevel-video-streaming-lab-traffic > round5-baseline-generator.log 2>&1
+```
+
+Use a different filename for each phase. The report's `window` fields describe
+recent load validity; `statuses`, `outcomes`, and operation means are cumulative
+within that generator process. Compare counter differences across the recovery
+window; a cumulative mean includes earlier failures. Compare the same route
+and workload when judging latency: the course-only baseline is not a healthy
+LearningPath baseline. Use the repaired mixed run for that route's healthy
+reference, or record a separate healthy control run.
+
+### Screenshots and observations to add after rehearsal
+
+Keep a small annotated set per round:
+
+1. **Baseline overview:** rates/errors/latency, workload validity, absolute time.
+2. **Fault overview:** same panels and scale, activation marked.
+3. **Decisive trace:** service/operation names and timing visible, with a caption
+   explaining which observation supports the diagnosis and which layer it rules out.
+4. **Scenario-specific evidence:** for round 5, capacity/active/waiting/oldest
+   age together, plus the empty successful response associated with a capacity step.
+5. **Recovery overview:** sustained healthy window, new instance selected, same
+   offered workload, plus a fresh recovery trace.
+
+Keep raw traces or trace IDs, generator logs, and image IDs beside screenshots;
+screenshots alone cannot establish cancellation or release correctness. Avoid
+capturing credentials or bearer tokens. Use captions with the run ID, phase,
+time range, expected observation, and measured observation. Link images beside
+the relevant facilitator step; keep diagnosis images out of the participant brief.
+
+For each run, fill this compact record:
+
+```text
+Run / round / host / commit / source changes / image IDs:
+Preparation and baseline duration:
+Workload, pool, timeout settings:
+Activation / first symptom / decisive evidence timestamps:
+Expected observation -> actual observation:
+Trace IDs and evidence filenames:
+Fix / rebuild duration / recovery window / counter differences:
+Reset duration and next baseline result:
+Hints required / confusing steps / missing panels:
+Pass, fail, or inconclusive; gap IDs and next action:
+```
+
+Update the round's measured timing range, dashboard navigation, expected
+evidence, and troubleshooting from these records. Mark calibration gaps complete
+only after the required observation and reset have been demonstrated; adding
+this checklist does not itself complete a rehearsal.
 
 Record the repository commit or image tag, delivery format, host/Codespaces
 size, setup time, fault activation time, rollback time, and recovery window.

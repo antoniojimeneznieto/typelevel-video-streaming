@@ -38,11 +38,11 @@ object LabCli
           case LabAction.Changes => LabScenarios.platform(root, "changes", None)
           case LabAction.Inspect(id) => LabScenarios.platform(root, "inspect", Some(id))
           case LabAction.Rollback(id) => LabScenarios.platform(root, "rollback", Some(id))
-          case LabAction.Incident("8f27", milliseconds) =>
-            LabScenarios.activatePlatform(root, milliseconds.getOrElse(750))
-          case LabAction.Incident("3c91", _) => LabScenarios.scenario3(root, "activate")
-          case LabAction.Incident("7b42", _) => LabScenarios.scenario4(root, "activate")
-          case LabAction.Incident("d5e0", _) => LabScenarios.scenario5(root, "activate")
+          case LabAction.Incident("8f27", milliseconds, verbose) =>
+            LabScenarios.activatePlatform(root, milliseconds.getOrElse(750), verbose)
+          case LabAction.Incident("3c91", _, _) => LabScenarios.scenario3(root, "activate")
+          case LabAction.Incident("7b42", _, _) => LabScenarios.scenario4(root, "activate")
+          case LabAction.Incident("d5e0", _, _) => LabScenarios.scenario5(root, "activate")
           case LabAction.Scenario3(action) => LabScenarios.scenario3(root, action)
           case LabAction.Scenario4(action) => LabScenarios.scenario4(root, action)
           case LabAction.Scenario5(action) => LabScenarios.scenario5(root, action)
