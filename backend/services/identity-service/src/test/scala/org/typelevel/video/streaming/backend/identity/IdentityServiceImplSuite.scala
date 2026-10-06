@@ -4,6 +4,8 @@ import java.util.UUID
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
+import org.typelevel.otel4s.metrics.MeterProvider
+import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.events.UserCreated
 import org.typelevel.video.streaming.backend.identity.api.*
 import org.typelevel.video.streaming.backend.identity.domain.*
@@ -35,10 +37,14 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
     (IdentityService[IO], IdentityRepository, Session[IO], IOLocalRequestContext[UUID]),
   ] =
     for
-      sessions  <- sessionPool
-      session   <- sessions
-      context   <- Resource.eval(IOLocalRequestContext.create[UUID])
-      hasher    <- Resource.eval(PasswordHasherImpl.create())
+      sessions <- sessionPool
+      session  <- sessions
+      context  <- Resource.eval(IOLocalRequestContext.create[UUID])
+      hasher   <- Resource.eval {
+                  given TracerProvider[IO] = TracerProvider.noop[IO]
+                  given MeterProvider[IO]  = MeterProvider.noop[IO]
+                  PasswordHasherImpl.create()
+                }
       repository = new IdentityRepositoryImpl(sessions)
       service    = new IdentityServiceImpl(repository, hasher, tokenIssuer, context)
     yield (service, repository, session, context)
