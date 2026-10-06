@@ -34,12 +34,24 @@ source "$script_directory/images.sh"
 
 log_file="$project_directory/startup-$(date +%Y%m%d-%H%M%S)-$$.log"
 source "$script_directory/progress.sh"
-total_steps=13
-if "$build_images"; then total_steps=14; fi
+total_steps=14
+if "$build_images"; then total_steps=15; fi
 init_progress "$log_file" "$total_steps"
 trap stop_spinner EXIT
 trap 'stop_spinner; printf "\nStartup interrupted. Full log: %s\n" "$log_file" >&2; exit 130' INT
 trap 'stop_spinner; printf "\nStartup stopped. Full log: %s\n" "$log_file" >&2; exit 143' TERM
+
+wait_for_docker() {
+  local deadline=$((SECONDS + 120))
+  # Codespaces can run postStartCommand before Docker-in-Docker is ready.
+  until docker info >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+      echo "Docker did not become ready within 120 seconds. Start Docker or check its permissions/context, then retry." >&2
+      return 1
+    fi
+    sleep 2
+  done
+}
 
 validate_backend_images() {
   local service_name
@@ -74,6 +86,7 @@ printf 'Demo data is temporary and is cleared when its storage containers stop.\
 printf 'Images: %s (override with IMAGE_TAG)\n' "$IMAGE_TAG"
 printf 'Full log: %s\n\n' "$log_file"
 
+run_step "Waiting for Docker" wait_for_docker
 if "$build_images"; then
   run_step "Building workshop images from local source" bash "$script_directory/build-images.sh"
 fi
