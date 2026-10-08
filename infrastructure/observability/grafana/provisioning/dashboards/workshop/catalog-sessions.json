@@ -1,6 +1,6 @@
 {
   "uid": "catalog-sessions",
-  "title": "Catalog Sessions",
+  "title": "Catalog Pool Investigation",
   "tags": ["workshop", "catalog", "postgresql"],
   "schemaVersion": 41,
   "version": 1,
@@ -20,6 +20,7 @@
       "description": "The exercise pool has six slots. Compare the current Catalog instance after a rebuild; older instance series can remain in the telemetry history.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "x": 0, "y": 0, "w": 24, "h": 9 },
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true } },
       "targets": [
         { "refId": "A", "expr": "catalog_session_active{service_name=\"catalog-service\"}", "legendFormat": "{{service_instance_id}} checked out" },
         { "refId": "B", "expr": "catalog_session_waiting{service_name=\"catalog-service\"}", "legendFormat": "{{service_instance_id}} waiting" },
@@ -59,6 +60,30 @@
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
       "targets": [
         { "refId": "A", "expr": "catalog_session_wait_max_age_seconds{service_name=\"catalog-service\"}", "legendFormat": "{{service_instance_id}} oldest wait" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Recent healthy Catalog traces",
+      "description": "Successful Gateway course and LearningPath reads. Open a recent trace to compare Catalog session acquisition and SQL spans with the affected period.",
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "gridPos": { "x": 12, "y": 26, "w": 12, "h": 10 },
+      "options": { "showHeader": true },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" }, "queryType": "traceql", "query": "{ resource.service.name = \"gateway-service\" && name =~ \"GET /api/catalog/(courses|learning-paths)\" && span.http.response.status_code = 200 } with (most_recent=true)", "tableType": "traces", "limit": 10 }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Recent failing Catalog traces",
+      "description": "Gateway course and LearningPath reads that reached the upstream deadline and returned HTTP 504. Compare available Catalog and SQL spans with pool occupancy and wait age; canceled requests may have incomplete child spans.",
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "gridPos": { "x": 0, "y": 26, "w": 12, "h": 10 },
+      "options": { "showHeader": true },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" }, "queryType": "traceql", "query": "{ resource.service.name = \"gateway-service\" && name =~ \"GET /api/catalog/(courses|learning-paths)\" && span.http.response.status_code = 504 } with (most_recent=true)", "tableType": "traces", "limit": 10 }
       ]
     }
   ]

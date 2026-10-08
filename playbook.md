@@ -724,7 +724,7 @@ Build the current exercise image and start a healthy window:
 `prepare` sets Catalog's pool to six sessions. Allow 30–40 seconds of baseline
 traffic and confirm a recent `window.load_valid=true`, successful requests,
 near-zero acquisition time, and pool occupancy that returns to zero. Open the
-**Catalog Sessions** dashboard from Workshop Overview. Record the baseline and
+**Catalog Pool Investigation** dashboard from Workshop Overview. Record the baseline and
 the activation time; keep the same 5 requests per second through the round.
 The dashboard legend includes the Catalog instance ID. After a rebuild, use
 the new instance's series for recovery; old series remain in telemetry history.
@@ -795,7 +795,11 @@ post-rebuild window. Run the identical mixed workload for at least two minutes:
 pool occupancy must return after requests, acquisition wait must stay bounded,
 and both normal course and LearningPath reads must remain responsive. Require
 recent valid generator windows without new dropped arrivals. Keep a fault trace
-and a recovery trace for the group walkthrough.
+and a recovery trace for the group walkthrough. The dashboard's healthy and
+failing trace tables show recent Gateway course and LearningPath requests by
+HTTP outcome. Choose traces that began in the relevant baseline, fault, or
+recovery window; older failing traces remain visible until they leave the
+selected time range.
 
 On one local full-stack rehearsal, the exercise version filled all six sessions
 and timed out 175 of 475 requests over a 95-second mixed run, with valid offered
@@ -857,7 +861,7 @@ For round 5, use this sequence alongside the commands above:
 | Phase | Action and evidence |
 | --- | --- |
 | Prepare | Start the current build, build the generator, run `prepare 5`, and check stack status. Confirm fresh telemetry and capacity six. Keep arbitrary browser searches out of the rehearsal. |
-| Baseline | Run `scenario5 baseline` for at least 40 seconds. Save generator logs, a Catalog Sessions screenshot, and a healthy course trace. Record successes, drops, acquisition wait, and occupancy. |
+| Baseline | Run `scenario5 baseline` for at least 40 seconds. Save generator logs, a Catalog Pool Investigation screenshot, and a healthy course trace. Record successes, drops, acquisition wait, and occupancy. |
 | Activate | Record the exact UTC time of `incident start d5e0`. Keep 5 requests/s. Record first persistent occupancy increase, capacity exhaustion, first queued request, and first HTTP 504. About one minute to depletion is a hypothesis to measure. |
 | Diagnose | Capture occupancy rising toward six and waiting requests appearing. Save a triggering empty-result request/response and a slow unrelated LearningPath trace. Identify acquisition waiting versus SQL execution; note any evidence unavailable until a span finishes. |
 | Check deadlines | Distinguish Gateway HTTP 504 near 10 seconds from generator timeout near 15 seconds using status/outcome counts and request evidence. Record whether downstream waits actually finish after the response deadline. |

@@ -40,9 +40,10 @@
       "keepTime": true
     },
     {
-      "title": "PostgreSQL and Skunk",
+      "title": "Catalog Pool Investigation",
       "url": "/d/catalog-sessions/catalog-sessions",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true
     },
     {
       "title": "Cats Effect Runtime Metrics",
