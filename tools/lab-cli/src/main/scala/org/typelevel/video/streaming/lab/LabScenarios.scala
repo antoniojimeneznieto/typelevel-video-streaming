@@ -3,7 +3,6 @@ package org.typelevel.video.streaming.lab
 import cats.effect.{IO, Resource}
 import cats.effect.std.Env
 import cats.syntax.all.*
-import fs2.io.file.{Files, Flag, Flags, Path as Fs2Path}
 import io.circe.{Json, JsonObject}
 import io.circe.parser.decode
 import io.circe.syntax.*
@@ -29,11 +28,8 @@ private[lab] object LabScenarios {
   )(use: (Vector[PlatformChange], Vector[PlatformChange] => IO[Unit]) => IO[A]): IO[A] = {
     val dir = root.resolve(".lab")
     LabIo.createDirectories(dir) *>
-      Files[IO]
-        .open(Fs2Path.fromNioPath(dir.resolve("platform.lock")), Flags(Flag.Create, Flag.Write))
-        .flatMap { handle =>
-          Resource.make(handle.lock)(handle.unlock)
-        }
+      LabIo
+        .exclusive(dir.resolve("platform.lock"))
         .use { _ =>
           val state = dir.resolve("platform-changes.json")
           for {
@@ -153,11 +149,30 @@ private[lab] object LabScenarios {
       _      <- applyChange(root, change, milliseconds, verbose)
     yield change.id
 
+  private def rollbackIfPresent(root: Path, id: String): IO[Unit] = ledger(root) {
+    (changes, save) =>
+      changes
+        .find(change => change.id == id && change.status != ChangeStatus.RolledBack)
+        .traverse_ { change =>
+          for
+            _   <- LabCommands.proxy(root, ProxyAction.Reset, quiet = true)
+            now <- IO.realTimeInstant
+            _   <- save(
+                   changes.map(current =>
+                     if current.id == id then change.rolledBack(now.toString) else current,
+                   ),
+                 )
+          yield ()
+        }
+  }
+
   def faultResource(root: Path, milliseconds: Int): Resource[IO, String] =
     Resource.eval(nextChange(milliseconds)).flatMap { change =>
       Resource.makeFull[IO, String] { poll =>
-        poll(applyChange(root, change, milliseconds, false)).as(change.id)
-      }(id => platform(root, PlatformAction.Rollback(id)))
+        poll(applyChange(root, change, milliseconds, false))
+          .onCancel(rollbackIfPresent(root, change.id))
+          .as(change.id)
+      }(id => rollbackIfPresent(root, id))
     }
 
   def activatePlatform(root: Path, milliseconds: Int, verbose: Boolean = false): IO[Unit] =

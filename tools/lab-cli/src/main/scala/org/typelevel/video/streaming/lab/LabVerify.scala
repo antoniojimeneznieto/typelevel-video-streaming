@@ -197,6 +197,9 @@ private[lab] object LabVerify:
                  }
     yield decoded.flatten
 
+  private def matchesLatency(client: Span, server: Span, slow: Boolean): Boolean =
+    if slow then client.ms - server.ms > 500 else client.ms < 100
+
   private[lab] def matchingBoundaryTrace(
       id: String,
       trace: Json,
@@ -209,7 +212,7 @@ private[lab] object LabVerify:
         client <- clients.headOption if clients.size == 1
         server <- servers.headOption if servers.size == 1
         if server.parent == client.id
-        if if slow then client.ms - server.ms > 500 else client.ms < 100 then
+        if matchesLatency(client, server, slow)
       yield (id, client.ms, server.ms)
     }
 

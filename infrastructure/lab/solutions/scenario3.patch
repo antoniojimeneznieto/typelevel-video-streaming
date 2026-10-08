@@ -1,6 +1,6 @@
 --- a/backend/services/identity-service/src/main/scala/org/typelevel/video/streaming/backend/identity/PasswordHasher.scala
 +++ b/backend/services/identity-service/src/main/scala/org/typelevel/video/streaming/backend/identity/PasswordHasher.scala
-@@ -41,7 +41,7 @@
+@@ -43,7 +43,7 @@
  
    override def verify(password: Password, hash: PasswordHash): IO[Boolean] =
      val work =

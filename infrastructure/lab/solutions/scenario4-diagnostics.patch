@@ -8,22 +8,23 @@
  import org.typelevel.otel4s.trace.{Tracer, TracerProvider}
  import org.typelevel.video.streaming.backend.runtime.auth.AccessTokenVerifierTelemetry
  import org.typelevel.video.streaming.backend.runtime.auth.AccessTokenVerifierTelemetry.SubjectShape
-@@ -17,7 +18,18 @@
+@@ -17,7 +18,19 @@
        subject: Option[String],
        shape: SubjectShape,
        decode: IO[Option[UUID]],
 -  ): IO[Option[UUID]] = Tracer[IO].span("auth.subject.decode").surround(decode)
 +  ): IO[Option[UUID]] =
 +    Tracer[IO].span("auth.subject.decode").surround {
-+      decode.flatTap { result =>
-+        val outcome = if result.isDefined then "accepted" else "rejected"
-+        Tracer[IO].withCurrentSpanOrNoop(
-+          _.addAttributes(
-+            Attribute("auth.result", outcome),
-+            Attribute("auth.subject.shape", shape.label),
-+          ),
-+        )
-+      }
++      for
++        result <- decode
++        outcome = if result.isDefined then "accepted" else "rejected"
++        _ <- Tracer[IO].withCurrentSpanOrNoop(
++               _.addAttributes(
++                 Attribute("auth.result", outcome),
++                 Attribute("auth.subject.shape", shape.label),
++               ),
++             )
++      yield result
 +    }
  
  object PlaybackAuthTelemetry:

@@ -3,10 +3,12 @@ package org.typelevel.video.streaming.lab
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import fs2.Stream
-import fs2.io.file.{CopyFlag, CopyFlags, Files, Path as Fs2Path}
+import fs2.io.file.{CopyFlag, CopyFlags, Files, Flag, Flags, Path as Fs2Path}
 import fs2.io.process.{ProcessBuilder, Redirect}
 import fs2.text
 import java.nio.file.Path
+import java.nio.channels.OverlappingFileLockException
+import scala.concurrent.duration.*
 
 private[lab] object LabIo:
   final case class ProcessResult(exitCode: Int, stdout: String, stderr: String):
@@ -62,6 +64,21 @@ private[lab] object LabIo:
   def createDirectories(path: Path): IO[Unit] =
     Files[IO].createDirectories(Fs2Path.fromNioPath(path))
   def read(path: Path): IO[String] = Files[IO].readUtf8(Fs2Path.fromNioPath(path)).compile.string
+
+  /** Retry nonblocking lock acquisition so a queued CLI can still be canceled. */
+  def exclusive(path: Path): Resource[IO, Unit] =
+    Files[IO].open(Fs2Path.fromNioPath(path), Flags(Flag.Create, Flag.Write)).flatMap { handle =>
+      Resource
+        .makeFull[IO, handle.Lock] { poll =>
+          def acquire: IO[handle.Lock] =
+            handle.tryLock.recover { case _: OverlappingFileLockException => None }.flatMap {
+              case Some(lock) => IO.pure(lock)
+              case None => poll(IO.sleep(100.millis)) *> acquire
+            }
+          acquire
+        }(handle.unlock)
+        .void
+    }
 
   def writeAtomic(path: Path, contents: String): IO[Unit] =
     Resource

@@ -1,6 +1,6 @@
 package org.typelevel.video.streaming.lab
 
-import cats.effect.IO
+import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
 import fs2.io.file.Files
 import io.circe.Json
@@ -8,8 +8,26 @@ import io.circe.parser.parse
 import weaver.SimpleIOSuite
 
 import java.util.UUID
+import scala.concurrent.duration.*
 
 object LabCliSuite extends SimpleIOSuite {
+  test("a queued file lock can be canceled without releasing its owner") {
+    Files[IO].tempDirectory.use { directory =>
+      val lock = LabIo.exclusive(directory.toNioPath.resolve("state.lock"))
+      for
+        entered <- Ref.of[IO, Boolean](false)
+        _       <- lock.use { _ =>
+               Resource.make(lock.use(_ => entered.set(true)).start)(_.cancel).use { contender =>
+                 IO.sleep(200.millis) *> contender.cancel.timeout(1.second)
+               }
+             }
+        acquiredEarly <- entered.get
+        _             <- lock.use(_ => entered.set(true)).timeout(1.second)
+        acquiredAfter <- entered.get
+      yield expect(!acquiredEarly && acquiredAfter)
+    }
+  }
+
   test("deployed scenario settings map back to Compose and invalid values fail closed") {
     IO.pure(
       expect(

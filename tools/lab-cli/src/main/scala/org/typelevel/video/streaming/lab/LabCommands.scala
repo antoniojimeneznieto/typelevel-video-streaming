@@ -114,31 +114,29 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
     }
 
   def rebuild(root: Path, service: String, extra: Map[String, String] = Map.empty): IO[Unit] =
-    withImages(root, true) { env =>
-      deployedSettings(root, service).flatMap { settings =>
-        val environment = env ++ settings ++ extra
-        LabIo.run(root, Seq("bash", "scripts/build-images.sh", service), environment).void *>
-          LabIo
-            .run(
-              root,
-              Seq(
-                "docker",
-                "compose",
-                "up",
-                "--detach",
-                "--no-deps",
-                "--no-build",
-                "--pull",
-                "never",
-                "--force-recreate",
-                "--wait",
-                service,
-              ),
-              environment,
-            )
-            .void
-      }
-    }
+    for
+      env        <- imageEnvironment(root, true)
+      settings   <- deployedSettings(root, service)
+      environment = env ++ settings ++ extra
+      _          <- LabIo.run(root, Seq("bash", "scripts/build-images.sh", service), environment)
+      _          <- LabIo.run(
+             root,
+             Seq(
+               "docker",
+               "compose",
+               "up",
+               "--detach",
+               "--no-deps",
+               "--no-build",
+               "--pull",
+               "never",
+               "--force-recreate",
+               "--wait",
+               service,
+             ),
+             environment,
+           )
+    yield ()
 
   def rebuilt(root: Path, service: String, extra: Map[String, String]): Resource[IO, Unit] =
     Resource.eval(deployedSettings(root, service)).flatMap { previous =>

@@ -187,8 +187,10 @@ identity across requests, so failures follow users rather than random attempts.
 Playback's workshop read mode and seeded projection rows avoid Kafka and S3.
 The traffic generator reports ten successful setup logins with an 8/2 format
 split, without account or token values; measured requests remain Playback-only.
-It renews each actor's token before expiry during long runs while retaining
-the same actor allocation.
+A separate maintenance loop renews each actor at 80% of its issued token lifetime,
+retaining the same actor allocation. Renewal requests are excluded from measured
+Playback latency and emit a bounded `token-renewal` event. A renewal failure stops
+the workload rather than appearing as a Playback request failure.
 
 **How participants identify it:** Identity login succeeds for both groups.
 Playback rejects the same minority before repository work while accepted

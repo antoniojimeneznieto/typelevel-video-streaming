@@ -18,16 +18,6 @@ private[lab] object LabPreparation {
     state.hcursor.get[Boolean]("Running").contains(true) &&
       state.hcursor.downField("Health").get[String]("Status").contains("healthy")
 
-  private def containerId(root: Path, service: String): IO[String] =
-    LabIo
-      .output(root, Seq("docker", "compose", "ps", "--all", "-q", service))
-      .map(_.trim)
-      .flatMap { id =>
-        IO.raiseUnless(id.nonEmpty && !id.contains('\n'))(
-          new IllegalStateException(s"Expected one $service container; run lab.sh start first"),
-        ).as(id)
-      }
-
   private def awaitHealth(root: Path, id: String): IO[Unit] = {
     def check: IO[Unit] =
       LabIo
@@ -37,7 +27,11 @@ private[lab] object LabPreparation {
     check.timeout(90.seconds)
   }
 
-  def prepare(root: Path, round: Int): IO[Unit] = {
+  def prepare(root: Path, round: Int): IO[Unit] =
+    LabIo.createDirectories(root.resolve(".lab")) *>
+      LabIo.exclusive(root.resolve(".lab/preparation.lock")).use(_ => prepareLocked(root, round))
+
+  private def prepareLocked(root: Path, round: Int): IO[Unit] = {
     val record = root.resolve(".lab/preparation.json")
     for {
       _ <- IO.raiseUnless(Set(1, 3, 4, 5)(round))(new IllegalArgumentException("Unsupported round"))
@@ -51,7 +45,7 @@ private[lab] object LabPreparation {
                )
                .spaces2 + "\n",
            )
-      ids <- services.traverse(service => containerId(root, service))
+      ids <- services.traverse(service => LabCommands.containerId(root, service))
       _   <- LabCommands.stopTraffic(root)
       // Restart existing containers, preserving their actual image and environment.
       // Recreating from bare Compose here would lose scenario-specific settings.
@@ -63,7 +57,7 @@ private[lab] object LabPreparation {
              case 5 => LabScenarios.scenario5(root, Scenario5Action.Prepare)
              case _ => IO.unit
            }
-      currentIds <- services.traverse(service => containerId(root, service))
+      currentIds <- services.traverse(service => LabCommands.containerId(root, service))
       _          <- currentIds.traverse_(awaitHealth(root, _))
       _          <- LabCommands.proxy(root, ProxyAction.Check)
       // Record only safe deployment metadata; container environments include secrets.

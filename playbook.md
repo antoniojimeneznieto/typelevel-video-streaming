@@ -555,11 +555,15 @@ default local Gateway port `8085`.
 The baseline sends 10 authenticated `GET /api/playback/favorites` requests per
 second from eight old-format actors. Identity authenticates all ten accounts
 during generator setup, including the two newer-format accounts, before
-starting traffic. `./scripts/lab.sh traffic status` prints a sanitized
-`preparation` record with ten successful logins and the 8/2 actor counts;
+starting traffic. The generator prints a sanitized
+`preparation` record during setup with ten successful logins and the 8/2 actor counts;
 it contains no account or token values. Verify clean recent windows and `200`
-responses. The generator renews actor tokens during long runs; the actor mix
-does not change when it does so.
+responses. Separate maintenance loops renew tokens at 80% of their issued
+lifetime, including the Identity current-user-only workload. Renewal is excluded
+from measured request latency and emits a `token-renewal` event. A renewal
+failure stops the run. The actor mix does not change. `traffic status` reads only
+the latest 20 log lines and prints the latest reports; save the full generator
+log if you need the original preparation record.
 
 Start the mixed workload with the neutral participant command:
 
@@ -950,3 +954,26 @@ recovery proof; and reset. Keep exact commands and the workload rate beside the
 step where they are used. Move a round from planned to runnable only after its
 automated acceptance check and a human rehearsal pass on the delivery formats
 the company will use.
+
+
+### Verification and generator accounting
+
+The traffic dashboard can select `catalog-courses`, `catalog-reads`, `catalog-soak`,
+`identity`, or `playback`. All generator instruments carry `profile`; completed
+requests also carry `operation`, `outcome`, and `status_class`. Arrival and active
+counts describe the whole selected profile. The Gateway/Catalog boundary
+comparison remains scoped to the `catalog-courses` profile.
+
+`catalog-reads` mixes healthy course and LearningPath reads without empty-result
+searches. Scenario 5 verification uses it to establish the LearningPath baseline,
+then samples pool occupancy and oldest wait while the soak traffic is still
+running. Wait age after traffic stops is recorded separately as cleanup evidence.
+The verifier prints the actual deployed container/image identity; source spelling
+is not used to decide whether the exercise is deployed.
+
+Verification requires idle background traffic. It stops only traffic it starts
+and restores the Catalog pool setting it observed before its temporary rebuild.
+Platform changes are persisted as `pending` before applying latency. If a command
+is interrupted or fails, it attempts a compensating reset; after a process crash,
+use `platform inspect` and `platform rollback` on the pending ID to reconcile it.
+Concurrent preparations and ledger edits are serialized with cancelable lock waits.
