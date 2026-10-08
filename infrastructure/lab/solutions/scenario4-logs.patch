@@ -1,0 +1,22 @@
+--- a/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/PlaybackAuthTelemetry.scala
++++ b/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/PlaybackAuthTelemetry.scala
+@@ -22,11 +22,13 @@
+     Tracer[IO].span("auth.subject.decode").surround {
+       decode.flatTap { result =>
+         val outcome = if result.isDefined then "accepted" else "rejected"
+-        Tracer[IO].withCurrentSpanOrNoop(
+-          _.addAttributes(
+-            Attribute("auth.result", outcome),
+-            Attribute("auth.subject.shape", shape.label),
+-          ),
+-        )
++        Tracer[IO]
++          .withCurrentSpanOrNoop(
++            _.addAttributes(
++              Attribute("auth.result", outcome),
++              Attribute("auth.subject.shape", shape.label),
++            ),
++          )
++          .flatMap(_ => logger.info(s"Playback subject decoding $outcome: ${subject.getOrElse("<missing>")}"))
+       }
+     }

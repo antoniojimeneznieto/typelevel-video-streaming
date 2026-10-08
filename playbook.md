@@ -8,6 +8,8 @@ this file is the sequence of actions to run the workshop.
 
 Workshop-wide ideas from live testing are collected in
 [Global lab ideas](docs/lab-global-ideas.md) for a joint review after testing.
+The facilitator's dated observations and screenshots are in
+[the 2026-10-06 rehearsal notes](docs/rehearsal-2026-10-06.md).
 
 ## Current readiness
 
@@ -241,13 +243,16 @@ of completing the exercise. Facilitators may use these fallback patches if a
 group gets stuck, after reviewing any participant edits:
 
 - `infrastructure/lab/solutions/scenario3.patch`: move verification to `IO.blocking`.
-- `infrastructure/lab/solutions/scenario4-diagnostics.patch`: add bounded validation-stage events, retaining the faulty decoder.
+- `infrastructure/lab/solutions/scenario4-diagnostics.patch`: add bounded result and subject-shape attributes to the prepared subject-decoding span, retaining the faulty decoder.
+- `infrastructure/lab/solutions/scenario4-logs.patch`: optional, after the required diagnostic checkpoint; log the exact rejected synthetic subject in the active trace.
 - `infrastructure/lab/solutions/scenario4.patch`: wire the compatible subject decoder **after** the diagnostic patch.
 - `infrastructure/lab/solutions/scenario5.patch`: scope Catalog session ownership.
 
 Run `git apply --check PATCH` before `git apply PATCH`, substituting the chosen
-path. Do not force a patch over participant changes. Round 4 has two ordered patches. Review diagnostic evidence before applying the
-decoder correction; when resetting, reverse the decoder patch before the diagnostic patch.
+path. Do not force a patch over participant changes. Apply round 4 diagnostics
+first, then the optional logs patch only after the core checkpoint. Review
+diagnostic evidence before applying the decoder correction. When resetting,
+reverse the decoder patch, optional logs patch, then diagnostic patch.
 A successful patch application is not recovery proof: follow the round's rebuild
 and verification steps.
 
@@ -550,7 +555,11 @@ default local Gateway port `8085`.
 The baseline sends 10 authenticated `GET /api/playback/favorites` requests per
 second from eight old-format actors. Identity authenticates all ten accounts
 during generator setup, including the two newer-format accounts, before
-starting traffic. Verify clean recent windows and `200` responses.
+starting traffic. `./scripts/lab.sh traffic status` prints a sanitized
+`preparation` record with ten successful logins and the 8/2 actor counts;
+it contains no account or token values. Verify clean recent windows and `200`
+responses. The generator renews actor tokens during long runs; the actor mix
+does not change when it does so.
 
 Start the mixed workload with the neutral participant command:
 
@@ -564,45 +573,83 @@ of slots. Actor identities and routing remain stable. Observe roughly 20%
 there are no dropped arrivals. Do not publish token contents, subjects, user
 IDs, or actor labels as telemetry attributes.
 
+From **Workshop Overview**, open **Playback Investigation**. Its stacked
+Playback response rates show the 200/401 split, and the two recent-trace tables
+provide a successful control and a rejected request from the same time range.
+Click a representative exemplar on the duration panel or open a trace-table
+row for a specific HTTP outcome in Tempo.
+Use traces that began after the latest rebuild when checking new diagnostics.
+
 ### Investigation prompts
 
 1. Does Identity login work for both groups? Is Gateway reaching Playback?
 2. Where does the Playback trace end? Do rejected requests reach repository
    spans or SQL?
-3. Which stage of token validation differs: signature and standard claims, or
-   subject decoding? Add bounded stage reasons or small spans, then use a new
-   rejected trace to demonstrate the failing stage. This step is required.
-4. Inspect `AccessTokenVerifier.userId` and Playback's wiring in `Main.scala`.
+3. Existing traces show a subject-decoding span on both outcomes, but not
+   why one is rejected. Add bounded result and input-shape attributes to the prepared
+   `PlaybackAuthTelemetry.decodeSubject` method. Use fresh traces to compare a
+   rejected request with a successful control. This step is required.
+4. Once the trace identifies the step, inspect `AccessTokenVerifier.userId`
+   and Playback's wiring in `Main.scala` to plan the repair.
 
 ### Step 1: diagnostic telemetry and proof
 
-Keep the original decoder. Add bounded validation-stage events or spans to the
-existing Playback request trace. Do not export tokens, subjects, user IDs, actor
-labels, JWT claims, or verification exception messages. Do not weaken validation
-or change which requests succeed as part of this step.
-
-The facilitator fallback `scenario4-diagnostics.patch` adds these events with
-`auth.result=accepted|rejected`:
-
-| Event | Meaning |
-| --- | --- |
-| `auth.jwt.verify` | Signature and the JWT library's configured claim checks |
-| `auth.subject.decode` | Application subject-format decoding |
-| `auth.claims.validate` | Additional date-order and canonical JWT-ID checks |
-| `auth.principal.decode` | Application principal construction |
-
-Later stages are absent when an earlier stage rejects. A successful
-`auth.jwt.verify` does not imply that all application checks succeeded. These
-are diagnostic events, not measurements of stage duration.
+Keep the original decoder. `AccessTokenVerifierTelemetry` is the runtime
+interface; the verifier uses its no-op implementation by default. Playback
+supplies `PlaybackAuthTelemetry`, whose `decodeSubject` method initially wraps
+the supplied `IO` in an `auth.subject.decode` span. A contextual `Tracer[IO]`
+and a prepared logger are already available. Participants edit only this method:
+set
+`auth.result=accepted|rejected` from the returned `Option` and
+`auth.subject.shape=bare_uuid|namespaced_uuid|other` from the supplied
+`SubjectShape`. The verifier classifies the subject only after JWT verification;
+the telemetry implementation receives both the category and verified subject,
+but the core instrumentation exports only the category and result.
+The fallback patch shows the complete edit using `Tracer[IO].withCurrentSpanOrNoop`;
+no verifier or dependency wiring is needed during the exercise. The span name
+and result are fixed, bounded values. Do not export tokens, subjects, user
+IDs, actor labels, JWT claims, or verification exception
+messages. Do not weaken validation or change which requests succeed as part
+of this step. Invalid JWTs fail before this span appears.
 
 Rebuild Playback with diagnostics while the same mixed workload continues.
 After restart/warmup, capture a fresh successful trace and a rejected trace.
-**Required checkpoint before the decoder repair:** the rejected trace shows
-`auth.jwt.verify=accepted` followed by `auth.subject.decode=rejected`; rejection
-still occurs at approximately the same workload share. Record the trace IDs and
-explain why database work is not reached. The successful trace must show the
-validation path completing. A source inspection or aggregate 401 rate alone
-does not complete this checkpoint.
+**Required checkpoint before the decoder repair:** a fresh 401 trace contains
+`auth.subject.decode` with `auth.result=rejected` and
+`auth.subject.shape=namespaced_uuid`, while a fresh 200 control contains the
+same span with `auth.result=accepted` and `auth.subject.shape=bare_uuid`. The
+401 share remains near 20%. Record both trace IDs and explain the format
+difference and why database work is not reached. Source inspection then
+confirms which namespace Identity emits and what Playback's decoder accepts.
+An aggregate 401 rate alone does not complete this checkpoint.
+
+Keep the verifier's `None` result for rejected subjects. The authentication
+middleware maps it to HTTP 401; propagating a decoding exception would skip
+that response path. After the core checkpoint, facilitators may demonstrate
+trace-to-logs correlation using the synthetic workshop accounts. Do not add
+a decoding log to the default implementation: it would reveal the branch
+before participants add telemetry.
+
+### Optional after-core exercise: trace to logs
+
+After recording the required 401 and 200 traces, apply
+`infrastructure/lab/solutions/scenario4-logs.patch` on top of the diagnostic
+edit and rebuild Playback. The patch logs the exact *synthetic* rejected subject,
+such as `user:<uuid>`, inside `auth.subject.decode`. Select a fresh 401 trace
+from Playback Investigation, copy its trace ID, then find the correlated
+entry in **Explore → Loki** with this query, replacing the trace ID:
+
+```logql
+{service_name="playback-service"} |= "Playback subject decoding rejected" | trace_id="<trace-id>"
+```
+
+The `Playback subject decoding rejected` log shows the exact synthetic subject.
+The optional patch also logs accepted subjects, so compare the rejected
+`user:<uuid>` form with a successful bare UUID in the same time range. This is a
+facilitator extension after the span exercise, not a prerequisite to the repair.
+Use it only with the seeded workshop accounts; a subject from real users can
+identify or link a person. Never log the JWT or add the subject as a metric or
+span attribute. Reverse this patch before reversing diagnostics during reset.
 
 ### Step 2: decoder repair and recovery proof
 
@@ -632,7 +679,8 @@ sbt --batch 'runtime/testOnly *AccessTokenVerifierSuite'
 
 Restore the original Playback verifier wiring and remove the exercise-added
 diagnostics before repeating the instrumentation lesson. If using fallback
-patches, reverse the decoder patch first, then the diagnostic patch. Run
+patches, reverse the decoder patch first, then the optional logs patch if used,
+then the diagnostic patch. Run
 `./scripts/lab.sh scenario4 restore` after restoring the source. It stops traffic and rebuilds Playback
 in normal projection mode. Leave the seeded accounts and projection rows in
 place; preparation is idempotent.

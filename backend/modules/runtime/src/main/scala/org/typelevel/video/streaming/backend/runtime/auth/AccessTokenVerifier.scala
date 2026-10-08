@@ -16,6 +16,7 @@ final class AccessTokenVerifier[Principal] private (
     audience: String,
     readPrincipal: DecodedJWT => Option[Principal],
     readSubject: String => Option[UUID],
+    telemetry: AccessTokenVerifierTelemetry,
 ) extends BearerTokenVerifier[IO, Principal]:
 
   private val verifier = JWT
@@ -28,20 +29,27 @@ final class AccessTokenVerifier[Principal] private (
     .withClaimPresence("jti")
     .build()
 
-  override def verify(token: String): IO[Option[Principal]] =
-    IO.delay {
-      val jwt = verifier.verify(token)
+  def withTelemetry(observe: AccessTokenVerifierTelemetry): AccessTokenVerifier[Principal] =
+    new AccessTokenVerifier(publicKey, issuer, audience, readPrincipal, readSubject, observe)
 
-      for
-        subject   <- Option(jwt.getSubject)
-        _         <- readSubject(subject)
-        issuedAt  <- Option(jwt.getIssuedAtAsInstant)
-        expiresAt <- Option(jwt.getExpiresAtAsInstant)
-        if issuedAt.getEpochSecond >= 0 && expiresAt.isAfter(issuedAt)
-        jwtId     <- Option(jwt.getId)
-        _         <- parseUuid(jwtId)
-        principal <- readPrincipal(jwt)
-      yield principal
+  override def verify(token: String): IO[Option[Principal]] =
+    IO.delay(verifier.verify(token)).flatMap { jwt =>
+      val subject = Option(jwt.getSubject)
+      telemetry.decodeSubject(
+        subject,
+        AccessTokenVerifierTelemetry.SubjectShape.from(subject),
+        IO.delay(subject.flatMap(readSubject)),
+      ).map { decoded =>
+        for
+          _         <- decoded
+          issuedAt  <- Option(jwt.getIssuedAtAsInstant)
+          expiresAt <- Option(jwt.getExpiresAtAsInstant)
+          if issuedAt.getEpochSecond >= 0 && expiresAt.isAfter(issuedAt)
+          jwtId     <- Option(jwt.getId)
+          _         <- parseUuid(jwtId)
+          principal <- readPrincipal(jwt)
+        yield principal
+      }
     }.recover { case _: JWTVerificationException => None }
 
   private def parseUuid(value: String): Option[UUID] =
@@ -55,7 +63,14 @@ object AccessTokenVerifier:
       issuer: String,
       audience: String,
   )(readPrincipal: DecodedJWT => Option[Principal]): AccessTokenVerifier[Principal] =
-    new AccessTokenVerifier(publicKey, issuer, audience, readPrincipal, parseUuid)
+    new AccessTokenVerifier(
+      publicKey,
+      issuer,
+      audience,
+      readPrincipal,
+      parseUuid,
+      AccessTokenVerifierTelemetry.noop,
+    )
 
   def userId(
       publicKey: RSAPublicKey,
@@ -76,6 +91,7 @@ object AccessTokenVerifier:
       audience,
       jwt => Option(jwt.getSubject).flatMap(compatibleSubject),
       compatibleSubject,
+      AccessTokenVerifierTelemetry.noop,
     )
 
   private def compatibleSubject(value: String): Option[UUID] =

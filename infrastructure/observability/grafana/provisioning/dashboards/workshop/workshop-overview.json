@@ -34,6 +34,12 @@
       "keepTime": true
     },
     {
+      "title": "Playback Investigation",
+      "url": "/d/playback-investigation/playback-investigation",
+      "targetBlank": false,
+      "keepTime": true
+    },
+    {
       "title": "PostgreSQL and Skunk",
       "url": "/d/catalog-sessions/catalog-sessions",
       "targetBlank": false
@@ -365,7 +371,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Server error percentage by service",
+      "title": "HTTP error percentage by status",
+      "description": "4xx and 5xx shares of all selected server requests. Status series are stacked; use Playback Investigation for the single-service 401 evidence.",
       "id": 10,
       "datasource": {
         "type": "prometheus",
@@ -380,15 +387,22 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "decimals": 2
+          "decimals": 2,
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 18,
+            "stacking": { "mode": "normal", "group": "A" }
+          }
         },
         "overrides": []
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "100 * sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"5..\"}[$__rate_interval])) / sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))",
-          "legendFormat": "{{service_name}}",
+          "expr": "100 * sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"[45]..\"}[1m])) / sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[1m]))",
+          "legendFormat": "HTTP {{http_response_status_code}}",
           "exemplar": true
         }
       ]
@@ -512,7 +526,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Route server error percentage",
+      "title": "Route 4xx/5xx percentage",
+      "description": "Per-route 4xx and 5xx responses; split by exact status code. Select one service to avoid merging identically named routes across services.",
       "id": 15,
       "datasource": {
         "type": "prometheus",
@@ -534,8 +549,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 * sum by (classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"5..\"}[$__rate_interval])) / sum by (classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))",
-          "legendFormat": "{{classifier}}",
+          "expr": "100 * sum by (classifier, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"[45]..\"}[1m])) / sum by (classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[1m]))",
+          "legendFormat": "{{classifier}} HTTP {{http_response_status_code}}",
           "exemplar": true
         }
       ]

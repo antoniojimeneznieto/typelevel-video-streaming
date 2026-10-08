@@ -1,160 +1,30 @@
---- a/backend/modules/runtime/src/main/scala/org/typelevel/video/streaming/backend/runtime/auth/AccessTokenVerifier.scala
-+++ b/backend/modules/runtime/src/main/scala/org/typelevel/video/streaming/backend/runtime/auth/AccessTokenVerifier.scala
-@@ -16,6 +16,7 @@
-     audience: String,
-     readPrincipal: DecodedJWT => Option[Principal],
-     readSubject: String => Option[UUID],
-+    diagnostic: (AccessTokenVerifier.Stage, Boolean) => IO[Unit] = (_, _) => IO.unit,
- ) extends BearerTokenVerifier[IO, Principal]:
+--- a/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/PlaybackAuthTelemetry.scala
++++ b/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/PlaybackAuthTelemetry.scala
+@@ -4,6 +4,7 @@
  
-   private val verifier = JWT
-@@ -28,27 +29,51 @@
-     .withClaimPresence("jti")
-     .build()
- 
-+  /** The callback receives bounded outcomes only, never token or principal data. */
-+  def withDiagnostics(
-+      observe: (AccessTokenVerifier.Stage, Boolean) => IO[Unit],
-+  ): AccessTokenVerifier[Principal] =
-+    new AccessTokenVerifier(publicKey, issuer, audience, readPrincipal, readSubject, observe)
-+
-+  private def stage[A](name: AccessTokenVerifier.Stage)(value: => Option[A]): IO[Option[A]] =
-+    IO.delay(value)
-+      .recover { case _: JWTVerificationException => None }
-+      .flatTap(result => diagnostic(name, result.isDefined))
-+
-   override def verify(token: String): IO[Option[Principal]] =
--    IO.delay {
--      val jwt = verifier.verify(token)
--
--      for
--        subject   <- Option(jwt.getSubject)
--        _         <- readSubject(subject)
--        issuedAt  <- Option(jwt.getIssuedAtAsInstant)
--        expiresAt <- Option(jwt.getExpiresAtAsInstant)
--        if issuedAt.getEpochSecond >= 0 && expiresAt.isAfter(issuedAt)
--        jwtId     <- Option(jwt.getId)
--        _         <- parseUuid(jwtId)
--        principal <- readPrincipal(jwt)
--      yield principal
--    }.recover { case _: JWTVerificationException => None }
-+    import AccessTokenVerifier.Stage
-+    stage(Stage.JwtVerification)(Some(verifier.verify(token))).flatMap {
-+      case None => IO.pure(None)
-+      case Some(jwt) =>
-+        stage(Stage.SubjectDecoding)(Option(jwt.getSubject).flatMap(readSubject)).flatMap {
-+          case None => IO.pure(None)
-+          case Some(_) =>
-+            stage(Stage.ClaimsValidation) {
-+              for
-+                issuedAt  <- Option(jwt.getIssuedAtAsInstant)
-+                expiresAt <- Option(jwt.getExpiresAtAsInstant)
-+                if issuedAt.getEpochSecond >= 0 && expiresAt.isAfter(issuedAt)
-+                jwtId <- Option(jwt.getId)
-+                _     <- parseUuid(jwtId)
-+              yield ()
-+            }.flatMap {
-+              case None => IO.pure(None)
-+              case Some(_) => stage(Stage.PrincipalDecoding)(readPrincipal(jwt))
-+            }
-+        }
-+    }
- 
-   private def parseUuid(value: String): Option[UUID] =
-     Try(UUID.fromString(value)).toOption
-       .filter(_.toString.equalsIgnoreCase(value))
- 
- object AccessTokenVerifier:
-+
-+  enum Stage(val eventName: String):
-+    case JwtVerification extends Stage("auth.jwt.verify")
-+    case SubjectDecoding extends Stage("auth.subject.decode")
-+    case ClaimsValidation extends Stage("auth.claims.validate")
-+    case PrincipalDecoding extends Stage("auth.principal.decode")
- 
-   def apply[Principal](
-       publicKey: RSAPublicKey,
---- a/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/Main.scala
-+++ b/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/Main.scala
-@@ -7,6 +7,7 @@
- import org.http4s.Header
- import org.typelevel.ci.CIString
- import org.typelevel.log4cats.slf4j.Slf4jFactory
+ import cats.effect.IO
+ import org.typelevel.log4cats.LoggerFactory
 +import org.typelevel.otel4s.Attribute
- import org.typelevel.otel4s.metrics.MeterProvider
- import org.typelevel.otel4s.trace.TracerProvider
- import org.typelevel.video.streaming.backend.playback.api.PlaybackService
-@@ -40,8 +41,19 @@
- 
-       AppConfig.load[IO].flatMap { config =>
-         val resources = for
--          publicKey     <- Resource.eval(RsaKeyLoader.publicKey(config.jwt.publicKeyPath))
--          verifier       = AccessTokenVerifier.userId(publicKey, "identity", "course-platform")
-+          publicKey  <- Resource.eval(RsaKeyLoader.publicKey(config.jwt.publicKeyPath))
-+          authTracer <-
-+            Resource.eval(otel.tracerProvider.get("org.typelevel.video.streaming.playback.auth"))
-+          verifier = AccessTokenVerifier
-+                       .userId(publicKey, "identity", "course-platform")
-+                       .withDiagnostics { (stage, accepted) =>
-+                         authTracer.currentSpanOrNoop.flatMap(
-+                           _.addEvent(
-+                             stage.eventName,
-+                             Attribute("auth.result", if accepted then "accepted" else "rejected"),
-+                           ),
-+                         )
-+                       }
-           context       <- Resource.eval(IOLocalRequestContext.create[UUID])
-           storage       <- S3VideoStorageImpl.resource(config.s3)
-           sessions      <- Postgres.sessionPool[IO](config.postgres)
---- a/backend/modules/runtime/src/test/scala/org/typelevel/video/streaming/backend/runtime/auth/AccessTokenVerifierSuite.scala
-+++ b/backend/modules/runtime/src/test/scala/org/typelevel/video/streaming/backend/runtime/auth/AccessTokenVerifierSuite.scala
-@@ -7,7 +7,7 @@
- import java.util.concurrent.atomic.AtomicInteger
- import java.util.{Base64, UUID}
- 
--import cats.effect.{IO, Resource}
-+import cats.effect.{IO, Ref, Resource}
- import cats.syntax.all.*
- import com.auth0.jwt.algorithms.Algorithm
- import com.auth0.jwt.{JWT, JWTCreator}
-@@ -233,3 +233,40 @@
-         .map(result => expect(result == Left(failure)))
-     }
-   }
-+
-+  test(
-+    "diagnostics distinguish JWT rejection from subject rejection without repairing the decoder",
-+  ) {
-+    import AccessTokenVerifier.Stage
-+    keys.flatMap { pair =>
-+      for
-+        observed <- Ref.of[IO, Vector[(Stage, Boolean)]](Vector.empty)
-+        legacy    = AccessTokenVerifier
-+                   .userId(publicKey(pair), issuer, audience)
-+                   .withDiagnostics((stage, accepted) => observed.update(_ :+ (stage -> accepted)))
-+        modern           = claims(Instant.now()).withSubject(s"user:$userId").sign(algorithm(pair))
-+        rejected        <- legacy.verify(modern)
-+        stages          <- observed.getAndSet(Vector.empty)
-+        malformed       <- legacy.verify("not-a-jwt")
-+        malformedStages <- observed.getAndSet(Vector.empty)
-+        compatible       =
-+          AccessTokenVerifier
-+            .userIdCompatible(publicKey(pair), issuer, audience)
-+            .withDiagnostics((stage, accepted) => observed.update(_ :+ (stage -> accepted)))
-+        accepted       <- compatible.verify(modern)
-+        repairedStages <- observed.get
-+      yield expect.all(
-+        rejected.isEmpty,
-+        stages == Vector(Stage.JwtVerification -> true, Stage.SubjectDecoding -> false),
-+        malformed.isEmpty,
-+        malformedStages == Vector(Stage.JwtVerification -> false),
-+        accepted.contains(userId),
-+        repairedStages == Vector(
-+          Stage.JwtVerification -> true,
-+          Stage.SubjectDecoding -> true,
-+          Stage.ClaimsValidation -> true,
-+          Stage.PrincipalDecoding -> true,
-+        ),
-+      )
+ import org.typelevel.otel4s.trace.{Tracer, TracerProvider}
+ import org.typelevel.video.streaming.backend.runtime.auth.AccessTokenVerifierTelemetry
+ import org.typelevel.video.streaming.backend.runtime.auth.AccessTokenVerifierTelemetry.SubjectShape
+@@ -17,7 +18,18 @@
+       subject: Option[String],
+       shape: SubjectShape,
+       decode: IO[Option[UUID]],
+-  ): IO[Option[UUID]] = Tracer[IO].span("auth.subject.decode").surround(decode)
++  ): IO[Option[UUID]] =
++    Tracer[IO].span("auth.subject.decode").surround {
++      decode.flatTap { result =>
++        val outcome = if result.isDefined then "accepted" else "rejected"
++        Tracer[IO].withCurrentSpanOrNoop(
++          _.addAttributes(
++            Attribute("auth.result", outcome),
++            Attribute("auth.subject.shape", shape.label),
++          ),
++        )
++      }
 +    }
-+  }
+ 
+ object PlaybackAuthTelemetry:
+   def create(using TracerProvider[IO], LoggerFactory[IO]): IO[PlaybackAuthTelemetry] =

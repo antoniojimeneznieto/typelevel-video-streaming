@@ -185,19 +185,29 @@ exercise Playback verifier accepts only the older form. Start with old-format
 actors, then add a fixed minority of newer-format actors. Each actor keeps its
 identity across requests, so failures follow users rather than random attempts.
 Playback's workshop read mode and seeded projection rows avoid Kafka and S3.
+The traffic generator reports ten successful setup logins with an 8/2 format
+split, without account or token values; measured requests remain Playback-only.
+It renews each actor's token before expiry during long runs while retaining
+the same actor allocation.
 
 **How participants identify it:** Identity login succeeds for both groups.
 Playback rejects the same minority before repository work while accepted
 requests, network timing, and SQL remain healthy. Standard HTTP telemetry
 locates the rejection but does not identify the validation stage. Participants
-inspect the verifier and add small otel4s spans or bounded failure reasons around
-signature/claims validation and subject decoding. Compare failing and healthy
-traces. Do not add token contents, subject values, user IDs, or cohort flags to
-telemetry.
+implement the prepared `AccessTokenVerifierTelemetry` observation point in
+Playback by adding bounded result and subject-shape attributes to the existing
+`auth.subject.decode` span in `PlaybackAuthTelemetry.decodeSubject`. Compare a
+rejected `namespaced_uuid` with an accepted `bare_uuid`, then inspect code to
+confirm the exact parser incompatibility. Do not add token contents, subject
+values, user IDs, or cohort flags to core span or metric telemetry. An optional
+after-core trace-to-logs extension may log exact accepted and rejected subjects from
+seeded synthetic accounts only.
 
 **Required diagnostic checkpoint:** Deploy instrumentation while retaining the
-faulty decoder. Capture a new rejected trace that distinguishes successful JWT
-verification from failed subject decoding, and a successful control trace.
+faulty decoder. Capture a new rejected trace with `auth.result=rejected` and
+`auth.subject.shape=namespaced_uuid` on the subject-decoding span, and a
+successful control trace with `accepted` and `bare_uuid`. Invalid
+JWTs fail before the subject-decoding span.
 Explain the evidence before changing the decoder.
 
 **Fix and proof:** Retain the diagnostics and deploy a bounded subject decoder accepting exactly the two

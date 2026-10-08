@@ -1,11 +1,11 @@
 --- a/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/Main.scala
 +++ b/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/Main.scala
-@@ -45,7 +45,7 @@
-           authTracer <-
-             Resource.eval(otel.tracerProvider.get("org.typelevel.video.streaming.playback.auth"))
+@@ -43,7 +43,7 @@
+           publicKey  <- Resource.eval(RsaKeyLoader.publicKey(config.jwt.publicKeyPath))
+           authTelemetry <- Resource.eval(PlaybackAuthTelemetry.create)
            verifier = AccessTokenVerifier
 -                       .userId(publicKey, "identity", "course-platform")
 +                       .userIdCompatible(publicKey, "identity", "course-platform")
-                        .withDiagnostics { (stage, accepted) =>
-                          authTracer.currentSpanOrNoop.flatMap(
-                            _.addEvent(
+                        .withTelemetry(authTelemetry)
+           context       <- Resource.eval(IOLocalRequestContext.create[UUID])
+           storage       <- S3VideoStorageImpl.resource(config.s3)

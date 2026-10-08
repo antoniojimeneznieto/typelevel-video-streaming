@@ -40,8 +40,11 @@ object Main extends IOApp.Simple:
 
       AppConfig.load[IO].flatMap { config =>
         val resources = for
-          publicKey     <- Resource.eval(RsaKeyLoader.publicKey(config.jwt.publicKeyPath))
-          verifier       = AccessTokenVerifier.userId(publicKey, "identity", "course-platform")
+          publicKey  <- Resource.eval(RsaKeyLoader.publicKey(config.jwt.publicKeyPath))
+          authTelemetry <- Resource.eval(PlaybackAuthTelemetry.create)
+          verifier = AccessTokenVerifier
+                       .userId(publicKey, "identity", "course-platform")
+                       .withTelemetry(authTelemetry)
           context       <- Resource.eval(IOLocalRequestContext.create[UUID])
           storage       <- S3VideoStorageImpl.resource(config.s3)
           sessions      <- Postgres.sessionPool[IO](config.postgres)

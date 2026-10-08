@@ -219,10 +219,12 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
                ),
                capture = true,
              )
-    logs <- LabIo.run(root, Seq("docker", "logs", "--tail", "200", container), capture = true)
+    logs <- LabIo.run(root, Seq("docker", "logs", container), capture = true)
+    entries = logs.linesIterator.filter(_.startsWith("{")).toVector
     _    <- IO.println(state.trim)
     _ <- IO.println("load_valid is cumulative; window.load_valid describes each report interval.")
-    _ <- logs.linesIterator.filter(_.startsWith("{")).toVector.takeRight(5).traverse_(IO.println)
+    _ <- entries.find(_.contains("\"event\":\"preparation\"")).traverse_(IO.println)
+    _ <- entries.filterNot(_.contains("\"event\":\"preparation\"")).takeRight(5).traverse_(IO.println)
   } yield ()
 
   def trafficStop(root: Path): IO[Unit] =
