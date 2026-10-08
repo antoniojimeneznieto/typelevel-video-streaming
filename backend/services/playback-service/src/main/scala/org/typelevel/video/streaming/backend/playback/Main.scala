@@ -40,9 +40,9 @@ object Main extends IOApp.Simple:
 
       AppConfig.load[IO].flatMap { config =>
         val resources = for
-          publicKey  <- Resource.eval(RsaKeyLoader.publicKey(config.jwt.publicKeyPath))
+          publicKey     <- Resource.eval(RsaKeyLoader.publicKey(config.jwt.publicKeyPath))
           authTelemetry <- Resource.eval(PlaybackAuthTelemetry.create)
-          verifier = AccessTokenVerifier
+          verifier       = AccessTokenVerifier
                        .userId(publicKey, "identity", "course-platform")
                        .withTelemetry(authTelemetry)
           context       <- Resource.eval(IOLocalRequestContext.create[UUID])

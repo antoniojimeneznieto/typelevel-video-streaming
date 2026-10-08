@@ -20,7 +20,7 @@ object PreparationDeadlineSuite extends SimpleIOSuite:
                )
       result <- TrafficGeneratorMain
                   .prepareRequest(
-                    Config(profile = "identity", setupTimeout = 100.millis),
+                    Config(profile = TrafficProfile.Identity, setupTimeout = 100.millis),
                     client,
                   )
                   .attempt
@@ -39,7 +39,7 @@ object PreparationDeadlineSuite extends SimpleIOSuite:
                )
       result <- TrafficGeneratorMain
                   .prepareRequest(
-                    Config(profile = "playback", setupTimeout = 100.millis),
+                    Config(profile = TrafficProfile.Playback, setupTimeout = 100.millis),
                     client,
                   )
                   .attempt

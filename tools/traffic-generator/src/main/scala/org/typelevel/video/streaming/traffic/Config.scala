@@ -12,7 +12,7 @@ final case class Config(
     requestTimeout: FiniteDuration   = 30.seconds,
     drainTimeout: FiniteDuration     = 35.seconds,
     reportInterval: FiniteDuration   = 5.seconds,
-    profile: String                  = "catalog-courses",
+    profile: TrafficProfile          = TrafficProfile.CatalogCourses,
     loginPercent: Int                = 10,
     modernPercent: Int               = 20,
     setupTimeout: FiniteDuration     = 60.seconds,
@@ -24,10 +24,6 @@ final case class Config(
   require(requestTimeout > Duration.Zero, "request-timeout must be positive")
   require(drainTimeout > Duration.Zero, "drain-timeout must be positive")
   require(reportInterval > Duration.Zero, "report-interval must be positive")
-  require(
-    Set("catalog-courses", "catalog-soak", "identity", "playback").contains(profile),
-    "unsupported profile",
-  )
   require(loginPercent >= 0 && loginPercent <= 100, "login percent must be 0 to 100")
   require(Set(0, 20).contains(modernPercent), "modern percent must be 0 or 20")
   require(

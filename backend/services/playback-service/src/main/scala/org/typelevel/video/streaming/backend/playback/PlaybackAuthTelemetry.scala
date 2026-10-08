@@ -11,7 +11,7 @@ import org.typelevel.video.streaming.backend.runtime.auth.AccessTokenVerifierTel
 /** Workshop observation point; validation behavior stays in the supplied effect. */
 final class PlaybackAuthTelemetry(using Tracer[IO], LoggerFactory[IO])
     extends AccessTokenVerifierTelemetry:
-  val logger = LoggerFactory[IO].getLoggerFromClass(getClass)
+  private val logger = LoggerFactory[IO].getLoggerFromClass(getClass)
 
   override def decodeSubject(
       subject: Option[String],

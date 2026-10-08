@@ -7,7 +7,10 @@ import com.monovore.decline.{Argument, Command, Opts}
 import org.http4s.Uri
 
 object Cli:
-  private val defaults = Config()
+  private val defaults                   = Config()
+  private given Argument[TrafficProfile] = Argument.from("profile") { value =>
+    TrafficProfile.values.find(_.label == value).toValidNel("Unsupported traffic profile")
+  }
 
   private given Argument[Uri] = Argument.from("url") { value =>
     Uri.fromString(value).leftMap(_ => "Invalid gateway URL").toValidatedNel
@@ -73,10 +76,7 @@ object Cli:
       positiveDuration("drain-timeout", "Grace period after arrivals stop", defaults.drainTimeout),
       positiveDuration("report-interval", "JSON progress interval", defaults.reportInterval),
       Opts
-        .option[String]("profile", help = "catalog-courses, catalog-soak, identity, or playback")
-        .validate(
-          "--profile must be catalog-courses, catalog-soak, identity, or playback",
-        )(Set("catalog-courses", "catalog-soak", "identity", "playback").contains)
+        .option[TrafficProfile]("profile", help = TrafficProfile.values.map(_.label).mkString(", "))
         .withDefault(defaults.profile),
       Opts
         .option[Int]("login-percent", help = "Identity login share (default: 10)")

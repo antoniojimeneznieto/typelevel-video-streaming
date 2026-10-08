@@ -6,8 +6,8 @@ import io.circe.Json
 
 final case class RequestResult(
     status: Option[Int],
-    outcome: String,
-    operation: String = "catalog-courses",
+    outcome: Outcome,
+    operation: Operation = Operation.Courses,
 )
 
 final case class OperationStats(count: Long = 0L, latencyNanos: Long = 0L):
@@ -43,15 +43,16 @@ final case class Stats(
 
   def finish(result: RequestResult, elapsed: FiniteDuration): Stats = copy(
     completed = completed + 1,
-    succeeded = succeeded + (if result.outcome == "success" then 1 else 0),
+    succeeded = succeeded + (if result.outcome == Outcome.Success then 1 else 0),
     statuses  =
       result.status.fold(statuses)(s => statuses.updated(s, statuses.getOrElse(s, 0L) + 1)),
-    outcomes        = outcomes.updated(result.outcome, outcomes.getOrElse(result.outcome, 0L) + 1),
+    outcomes =
+      outcomes.updated(result.outcome.label, outcomes.getOrElse(result.outcome.label, 0L) + 1),
     latencyNanos    = latencyNanos + elapsed.toNanos,
     maxLatencyNanos = maxLatencyNanos.max(elapsed.toNanos),
     operations      = operations.updated(
-      result.operation,
-      operations.getOrElse(result.operation, OperationStats()).add(elapsed),
+      result.operation.label,
+      operations.getOrElse(result.operation.label, OperationStats()).add(elapsed),
     ),
   )
 

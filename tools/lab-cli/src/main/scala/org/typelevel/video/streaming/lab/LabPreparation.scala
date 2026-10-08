@@ -8,7 +8,6 @@ import io.circe.Json
 import io.circe.parser.parse
 
 import java.nio.file.Path
-import java.time.Instant
 
 /** Controlled workloads isolate the checked-in defects; this is not a safe browsing mode. */
 private[lab] object LabPreparation {
@@ -21,7 +20,7 @@ private[lab] object LabPreparation {
 
   private def containerId(root: Path, service: String): IO[String] =
     LabIo
-      .run(root, Seq("docker", "compose", "ps", "--all", "-q", service), capture = true)
+      .output(root, Seq("docker", "compose", "ps", "--all", "-q", service))
       .map(_.trim)
       .flatMap { id =>
         IO.raiseUnless(id.nonEmpty && !id.contains('\n'))(
@@ -32,7 +31,7 @@ private[lab] object LabPreparation {
   private def awaitHealth(root: Path, id: String): IO[Unit] = {
     def check: IO[Unit] =
       LabIo
-        .run(root, Seq("docker", "inspect", "--format", "{{json .State}}", id), capture = true)
+        .output(root, Seq("docker", "inspect", "--format", "{{json .State}}", id))
         .flatMap(value => IO.fromEither(parse(value)))
         .flatMap(state => if healthy(state) then IO.unit else IO.sleep(1.second) *> IO.defer(check))
     check.timeout(90.seconds)
@@ -60,30 +59,31 @@ private[lab] object LabPreparation {
       _ <- ids.traverse_(awaitHealth(root, _))
       _ <- LabScenarios.resetPlatform(root)
       _ <- round match {
-             case 4 => LabScenarios.scenario4(root, "prepare")
-             case 5 => LabScenarios.scenario5(root, "prepare")
+             case 4 => LabScenarios.scenario4(root, Scenario4Action.Prepare)
+             case 5 => LabScenarios.scenario5(root, Scenario5Action.Prepare)
              case _ => IO.unit
            }
       currentIds <- services.traverse(service => containerId(root, service))
       _          <- currentIds.traverse_(awaitHealth(root, _))
-      _          <- LabCommands.proxy(root, "check", None)
+      _          <- LabCommands.proxy(root, ProxyAction.Check)
       // Record only safe deployment metadata; container environments include secrets.
       deployed <-
         services.zip(currentIds).traverse { case (service, id) =>
           LabIo
-            .run(root, Seq("docker", "inspect", "--format", "{{.Image}}", id), capture = true)
+            .output(root, Seq("docker", "inspect", "--format", "{{.Image}}", id))
             .map(image =>
               service -> Json
                 .obj("container" -> Json.fromString(id), "image" -> Json.fromString(image.trim)),
             )
         }
-      _ <- LabIo.writeAtomic(
+      preparedAt <- IO.realTimeInstant
+      _          <- LabIo.writeAtomic(
              record,
              Json
                .obj(
                  "round" -> Json.fromInt(round),
                  "status" -> Json.fromString("prepared"),
-                 "prepared_at" -> Json.fromString(Instant.now().toString),
+                 "prepared_at" -> Json.fromString(preparedAt.toString),
                  "services" -> Json.obj(deployed*),
                )
                .spaces2 + "\n",

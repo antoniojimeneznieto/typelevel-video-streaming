@@ -1,6 +1,7 @@
 package org.typelevel.video.streaming.lab
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
+import cats.effect.std.Env
 import cats.syntax.all.*
 
 import java.nio.file.Path
@@ -10,29 +11,32 @@ private[lab] object LabCommands {
   private val gateway   = "http://gateway-service:8084"
 
   private def imageEnvironment(root: Path, followRunning: Boolean): IO[Map[String, String]] = {
-    val detected =
-      if followRunning && !sys.env.contains("IMAGE_PREFIX") &&
-        !sys.env.contains("IMAGE_TAG")
-      then
-        LabIo
-          .probe(root, Seq("docker", "compose", "ps", "-q", "gateway-service"))
-          .flatMap {
-            case Some(id) if id.trim.nonEmpty =>
-              LabIo.probe(root, Seq("docker", "inspect", "--format", "{{.Config.Image}}", id.trim))
-            case _ => IO.pure(None)
-          }
-          .map(_.flatMap { value =>
-            val image    = value.trim
-            val marker   = "/gateway-service:"
-            val position = image.lastIndexOf(marker)
-            Option.when(position > 0)(
-              Map(
-                "IMAGE_PREFIX" -> image.take(position),
-                "IMAGE_TAG" -> image.drop(position + marker.length),
-              ),
-            )
-          }.getOrElse(Map.empty[String, String]))
-      else IO.pure(Map.empty[String, String])
+    val detected = (Env[IO].get("IMAGE_PREFIX"), Env[IO].get("IMAGE_TAG")).tupled.flatMap {
+      (prefix, tag) =>
+        if followRunning && prefix.isEmpty && tag.isEmpty then
+          LabIo
+            .probe(root, Seq("docker", "compose", "ps", "-q", "gateway-service"))
+            .flatMap {
+              case Some(id) if id.trim.nonEmpty =>
+                LabIo.probe(
+                  root,
+                  Seq("docker", "inspect", "--format", "{{.Config.Image}}", id.trim),
+                )
+              case _ => IO.pure(None)
+            }
+            .map(_.flatMap { value =>
+              val image    = value.trim
+              val marker   = "/gateway-service:"
+              val position = image.lastIndexOf(marker)
+              Option.when(position > 0)(
+                Map(
+                  "IMAGE_PREFIX" -> image.take(position),
+                  "IMAGE_TAG" -> image.drop(position + marker.length),
+                ),
+              )
+            }.getOrElse(Map.empty[String, String]))
+        else IO.pure(Map.empty[String, String])
+    }
 
     detected.flatMap { environment =>
       val script = """set -euo pipefail
@@ -41,7 +45,7 @@ source scripts/images.sh
 printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_ENDPOINT=%s\n' \
   "$IMAGE_PREFIX" "$IMAGE_TAG" "$LOCAL_UID" "$LOCAL_GID" "${S3_PUBLIC_ENDPOINT:-}"
 """
-      LabIo.run(root, Seq("bash", "-c", script), environment, capture = true).map { output =>
+      LabIo.output(root, Seq("bash", "-c", script), environment).map { output =>
         output.linesIterator.flatMap { line =>
           line.split("=", 2) match {
             case Array(key, value) if value.nonEmpty => Some(key -> value)
@@ -88,7 +92,7 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
   private def deployedSettings(root: Path, service: String): IO[Map[String, String]] =
     scenarioSetting(service).fold(IO.pure(Map.empty[String, String])) { case (containerKey, _) =>
       LabIo
-        .run(root, Seq("docker", "compose", "ps", "--all", "-q", service), capture = true)
+        .output(root, Seq("docker", "compose", "ps", "--all", "-q", service))
         .map(_.trim)
         .flatMap { id =>
           if id.isEmpty then IO.pure(Map.empty[String, String])
@@ -99,7 +103,7 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
             val template =
               s"""{{range .Config.Env}}{{if eq (index (split . "=") 0) "$containerKey"}}{{index (split . "=") 1}}{{end}}{{end}}"""
             LabIo
-              .run(root, Seq("docker", "inspect", "--format", template, id), capture = true)
+              .output(root, Seq("docker", "inspect", "--format", template, id))
               .flatMap(value =>
                 IO.fromEither(
                   preservedSetting(service, value).left.map(new IllegalStateException(_)),
@@ -136,6 +140,13 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
       }
     }
 
+  def rebuilt(root: Path, service: String, extra: Map[String, String]): Resource[IO, Unit] =
+    Resource.eval(deployedSettings(root, service)).flatMap { previous =>
+      Resource
+        .make(IO.unit)(_ => rebuild(root, service, previous))
+        .evalMap(_ => rebuild(root, service, extra))
+    }
+
   def stopStack(root: Path): IO[Unit] = withImages(root, false) { env =>
     stopTraffic(root) *> LabIo.run(root, Seq("docker", "compose", "down"), env).void
   }
@@ -144,33 +155,54 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
     LabIo.run(root, Seq("bash", "scripts/build-images.sh", "traffic-generator"), env).void
   }
 
-  private def runTraffic(root: Path, options: Seq[String], capture: Boolean): IO[String] =
-    imageEnvironment(root, true).flatMap { env =>
-      LabIo
-        .run(
-          root,
-          Seq(
-            "docker",
-            "compose",
-            "run",
-            "--rm",
-            "--no-deps",
-            "-T",
-            "traffic-generator",
-            "--base-url",
-            gateway,
-          ) ++ options,
-          env,
-          capture      = capture,
-          allowFailure = capture,
-        )
-    }
+  private def trafficArgs(options: Seq[String]): Seq[String] =
+    Seq(
+      "docker",
+      "compose",
+      "run",
+      "--rm",
+      "--no-deps",
+      "-T",
+      "traffic-generator",
+      "--base-url",
+      gateway,
+    ) ++ options
 
   def trafficRun(root: Path, options: Seq[String]): IO[Unit] =
-    runTraffic(root, options, capture = false).void
+    imageEnvironment(root, true).flatMap(env => LabIo.run(root, trafficArgs(options), env))
 
-  def trafficRunCaptured(root: Path, options: Seq[String]): IO[String] =
-    runTraffic(root, options, capture = true)
+  def trafficRunCaptured(root: Path, options: Seq[String]): IO[LabIo.ProcessResult] =
+    imageEnvironment(root, true).flatMap(env => LabIo.capture(root, trafficArgs(options), env))
+
+  def requireIdle(root: Path): IO[Unit] =
+    LabIo
+      .probe(root, Seq("docker", "inspect", "--format", "{{.State.Running}}", container))
+      .flatMap { state =>
+        IO.raiseWhen(state.exists(_.trim == "true"))(
+          new IllegalStateException("Traffic is already running; stop it before verification"),
+        )
+      }
+
+  def trafficResource(root: Path, options: Seq[String]): Resource[IO, Unit] =
+    Resource.make(trafficStart(root, options))(_ => trafficStop(root))
+
+  def containerId(root: Path, service: String): IO[String] =
+    for
+      value <- LabIo.output(root, Seq("docker", "compose", "ps", "--all", "-q", service))
+      id     = value.trim
+      _     <- IO.raiseUnless(id.nonEmpty && !id.contains('\n'))(
+             new IllegalStateException(s"Expected one $service container"),
+           )
+    yield id
+
+  def deployment(root: Path, service: String): IO[String] =
+    for
+      id    <- containerId(root, service)
+      value <- LabIo.output(
+                 root,
+                 Seq("docker", "inspect", "--format", "container={{.Id}} image={{.Image}}", id),
+               )
+    yield value.trim
 
   def trafficStart(root: Path, options: Seq[String]): IO[Unit] = withImages(root, true) { env =>
     LabIo
@@ -183,7 +215,7 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
             ),
           )
         case Some(_) =>
-          LabIo.run(root, Seq("docker", "container", "rm", container), capture = true).void
+          LabIo.output(root, Seq("docker", "container", "rm", container)).void
         case None => IO.unit
       } *> LabIo
       .run(
@@ -208,7 +240,7 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
   }
 
   def trafficStatus(root: Path): IO[Unit] = for {
-    state <- LabIo.run(
+    state <- LabIo.output(
                root,
                Seq(
                  "docker",
@@ -217,14 +249,14 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
                  "state={{.State.Status}} exit_code={{.State.ExitCode}}",
                  container,
                ),
-               capture = true,
              )
-    logs <- LabIo.run(root, Seq("docker", "logs", container), capture = true)
+    logs   <- LabIo.output(root, Seq("docker", "logs", "--tail", "20", container))
     entries = logs.linesIterator.filter(_.startsWith("{")).toVector
-    _    <- IO.println(state.trim)
+    _      <- IO.println(state.trim)
     _ <- IO.println("load_valid is cumulative; window.load_valid describes each report interval.")
     _ <- entries.find(_.contains("\"event\":\"preparation\"")).traverse_(IO.println)
-    _ <- entries.filterNot(_.contains("\"event\":\"preparation\"")).takeRight(5).traverse_(IO.println)
+    _ <-
+      entries.filterNot(_.contains("\"event\":\"preparation\"")).takeRight(5).traverse_(IO.println)
   } yield ()
 
   def trafficStop(root: Path): IO[Unit] =
@@ -240,27 +272,19 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
 
   def proxy(
       root: Path,
-      action: String,
-      milliseconds: Option[Int],
+      action: ProxyAction,
       quiet: Boolean = false,
   ): IO[Unit] =
     withImages(root, false) { env =>
-      LabIo
-        .run(
-          root,
-          Seq(
-            "docker",
-            "compose",
-            "run",
-            "--rm",
-            "--no-deps",
-            "-T",
-            "proxy-control",
-            action,
-          ) ++ milliseconds.map(_.toString),
-          env,
-          capture = quiet,
-        )
-        .void
+      val args = Seq(
+        "docker",
+        "compose",
+        "run",
+        "--rm",
+        "--no-deps",
+        "-T",
+        "proxy-control",
+      ) ++ action.arguments
+      if quiet then LabIo.output(root, args, env).void else LabIo.run(root, args, env)
     }
 }

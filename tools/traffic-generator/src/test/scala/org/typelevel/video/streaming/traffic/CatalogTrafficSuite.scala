@@ -28,7 +28,7 @@ object CatalogTrafficSuite extends SimpleIOSuite:
       request <- seen.get
       closed  <- released.get
     yield expect.all(
-      result == RequestResult(Some(200), "success"),
+      result == RequestResult(Some(200), Outcome.Success),
       request.exists(_.method == Method.GET),
       request.exists(_.uri.path.renderString == "/api/catalog/courses"),
       request.exists(_.uri.query.params.get("limit").contains("10")),
@@ -48,15 +48,15 @@ object CatalogTrafficSuite extends SimpleIOSuite:
                )
       result <- CatalogTraffic.request(client, uri"http://gateway.test")
       count  <- calls.get
-    yield expect.all(result == RequestResult(Some(503), "http_error"), count == 1)
+    yield expect.all(result == RequestResult(Some(503), Outcome.HttpError), count == 1)
   }
 
   test("soak profile reports course searches under one operation and independent path reads") {
     val operations = (0L until 100L).map(CatalogTraffic.soakOperation)
     IO.pure(
       expect.all(
-        operations.count(_ == "catalog-learning-paths") == 10,
-        operations.count(_ == "catalog-courses") == 90,
+        operations.count(_ == Operation.LearningPaths) == 10,
+        operations.count(_ == Operation.Courses) == 90,
       ),
     )
   }
@@ -78,8 +78,8 @@ object CatalogTrafficSuite extends SimpleIOSuite:
       missing  <- CatalogTraffic.soakRequest(client, uri"http://gateway.test", 49L)
       requests <- seen.get
     yield expect.all(
-      matching == RequestResult(Some(200), "success", "catalog-courses"),
-      missing == RequestResult(Some(200), "success", "catalog-courses"),
+      matching == RequestResult(Some(200), Outcome.Success, Operation.Courses),
+      missing == RequestResult(Some(200), Outcome.Success, Operation.Courses),
       requests.map(_.uri.query.params.get("q")) == Vector(Some("Scala"), Some("Kubernetes")),
     )
   }
@@ -87,7 +87,7 @@ object CatalogTrafficSuite extends SimpleIOSuite:
   test("a malformed successful response fails typed decoding") {
     val client = Client[IO](_ => Resource.pure(Response[IO](Status.Ok).withEntity("{}")))
     CatalogTraffic.request(client, uri"http://gateway.test").map { result =>
-      expect(result == RequestResult(Some(200), "decode_error"))
+      expect(result == RequestResult(Some(200), Outcome.DecodeError))
     }
   }
 

@@ -14,7 +14,7 @@ object CatalogSessionMetricsSuite extends SimpleIOSuite:
   private val gaugeName = "catalog.session.wait.max_age"
 
   private def instrument[A](resource: Resource[IO, A]): Resource[IO, Resource[IO, A]] =
-    CatalogSessionMetrics.instrument(resource, MeterProvider.noop[IO], 1)
+    CatalogSessionMetrics.instrument(resource, 1)(using MeterProvider.noop[IO])
 
   private def age(kit: MetricsTestkit[IO]): IO[Double] =
     kit.collectMetrics.flatMap { metrics =>
@@ -105,13 +105,13 @@ object CatalogSessionMetricsSuite extends SimpleIOSuite:
     "collected age grows without pool events, follows remaining waiters, and clears on cancellation",
   ) {
     MetricsTestkit.inMemory[IO]().use { kit =>
+      given MeterProvider[IO] = kit.meterProvider
       for
         entered <- Queue.unbounded[IO, Unit]
         pool    <- Semaphore[IO](0)
         result  <- CatalogSessionMetrics
                     .instrument(
                       Resource.eval(entered.offer(())) *> pool.permit,
-                      kit.meterProvider,
                       1,
                     )
                     .use { measured =>
@@ -160,6 +160,7 @@ object CatalogSessionMetricsSuite extends SimpleIOSuite:
     "successful and failed acquisition clear the gauge; closing instrumentation unregisters it",
   ) {
     MetricsTestkit.inMemory[IO]().use { kit =>
+      given MeterProvider[IO] = kit.meterProvider
       for
         fail   <- Ref.of[IO, Boolean](false)
         inside <- CatalogSessionMetrics
@@ -169,7 +170,6 @@ object CatalogSessionMetricsSuite extends SimpleIOSuite:
                           IO.raiseError[Unit](new RuntimeException("acquisition failed"))
                         else IO.unit
                       }),
-                      kit.meterProvider,
                       1,
                     )
                     .use { measured =>

@@ -47,12 +47,6 @@ jobs:
         run: sbt --batch test
       - name: Package lab CLI
         run: sbt --batch 'labCli/Universal/packageBin'
-      #- name: Upload lab CLI distribution
-      #  uses: actions/upload-artifact@v4
-      #  with:
-      #    name: lab-cli-jvm
-      #    path: target/out/jvm/scala-*/lab-cli/universal/lab-cli-*.zip
-      #    if-no-files-found: error
       - name: Build frontend
         working-directory: frontend
         run: |

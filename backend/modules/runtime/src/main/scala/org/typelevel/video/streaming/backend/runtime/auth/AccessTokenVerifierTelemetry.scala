@@ -1,12 +1,11 @@
 package org.typelevel.video.streaming.backend.runtime.auth
 
 import java.util.UUID
-import scala.util.Try
 
 import cats.effect.IO
 
-/** Observes application subject decoding without changing its authentication result.
-  * `subject` is the verified JWT subject; implementations must choose deliberately what to export.
+/** Observes application subject decoding without changing its authentication result. `subject` is
+  * the verified JWT subject; implementations must choose deliberately what to export.
   */
 trait AccessTokenVerifierTelemetry:
   def decodeSubject(
@@ -17,9 +16,9 @@ trait AccessTokenVerifierTelemetry:
 
 object AccessTokenVerifierTelemetry:
   enum SubjectShape(val label: String):
-    case BareUuid       extends SubjectShape("bare_uuid")
+    case BareUuid extends SubjectShape("bare_uuid")
     case NamespacedUuid extends SubjectShape("namespaced_uuid")
-    case Other          extends SubjectShape("other")
+    case Other extends SubjectShape("other")
 
   object SubjectShape:
     /** Fixed categories only; the category never contains the subject or namespace. */
@@ -34,7 +33,7 @@ object AccessTokenVerifierTelemetry:
       case None => SubjectShape.Other
 
     private def canonicalUuid(value: String): Boolean =
-      Try(UUID.fromString(value)).toOption.exists(_.toString.equalsIgnoreCase(value))
+      SubjectId.canonical(value).isDefined
 
   val noop: AccessTokenVerifierTelemetry = new AccessTokenVerifierTelemetry:
     override def decodeSubject(

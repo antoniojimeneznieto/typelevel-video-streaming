@@ -1,76 +1,85 @@
 package org.typelevel.video.streaming.lab
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
+import cats.syntax.all.*
 import fs2.Stream
 import fs2.io.file.{CopyFlag, CopyFlags, Files, Path as Fs2Path}
 import fs2.io.process.{ProcessBuilder, Redirect}
 import fs2.text
-
 import java.nio.file.Path
 
-private[lab] object LabIo {
+private[lab] object LabIo:
+  final case class ProcessResult(exitCode: Int, stdout: String, stderr: String):
+    def checked(command: String): IO[String] =
+      IO.raiseWhen(exitCode != 0)(
+        new IllegalStateException(s"$command exited with $exitCode: ${stderr.trim}"),
+      ).as(stdout)
+
   private def builder(root: Path, args: Seq[String], environment: Map[String, String]) =
     ProcessBuilder(args.head, args.tail.toList)
       .withWorkingDirectory(Fs2Path.fromNioPath(root))
       .withExtraEnv(environment)
 
-  def run(
+  def run(root: Path, args: Seq[String], environment: Map[String, String] = Map.empty): IO[Unit] =
+    builder(root, args, environment).inheritStdio.spawn[IO].use { process =>
+      for
+        code <- process.exitValue
+        _ <- IO.raiseWhen(code != 0)(new IllegalStateException(s"${args.head} exited with $code"))
+      yield ()
+    }
+
+  def capture(
       root: Path,
       args: Seq[String],
       environment: Map[String, String] = Map.empty,
-      capture: Boolean                 = false,
-      allowFailure: Boolean            = false,
-  ): IO[String] = {
-    val processBuilder = builder(root, args, environment)
-    val configured     = if capture then
-      processBuilder.withStdin(Redirect.Inherit).withRedirectErrorStream(true)
-    else processBuilder.inheritStdio
-    configured.spawn[IO].use { process =>
-      for {
-        output <-
-          if capture then process.stdout.through(text.utf8.decode).compile.string
-          else IO.pure("")
+  ): IO[ProcessResult] =
+    builder(root, args, environment).withStdin(Redirect.Inherit).spawn[IO].use { process =>
+      for
+        streams <- (
+                     process.stdout.through(text.utf8.decode).compile.string,
+                     process.stderr.through(text.utf8.decode).compile.string,
+                   ).parTupled
         code <- process.exitValue
-        _    <- IO.raiseWhen(code != 0 && !allowFailure)(
-               new IllegalStateException(
-                 s"${args.head} exited with $code${if capture then s": ${output.trim}" else ""}",
-               ),
-             )
-      } yield output
+      yield ProcessResult(code, streams._1, streams._2)
     }
-  }
+
+  def output(
+      root: Path,
+      args: Seq[String],
+      environment: Map[String, String] = Map.empty,
+  ): IO[String] =
+    capture(root, args, environment).flatMap(_.checked(args.head))
 
   def probe(
       root: Path,
       args: Seq[String],
       environment: Map[String, String] = Map.empty,
   ): IO[Option[String]] =
-    builder(root, args, environment)
-      .withStdin(Redirect.Inherit)
-      .withStderr(Redirect.Discard)
-      .spawn[IO]
-      .use { process =>
-        for {
-          output <- process.stdout.through(text.utf8.decode).compile.string
-          code   <- process.exitValue
-        } yield Option.when(code == 0)(output)
-      }
+    capture(root, args, environment).map(result => Option.when(result.exitCode == 0)(result.stdout))
 
-  def exists(path: Path): IO[Boolean] = Files[IO].exists(Fs2Path.fromNioPath(path))
-
-  def isRegularFile(path: Path): IO[Boolean] =
-    Files[IO].isRegularFile(Fs2Path.fromNioPath(path))
-
+  def exists(path: Path): IO[Boolean]         = Files[IO].exists(Fs2Path.fromNioPath(path))
+  def isRegularFile(path: Path): IO[Boolean]  = Files[IO].isRegularFile(Fs2Path.fromNioPath(path))
   def createDirectories(path: Path): IO[Unit] =
     Files[IO].createDirectories(Fs2Path.fromNioPath(path))
+  def read(path: Path): IO[String] = Files[IO].readUtf8(Fs2Path.fromNioPath(path)).compile.string
 
-  def read(path: Path): IO[String] =
-    Files[IO].readUtf8(Fs2Path.fromNioPath(path)).compile.string
-
-  def writeAtomic(path: Path, contents: String): IO[Unit] = {
-    val target    = Fs2Path.fromNioPath(path)
-    val temporary = Fs2Path.fromNioPath(path.resolveSibling(path.getFileName.toString + ".tmp"))
-    Stream.emit(contents).through(Files[IO].writeUtf8(temporary)).compile.drain *>
-      Files[IO].move(temporary, target, CopyFlags(CopyFlag.ReplaceExisting, CopyFlag.AtomicMove))
-  }
-}
+  def writeAtomic(path: Path, contents: String): IO[Unit] =
+    Resource
+      .make(
+        IO.blocking(
+          java.nio.file.Files.createTempFile(path.toAbsolutePath.getParent, ".lab-", ".tmp"),
+        ),
+      ) { temporary =>
+        Files[IO].deleteIfExists(Fs2Path.fromNioPath(temporary)).void
+      }
+      .use { temporary =>
+        val source = Fs2Path.fromNioPath(temporary)
+        for
+          _ <- Stream.emit(contents).through(Files[IO].writeUtf8(source)).compile.drain
+          _ <- Files[IO].move(
+                 source,
+                 Fs2Path.fromNioPath(path),
+                 CopyFlags(CopyFlag.ReplaceExisting, CopyFlag.AtomicMove),
+               )
+        yield ()
+      }

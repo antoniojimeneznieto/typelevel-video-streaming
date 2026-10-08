@@ -18,7 +18,7 @@ private[gateway] object GatewayClient:
   )(using TracerProvider[IO], MeterProvider[IO]): Resource[IO, Client[IO]] =
     EmberClientBuilder
       .default[IO]
-      // GatewayRoutes applies the configured response deadline across the exchange.
+      // GatewayRoutes bounds response acquisition; body streaming has its own lifetime.
       .withTimeout(Duration.Inf)
       .build
       .evalMap(instrument(_, config))

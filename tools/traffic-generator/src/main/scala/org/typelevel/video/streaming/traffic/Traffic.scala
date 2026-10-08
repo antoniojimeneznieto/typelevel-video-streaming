@@ -27,52 +27,45 @@ object Traffic:
       Arrival(current + 1, current - next, true)
 
   def run(config: Config, request: IO[RequestResult], stats: Ref[IO, Stats]): IO[Unit] =
-    run(config, _ => request, stats, TrafficMetrics.noop)
+    run(config, request, stats, TrafficMetrics.noop)
 
   def run(
       config: Config,
       request: IO[RequestResult],
       stats: Ref[IO, Stats],
       metrics: TrafficMetrics,
-  ): IO[Unit] = run(config, _ => request, stats, metrics)
+  ): IO[Unit] =
+    run(config, Workload(_ => PreparedRequest(Operation.Courses, request)), stats, metrics)
 
   def run(
       config: Config,
-      request: Long => IO[RequestResult],
+      workload: Workload,
       stats: Ref[IO, Stats],
       metrics: TrafficMetrics,
-  ): IO[Unit] = run(config, request, stats, metrics, _ => "catalog-courses")
-
-  def run(
-      config: Config,
-      request: Long => IO[RequestResult],
-      stats: Ref[IO, Stats],
-      metrics: TrafficMetrics,
-      operationForSlot: Long => String,
   ): IO[Unit] =
     Semaphore[IO](config.maxConcurrent.toLong).flatMap { permits =>
       Supervisor[IO].use { supervisor =>
         def execute(slot: Long): IO[Unit] = IO
           .uncancelable { poll =>
-            IO.monotonic.flatMap { start =>
-              poll(
-                request(slot)
-                  .timeoutTo(
-                    config.requestTimeout,
-                    IO.pure(RequestResult(None, "timeout", operationForSlot(slot))),
+            val request = workload.request(slot)
+            for
+              start  <- IO.monotonic
+              result <-
+                poll(
+                  request.run
+                    .timeoutTo(
+                      config.requestTimeout,
+                      IO.pure(RequestResult(None, Outcome.Timeout, request.operation)),
+                    )
+                    .handleError(_ => RequestResult(None, Outcome.RequestError, request.operation)),
+                )
+                  .onCancel(
+                    stats.update(s => s.copy(cancelled = s.cancelled + 1)) *> metrics.cancelled,
                   )
-                  .handleError(_ => RequestResult(None, "request_error", operationForSlot(slot))),
-              )
-                .onCancel(
-                  stats.update(s => s.copy(cancelled = s.cancelled + 1)) *> metrics.cancelled,
-                )
-                .flatMap(result =>
-                  IO.monotonic.flatMap(end =>
-                    stats.update(_.finish(result, end - start)) *>
-                      metrics.completed(result, end - start),
-                  ),
-                )
-            }
+              end <- IO.monotonic
+              _   <- stats.update(_.finish(result, end - start))
+              _   <- metrics.completed(result, end - start)
+            yield ()
           }
           .guarantee(permits.release)
 

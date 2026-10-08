@@ -4,30 +4,9 @@ import cats.syntax.all.*
 import com.monovore.decline.{Command, Opts}
 
 import java.nio.file.{Path, Paths}
-
-private[lab] enum LabAction {
-  case Start(build: Boolean)
-  case Prepare(round: Int)
-  case Rebuild(service: String)
-  case Status
-  case Stop
-  case TrafficBuild
-  case TrafficRun(options: TrafficOptions)
-  case TrafficStart(options: TrafficOptions)
-  case TrafficStatus
-  case TrafficStop
-  case Proxy(action: String, milliseconds: Option[Int])
-  case Changes
-  case Inspect(id: String)
-  case Rollback(id: String)
-  case Incident(code: String, milliseconds: Option[Int], verbose: Boolean = false)
-  case Scenario3(action: String)
-  case Scenario4(action: String)
-  case Scenario5(action: String)
-  case VerifyScenario1(grafana: String, rate: Int, window: Int)
-  case VerifyScenario3
-  case VerifyScenario5(grafana: String)
-}
+import scala.concurrent.duration.*
+import scala.util.Try
+import org.http4s.Uri
 
 final private[lab] case class TrafficOptions(
     baseUrl: Option[String],
@@ -71,24 +50,58 @@ private[lab] object LabCliParser {
     "frontend",
   )
 
+  private def positiveDuration(value: String): Boolean =
+    Try(Duration(value)).toOption.exists {
+      case finite: FiniteDuration => finite > Duration.Zero
+      case _ => false
+    }
+
+  private def gatewayOrigin(value: String): Boolean =
+    Uri
+      .fromString(value)
+      .exists(uri =>
+        uri.scheme.exists(s => s.value == "http" || s.value == "https") &&
+          uri.authority.exists(_.userInfo.isEmpty) && uri.query.isEmpty && uri.fragment.isEmpty &&
+          (uri.path.isEmpty || uri.path == Uri.Path.Root),
+      )
+
   private val trafficOptions: Opts[TrafficOptions] = (
-    Opts.option[String]("base-url", help = "Gateway origin").orNone,
+    Opts
+      .option[String]("base-url", help = "Gateway origin")
+      .validate("Expected an HTTP(S) gateway origin")(gatewayOrigin)
+      .orNone,
     Opts
       .option[Int]("rate", help = "Requests per second")
       .validate("--rate must be between 1 and 10000")(n => n >= 1 && n <= 10000)
       .orNone,
-    Opts.option[String]("duration", help = "Run duration or infinite").orNone,
+    Opts
+      .option[String]("duration", help = "Run duration or infinite")
+      .validate("Expected a positive finite duration or infinite")(v =>
+        v == "infinite" || positiveDuration(v),
+      )
+      .orNone,
     Opts
       .option[Int]("max-concurrent", help = "Maximum concurrent requests")
       .validate("--max-concurrent must be positive")(_ > 0)
       .orNone,
-    Opts.option[String]("request-timeout", help = "Request timeout").orNone,
-    Opts.option[String]("drain-timeout", help = "Drain timeout").orNone,
-    Opts.option[String]("report-interval", help = "Progress report interval").orNone,
+    Opts
+      .option[String]("request-timeout", help = "Request timeout")
+      .validate("--request-timeout must be positive and finite")(positiveDuration)
+      .orNone,
+    Opts
+      .option[String]("drain-timeout", help = "Drain timeout")
+      .validate("--drain-timeout must be positive and finite")(positiveDuration)
+      .orNone,
+    Opts
+      .option[String]("report-interval", help = "Progress report interval")
+      .validate("--report-interval must be positive and finite")(positiveDuration)
+      .orNone,
     Opts
       .option[String]("profile", help = "Traffic profile")
-      .validate("--profile must be catalog-courses, catalog-soak, identity, or playback")(
-        Set("catalog-courses", "catalog-soak", "identity", "playback"),
+      .validate(
+        "--profile must be catalog-courses, catalog-reads, catalog-soak, identity, or playback",
+      )(
+        Set("catalog-courses", "catalog-reads", "catalog-soak", "identity", "playback"),
       )
       .orNone,
     Opts
@@ -99,7 +112,10 @@ private[lab] object LabCliParser {
       .option[Int]("modern-percent", help = "Playback modern subject share")
       .validate("--modern-percent must be 0 or 20")(n => n == 0 || n == 20)
       .orNone,
-    Opts.option[String]("setup-timeout", help = "Total actor preparation timeout").orNone,
+    Opts
+      .option[String]("setup-timeout", help = "Total actor preparation timeout")
+      .validate("--setup-timeout must be positive and finite")(positiveDuration)
+      .orNone,
   ).mapN(TrafficOptions.apply)
 
   private val traffic = Command("traffic", "Build, run, and inspect traffic") {
@@ -121,39 +137,41 @@ private[lab] object LabCliParser {
   }
 
   private val proxy = Command("proxy", "Control the Gateway to Catalog proxy") {
-    Opts.subcommand(Command("check", "Check the proxy path") { Opts(Proxy("check", None)) }) orElse
+    Opts.subcommand(Command("check", "Check the proxy path") {
+      Opts(Proxy(ProxyAction.Check))
+    }) orElse
       Opts.subcommand(Command("status", "Show proxy status") {
-        Opts(Proxy("status", None))
+        Opts(Proxy(ProxyAction.Status))
       }) orElse
       Opts.subcommand(Command("down", "Disable the proxy path") {
-        Opts(Proxy("down", None))
+        Opts(Proxy(ProxyAction.Down))
       }) orElse
       Opts.subcommand(Command("reset", "Reset the proxy path") {
-        Opts(Proxy("reset", None))
+        Opts(Proxy(ProxyAction.Reset))
       }) orElse
       Opts.subcommand(Command("latency", "Add proxy latency") {
         Opts
           .option[Int]("milliseconds", help = "Delay in milliseconds")
           .validate("--milliseconds must be positive")(_ > 0)
-          .map(value => Proxy("latency", Some(value)))
+          .map(value => Proxy(ProxyAction.Latency(value)))
       }) orElse
       Opts.subcommand(Command("timeout", "Set proxy timeout") {
         Opts
           .option[Int]("milliseconds", help = "Timeout in milliseconds")
           .validate("--milliseconds must be positive")(_ > 0)
-          .map(value => Proxy("timeout", Some(value)))
+          .map(value => Proxy(ProxyAction.Timeout(value)))
       })
   }
 
   private val platform = Command("platform", "Inspect and roll back local platform changes") {
     Opts.subcommand(Command("changes", "List platform changes") {
-      Opts(Changes)
+      Opts(Platform(PlatformAction.Changes))
     }) orElse
       Opts.subcommand(Command("inspect", "Show a platform change") {
-        Opts.argument[String]("CHANGE_ID").map(Inspect.apply)
+        Opts.argument[String]("CHANGE_ID").map(id => Platform(PlatformAction.Inspect(id)))
       }) orElse
       Opts.subcommand(Command("rollback", "Roll back a platform change") {
-        Opts.argument[String]("CHANGE_ID").map(Rollback.apply)
+        Opts.argument[String]("CHANGE_ID").map(id => Platform(PlatformAction.Rollback(id)))
       })
   }
 
@@ -169,11 +187,15 @@ private[lab] object LabCliParser {
         .validate("--milliseconds must be between 1 and 9999")(n => n >= 1 && n <= 9999)
         .orNone,
       Opts.flag("verbose", help = "Show facilitator control details for incident 8f27").orFalse,
-    ).mapN(Incident.apply)
+    ).tupled
       .validate("--milliseconds and --verbose are only valid for incident 8f27") {
-        case Incident(code, milliseconds, verbose) =>
-          code == "8f27" || (milliseconds.isEmpty && !verbose)
-        case _ => false
+        case (code, milliseconds, verbose) => code == "8f27" || (milliseconds.isEmpty && !verbose)
+      }
+      .map {
+        case ("8f27", milliseconds, verbose) => DelayIncident(milliseconds.getOrElse(750), verbose)
+        case ("3c91", _, _) => Scenario3(Scenario3Action.Activate)
+        case ("7b42", _, _) => Scenario4(Scenario4Action.Activate)
+        case _ => Scenario5(Scenario5Action.Activate)
       }
 
   private val incident = Command("incident", "Activate a workshop incident") {
@@ -187,46 +209,46 @@ private[lab] object LabCliParser {
 
   private val scenario3 = Command("scenario3", "Control the Identity workload") {
     Opts.subcommand(Command("baseline", "Start the light login mix") {
-      Opts(Scenario3("baseline"))
+      Opts(Scenario3(Scenario3Action.Baseline))
     }) orElse
       Opts.subcommand(Command("activate", "Start the heavy login mix") {
-        Opts(Scenario3("activate"))
+        Opts(Scenario3(Scenario3Action.Activate))
       }) orElse
       Opts.subcommand(Command("restore", "Stop the Identity workload") {
-        Opts(Scenario3("restore"))
+        Opts(Scenario3(Scenario3Action.Restore))
       })
   }
 
   private val scenario4 = Command("scenario4", "Control the Playback exercise") {
     Opts.subcommand(Command("prepare", "Seed Playback actors and enable workshop read mode") {
-      Opts(Scenario4("prepare"))
+      Opts(Scenario4(Scenario4Action.Prepare))
     }) orElse
       Opts.subcommand(Command("baseline", "Start the old subject workload") {
-        Opts(Scenario4("baseline"))
+        Opts(Scenario4(Scenario4Action.Baseline))
       }) orElse
       Opts.subcommand(Command("activate", "Start the mixed subject workload") {
-        Opts(Scenario4("activate"))
+        Opts(Scenario4(Scenario4Action.Activate))
       }) orElse
       Opts.subcommand(Command("restore", "Stop traffic and restore Playback mode") {
-        Opts(Scenario4("restore"))
+        Opts(Scenario4(Scenario4Action.Restore))
       })
   }
 
   private val scenario5 = Command("scenario5", "Control the Catalog session exercise") {
     Opts.subcommand(Command("prepare", "Rebuild Catalog with a small session pool") {
-      Opts(Scenario5("prepare"))
+      Opts(Scenario5(Scenario5Action.Prepare))
     }) orElse
       Opts.subcommand(Command("rebuild", "Rebuild Catalog after a source fix") {
-        Opts(Scenario5("rebuild"))
+        Opts(Scenario5(Scenario5Action.Rebuild))
       }) orElse
       Opts.subcommand(Command("baseline", "Start healthy Catalog reads") {
-        Opts(Scenario5("baseline"))
+        Opts(Scenario5(Scenario5Action.Baseline))
       }) orElse
       Opts.subcommand(Command("activate", "Start the mixed Catalog workload") {
-        Opts(Scenario5("activate"))
+        Opts(Scenario5(Scenario5Action.Activate))
       }) orElse
       Opts.subcommand(Command("restore", "Stop traffic and restore the normal pool size") {
-        Opts(Scenario5("restore"))
+        Opts(Scenario5(Scenario5Action.Restore))
       })
   }
 
@@ -236,7 +258,7 @@ private[lab] object LabCliParser {
         Opts.option[String]("grafana", help = "Grafana URL").withDefault("http://localhost:3000"),
         Opts
           .option[Int]("rate", help = "Catalog requests per second")
-          .validate("--rate must be positive")(_ > 0)
+          .validate("--rate must be between 1 and 10000")(n => n > 0 && n <= 10000)
           .withDefault(5),
         Opts
           .option[Int]("window", help = "Observation window in seconds")
@@ -287,7 +309,7 @@ private[lab] object LabCliParser {
         Opts.subcommand(scenario4) orElse
         Opts.subcommand(scenario5) orElse
         Opts.subcommand(verify) orElse
-        Opts.help.map(_ => Changes),
+        Opts.help.map(_ => Platform(PlatformAction.Changes)),
     ).mapN((root, action) => LabConfig(Paths.get(root).toAbsolutePath.normalize(), action))
 
   val command: Command[LabConfig] = Command(

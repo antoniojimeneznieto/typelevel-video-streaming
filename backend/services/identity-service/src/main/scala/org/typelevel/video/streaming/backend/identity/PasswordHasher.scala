@@ -62,8 +62,10 @@ object PasswordHasherImpl:
   def create(
       maxConcurrent: Int = 4,
   )(using TracerProvider[IO], MeterProvider[IO]): IO[PasswordHasherImpl] =
-    require(maxConcurrent > 0, "maxConcurrent must be positive")
     for
+      _ <- IO.raiseUnless(maxConcurrent > 0)(
+             new IllegalArgumentException("maxConcurrent must be positive"),
+           )
       telemetry <- PasswordHasherTelemetry.create
       permits   <- Semaphore[IO](maxConcurrent.toLong)
     yield new PasswordHasherImpl(

@@ -84,7 +84,7 @@
       "type": "text",
       "title": "Trace comparison",
       "gridPos": { "x": 0, "y": 28, "w": 24, "h": 5 },
-      "options": { "mode": "markdown", "content": "Compare a fresh **401** trace with a **200** control. Before adding diagnostics, the HTTP spans show that Playback rejects the request before repository work; they do not name the validation stage. After adding the required subject-decoding telemetry, repeat the comparison on *new* traces before editing the decoder. Identity logins happen during actor setup; measured traffic on this dashboard is Playback only." }
+      "options": { "mode": "markdown", "content": "Compare a fresh **401** trace with a **200** control. Before adding diagnostics, the HTTP spans show that Playback rejects the request before repository work; they do not name the validation stage. After adding the required subject-decoding telemetry, repeat the comparison on *new* traces before editing the decoder. Identity logins happen during actor setup and separate expiry-driven maintenance. Renewal is excluded from measured Playback latency; renewal failures stop the workload." }
     }
   ]
 }

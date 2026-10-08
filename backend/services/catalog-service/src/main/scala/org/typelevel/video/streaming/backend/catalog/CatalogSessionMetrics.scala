@@ -3,18 +3,25 @@ package org.typelevel.video.streaming.backend.catalog
 import scala.concurrent.duration.FiniteDuration
 
 import cats.effect.{IO, Ref, Resource}
-import org.typelevel.otel4s.metrics.{BucketBoundaries, Histogram, MeterProvider, UpDownCounter}
+import cats.syntax.all.*
+import org.typelevel.otel4s.metrics.{
+  BucketBoundaries,
+  Histogram,
+  Meter,
+  MeterProvider,
+  UpDownCounter,
+}
 
 /** Measures pool acquisition separately from SQL execution. */
 private[catalog] object CatalogSessionMetrics:
   def instrument[A](
       sessions: Resource[IO, A],
-      provider: MeterProvider[IO],
       maxConnections: Int,
-  ): Resource[IO, Resource[IO, A]] =
+  )(using MeterProvider[IO]): Resource[IO, Resource[IO, A]] =
     for
-      meter       <- provider.get("org.typelevel.video.streaming.catalog.sessions").toResource
-      acquisition <- meter
+      given Meter[IO] <-
+        MeterProvider[IO].get("org.typelevel.video.streaming.catalog.sessions").toResource
+      acquisition <- Meter[IO]
                        .histogram[Double]("catalog.session.acquire.duration")
                        .withUnit("s")
                        .withDescription("Time to acquire a Catalog PostgreSQL session")
@@ -24,19 +31,19 @@ private[catalog] object CatalogSessionMetrics:
                        )
                        .create
                        .toResource
-      active <- meter
+      active <- Meter[IO]
                   .upDownCounter[Long]("catalog.session.active")
                   .withUnit("{session}")
                   .withDescription("Catalog sessions checked out from the pool")
                   .create
                   .toResource
-      capacity <- meter
+      capacity <- Meter[IO]
                     .upDownCounter[Long]("catalog.session.capacity")
                     .withUnit("{session}")
                     .withDescription("Configured Catalog PostgreSQL session pool capacity")
                     .create
                     .toResource
-      waiting <- meter
+      waiting <- Meter[IO]
                    .upDownCounter[Long]("catalog.session.waiting")
                    .withUnit("{request}")
                    .withDescription("Catalog requests waiting for a database session")
@@ -44,7 +51,7 @@ private[catalog] object CatalogSessionMetrics:
                    .toResource
       nextWaitId <- Ref.of[IO, Long](0L).toResource
       waitStarts <- Ref.of[IO, Map[Long, FiniteDuration]](Map.empty).toResource
-      _          <- meter
+      _          <- Meter[IO]
              .observableGauge[Double]("catalog.session.wait.max_age")
              .withUnit("s")
              .withDescription("Age of the oldest request waiting for a Catalog session")
@@ -71,24 +78,33 @@ private[catalog] object CatalogSessionMetrics:
       nextWaitId: Ref[IO, Long],
       waitStarts: Ref[IO, Map[Long, FiniteDuration]],
   ): Resource[IO, A] =
-    Resource
-      .makeFull[IO, (A, IO[Unit])] { poll =>
-        for
-          start <- IO.monotonic
-          id    <- nextWaitId.getAndUpdate(_ + 1)
-          _     <- waitStarts.update(_.updated(id, start))
-          _     <- waiting.inc()
-          // Keep bookkeeping and ownership transfer masked, but preserve the pool's
-          // cancelable acquisition while a request waits for an available session.
-          pair <- poll(sessions.allocated).guarantee(
-                    IO.monotonic.flatMap { end =>
-                      waitStarts.update(_ - id) *>
-                        acquisition.record((end - start).toNanos.toDouble / 1e9)
-                    } *> waiting.dec(),
-                  )
-          _ <- active.inc()
-        yield pair
-      } { case (_, release) =>
-        release.guarantee(active.dec())
-      }
-      .map(_._1)
+    def beginWait: IO[Long] =
+      for
+        start <- IO.monotonic
+        id    <- nextWaitId.getAndUpdate(_ + 1)
+        _     <- waitStarts.update(_.updated(id, start))
+        _     <- waiting.inc().onError { case _ => waitStarts.update(_ - id) }
+      yield id
+
+    // Success ends the wait immediately; the Resource finalizer covers failure and cancellation.
+    // Removing the ticket makes cleanup idempotent even if a metric fails.
+    def endWait(id: Long): IO[Unit] =
+      for
+        start <- waitStarts.modify(starts => (starts - id, starts.get(id)))
+        _     <- start.traverse_ { started =>
+               (for
+                 now <- IO.monotonic
+                 _   <- acquisition.record((now - started).toNanos.toDouble / 1e9)
+               yield ()).guarantee(waiting.dec())
+             }
+      yield ()
+
+    for
+      id <- Resource.make(beginWait)(endWait)
+      // Register session ownership before executing any fallible instrumentation.
+      pair <- Resource.makeFull[IO, (A, IO[Unit])](poll => poll(sessions.allocated)) {
+                case (_, release) => release
+              }
+      _ <- Resource.eval(endWait(id))
+      _ <- Resource.make(active.inc())(_ => active.dec())
+    yield pair._1

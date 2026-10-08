@@ -31,7 +31,7 @@
       "id": 2,
       "type": "timeseries",
       "title": "Session acquisition p95",
-      "description": "Completed session checkouts only. This series can disappear when the pool is fully exhausted; use oldest active wait below for requests still queued.",
+      "description": "Finished acquisition attempts, including cancellation and failure. Attempts still waiting have no duration observation; use oldest active wait below.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "x": 0, "y": 9, "w": 12, "h": 9 },
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },

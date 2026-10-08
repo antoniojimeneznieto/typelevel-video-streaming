@@ -54,3 +54,28 @@ object PasswordHasherTelemetrySuite extends SimpleIOSuite:
       }
     }
   }
+
+  test("queued verification can be canceled before any permit is released") {
+    given MeterProvider[IO]  = MeterProvider.noop[IO]
+    given TracerProvider[IO] = TracerProvider.noop[IO]
+    for
+      telemetry <- PasswordHasherTelemetry.create
+      permits   <- Semaphore[IO](0)
+      fiber     <- telemetry.verify(permits)(IO.unit).start
+      _         <- IO.sleep(100.millis)
+      done      <- Deferred[IO, Unit]
+      canceler  <- (fiber.cancel *> done.complete(())).start
+      promptly  <- done.get.as(true).timeoutTo(500.millis, IO.pure(false))
+      _         <- permits.release
+      _         <- canceler.joinWithNever.timeout(2.seconds)
+    yield expect(promptly)
+  }
+
+  test("invalid hasher concurrency is an effect failure") {
+    given MeterProvider[IO]  = MeterProvider.noop[IO]
+    given TracerProvider[IO] = TracerProvider.noop[IO]
+    org.typelevel.video.streaming.backend.identity.service.PasswordHasherImpl
+      .create(0)
+      .attempt
+      .map(result => expect(result.left.exists(_.isInstanceOf[IllegalArgumentException])))
+  }

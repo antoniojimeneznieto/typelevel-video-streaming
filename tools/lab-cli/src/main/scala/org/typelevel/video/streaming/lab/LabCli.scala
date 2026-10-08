@@ -1,6 +1,7 @@
 package org.typelevel.video.streaming.lab
 
 import cats.effect.{ExitCode, IO}
+import cats.effect.std.Console
 import com.monovore.decline.Opts
 import com.monovore.decline.effect.CommandIOApp
 
@@ -12,7 +13,8 @@ object LabCli
     ) {
   override def main: Opts[IO[ExitCode]] = LabCliParser.opts.map { config =>
     execute(config).as(ExitCode.Success).handleErrorWith { error =>
-      IO.blocking(System.err.println(Option(error.getMessage).getOrElse(error.toString)))
+      Console[IO]
+        .errorln(Option(error.getMessage).getOrElse(error.toString))
         .as(ExitCode(1))
     }
   }
@@ -33,16 +35,10 @@ object LabCli
           case LabAction.TrafficStart(options) => LabCommands.trafficStart(root, options.arguments)
           case LabAction.TrafficStatus => LabCommands.trafficStatus(root)
           case LabAction.TrafficStop => LabCommands.trafficStop(root)
-          case LabAction.Proxy(action, milliseconds) =>
-            LabCommands.proxy(root, action, milliseconds)
-          case LabAction.Changes => LabScenarios.platform(root, "changes", None)
-          case LabAction.Inspect(id) => LabScenarios.platform(root, "inspect", Some(id))
-          case LabAction.Rollback(id) => LabScenarios.platform(root, "rollback", Some(id))
-          case LabAction.Incident("8f27", milliseconds, verbose) =>
-            LabScenarios.activatePlatform(root, milliseconds.getOrElse(750), verbose)
-          case LabAction.Incident("3c91", _, _) => LabScenarios.scenario3(root, "activate")
-          case LabAction.Incident("7b42", _, _) => LabScenarios.scenario4(root, "activate")
-          case LabAction.Incident("d5e0", _, _) => LabScenarios.scenario5(root, "activate")
+          case LabAction.Proxy(action) => LabCommands.proxy(root, action)
+          case LabAction.Platform(action) => LabScenarios.platform(root, action)
+          case LabAction.DelayIncident(milliseconds, verbose) =>
+            LabScenarios.activatePlatform(root, milliseconds, verbose)
           case LabAction.Scenario3(action) => LabScenarios.scenario3(root, action)
           case LabAction.Scenario4(action) => LabScenarios.scenario4(root, action)
           case LabAction.Scenario5(action) => LabScenarios.scenario5(root, action)
@@ -50,7 +46,6 @@ object LabCli
             LabVerify.scenario1(root, grafana, rate, window)
           case LabAction.VerifyScenario3 => LabVerify.scenario3(root)
           case LabAction.VerifyScenario5(grafana) => LabVerify.scenario5(root, grafana)
-          case _ => IO.raiseError(new IllegalArgumentException("Unknown incident code"))
         })
     }
   }

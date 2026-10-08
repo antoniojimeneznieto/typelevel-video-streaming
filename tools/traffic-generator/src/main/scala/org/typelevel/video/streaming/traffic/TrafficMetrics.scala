@@ -8,6 +8,7 @@ import org.typelevel.otel4s.metrics.{
   BucketBoundaries,
   Counter,
   Histogram,
+  Meter,
   MeterProvider,
   UpDownCounter,
 }
@@ -27,25 +28,25 @@ object TrafficMetrics:
     def completed(result: RequestResult, elapsed: FiniteDuration): IO[Unit] = IO.unit
     def cancelled: IO[Unit]                                                 = IO.unit
 
-  def create(provider: MeterProvider[IO], profile: String = "catalog-courses"): IO[TrafficMetrics] =
+  def create(profile: TrafficProfile)(using MeterProvider[IO]): IO[TrafficMetrics] =
     for
-      meter    <- provider.get("org.typelevel.video.streaming.traffic")
-      arrivals <- meter
+      given Meter[IO] <- MeterProvider[IO].get("org.typelevel.video.streaming.traffic")
+      arrivals        <- Meter[IO]
                     .counter[Long]("lab.traffic.arrivals")
                     .withUnit("{request}")
                     .withDescription("Scheduled arrivals by admission result")
                     .create
-      requests <- meter
+      requests <- Meter[IO]
                     .counter[Long]("lab.traffic.requests")
                     .withUnit("{request}")
                     .withDescription("Completed generator requests by outcome")
                     .create
-      cancellations <- meter
+      cancellations <- Meter[IO]
                          .counter[Long]("lab.traffic.cancellations")
                          .withUnit("{request}")
                          .withDescription("Generator requests cancelled before completion")
                          .create
-      duration <- meter
+      duration <- Meter[IO]
                     .histogram[Double]("lab.traffic.request.duration")
                     .withUnit("s")
                     .withDescription("End-to-end generator request duration")
@@ -53,12 +54,19 @@ object TrafficMetrics:
                       BucketBoundaries(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
                     )
                     .create
-      active <- meter
+      active <- Meter[IO]
                   .upDownCounter[Long]("lab.traffic.requests.active")
                   .withUnit("{request}")
                   .withDescription("Generator requests currently in flight")
                   .create
-    yield Live(arrivals, requests, cancellations, duration, active, Attribute("operation", profile))
+    yield Live(
+      arrivals,
+      requests,
+      cancellations,
+      duration,
+      active,
+      Attribute("profile", profile.label),
+    )
 
   private def statusClass(status: Option[Int]): String =
     status.fold("none")(code => if code >= 100 && code < 600 then s"${code / 100}xx" else "other")
@@ -69,23 +77,26 @@ object TrafficMetrics:
       cancellationsCounter: Counter[IO, Long],
       durationHistogram: Histogram[IO, Double],
       activeCounter: UpDownCounter[IO, Long],
-      operation: Attribute[String],
+      profile: Attribute[String],
   ) extends TrafficMetrics:
     def arrivals(result: String, count: Long): IO[Unit] =
       if count == 0 then IO.unit
-      else arrivalsCounter.add(count, operation, Attribute("result", result))
+      else arrivalsCounter.add(count, profile, Attribute("result", result))
 
-    def started: IO[Unit] = activeCounter.add(1L, operation)
+    def started: IO[Unit] = activeCounter.add(1L, profile)
 
     def completed(result: RequestResult, elapsed: FiniteDuration): IO[Unit] =
       val attributes = List(
-        Attribute("operation", result.operation),
-        Attribute("outcome", result.outcome),
+        profile,
+        Attribute("operation", result.operation.label),
+        Attribute("outcome", result.outcome.label),
         Attribute("status_class", statusClass(result.status)),
       )
-      requestsCounter.add(1L, attributes) *>
-        durationHistogram.record(elapsed.toNanos.toDouble / 1e9, attributes) *>
-        activeCounter.add(-1L, operation)
+      for
+        _ <- requestsCounter.add(1L, attributes)
+        _ <- durationHistogram.record(elapsed.toNanos.toDouble / 1e9, attributes)
+        _ <- activeCounter.add(-1L, profile)
+      yield ()
 
     def cancelled: IO[Unit] =
-      cancellationsCounter.add(1L, operation) *> activeCounter.add(-1L, operation)
+      cancellationsCounter.add(1L, profile) *> activeCounter.add(-1L, profile)

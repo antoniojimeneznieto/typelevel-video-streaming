@@ -36,8 +36,8 @@
       "gridPos": { "x": 0, "y": 10, "w": 24, "h": 9 },
       "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
       "targets": [
-        { "refId": "A", "expr": "sum(rate(lab_traffic_arrivals_total{operation=\"catalog-courses\"}[1m]))", "legendFormat": "offered" },
-        { "refId": "B", "expr": "sum(rate(lab_traffic_arrivals_total{operation=\"catalog-courses\",result=\"sent\"}[1m]))", "legendFormat": "sent" },
+        { "refId": "A", "expr": "sum(rate(lab_traffic_arrivals_total{profile=\"catalog-courses\"}[1m]))", "legendFormat": "offered" },
+        { "refId": "B", "expr": "sum(rate(lab_traffic_arrivals_total{profile=\"catalog-courses\",result=\"sent\"}[1m]))", "legendFormat": "sent" },
         { "refId": "C", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"gateway-service\",classifier=\"/api/catalog/courses\",http_phase=\"body\"}[1m]))", "legendFormat": "gateway inbound" },
         { "refId": "D", "expr": "sum(rate(http_client_request_duration_seconds_count{service_name=\"gateway-service\",classifier=\"catalog:/courses\",http_phase=\"body\"}[1m]))", "legendFormat": "gateway Catalog attempts" },
         { "refId": "E", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"catalog-service\",classifier=\"/courses\",http_phase=\"body\"}[1m]))", "legendFormat": "Catalog server" }

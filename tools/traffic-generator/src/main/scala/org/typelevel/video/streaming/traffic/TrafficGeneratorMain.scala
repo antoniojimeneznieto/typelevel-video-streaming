@@ -56,8 +56,9 @@ object TrafficGeneratorMain extends IOApp:
         .build,
     ).tupled
       .use { (provider, client) =>
+        given MeterProvider[IO] = provider
         for
-          metrics  <- TrafficMetrics.create(provider, config.profile)
+          metrics  <- TrafficMetrics.create(config.profile)
           stats    <- Ref.of[IO, Stats](Stats())
           previous <- Ref.of[IO, Stats](Stats())
           request  <- prepareRequest(config, client)
@@ -68,7 +69,7 @@ object TrafficGeneratorMain extends IOApp:
                        prior    <- previous.getAndSet(s)
                        now      <- IO.monotonic
                        wallTime <- IO.realTime
-                       json      = s.json(kind, now - start, config.profile)
+                       json      = s.json(kind, now - start, config.profile.label)
                                 .deepMerge(
                                   Json.obj(
                                     "timestamp_epoch_ms" -> Json.fromLong(wallTime.toMillis),
@@ -81,20 +82,13 @@ object TrafficGeneratorMain extends IOApp:
                        _ <- IO.println(json)
                      yield ()
           progress = Stream.awakeEvery[IO](config.reportInterval).evalMap(_ => report("progress"))
-          operationForSlot = (slot: Long) =>
-                               config.profile match
-                                 case "catalog-soak" => CatalogTraffic.soakOperation(slot)
-                                 case "identity" =>
-                                   if slot % 100 < config.loginPercent then "identity-login"
-                                   else "identity-current-user"
-                                 case "playback" => "playback-favorites"
-                                 case _ => "catalog-courses"
-          _ <-
+          _       <-
             Stream
               .eval(
-                Traffic.run(config, request, stats, metrics, operationForSlot),
+                Traffic.run(config, request, stats, metrics),
               )
               .concurrently(progress)
+              .concurrently(Stream.eval(request.maintenance))
               .compile
               .drain
               .guarantee(report("summary"))
@@ -108,15 +102,35 @@ object TrafficGeneratorMain extends IOApp:
   private[traffic] def prepareRequest(
       config: Config,
       client: org.http4s.client.Client[IO],
-  ): IO[Long => IO[RequestResult]] =
-    val prepare =
-      if config.profile == "playback" then
+  ): IO[Workload] =
+    val prepare = config.profile match
+      case TrafficProfile.Playback =>
         PlaybackTraffic.prepare(client, config.baseUrl, config.modernPercent)
-      else if config.profile == "identity" then
+      case TrafficProfile.Identity =>
         IdentityTraffic.prepare(client, config.baseUrl, config.loginPercent)
-      else if config.profile == "catalog-soak" then
-        IO.pure((slot: Long) => CatalogTraffic.soakRequest(client, config.baseUrl, slot))
-      else IO.pure((_: Long) => CatalogTraffic.request(client, config.baseUrl))
+      case TrafficProfile.CatalogSoak =>
+        IO.pure(
+          Workload(slot =>
+            PreparedRequest(
+              CatalogTraffic.soakOperation(slot),
+              CatalogTraffic.soakRequest(client, config.baseUrl, slot),
+            ),
+          ),
+        )
+      case TrafficProfile.CatalogReads =>
+        IO.pure(Workload(slot =>
+          val operation = CatalogTraffic.soakOperation(slot)
+          PreparedRequest(
+            operation,
+            CatalogTraffic.requestOperation(client, config.baseUrl, operation, None),
+          ),
+        ))
+      case TrafficProfile.CatalogCourses =>
+        IO.pure(
+          Workload(_ =>
+            PreparedRequest(Operation.Courses, CatalogTraffic.request(client, config.baseUrl)),
+          ),
+        )
     prepare.timeoutTo(
       config.setupTimeout,
       IO.raiseError(

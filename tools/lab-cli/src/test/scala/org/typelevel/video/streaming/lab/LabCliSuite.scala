@@ -1,6 +1,7 @@
 package org.typelevel.video.streaming.lab
 
 import cats.effect.IO
+import cats.syntax.all.*
 import fs2.io.file.Files
 import io.circe.Json
 import io.circe.parser.parse
@@ -65,7 +66,7 @@ object LabCliSuite extends SimpleIOSuite {
         _ <- LabIo.createDirectories(root.resolve(".lab"))
         _ <- LabIo.writeAtomic(root.resolve(".lab/platform-changes.json"), changes)
         // No Docker/Compose project exists here: a historical rollback must not call it.
-        _     <- LabScenarios.platform(root, "rollback", Some("old"))
+        _     <- LabScenarios.platform(root, PlatformAction.Rollback("old"))
         after <- LabIo.read(root.resolve(".lab/platform-changes.json"))
       } yield expect(after == changes)
     }
@@ -76,7 +77,7 @@ object LabCliSuite extends SimpleIOSuite {
       val root  = directory.toNioPath
       val state = root.resolve("state.json")
       for {
-        output   <- LabIo.run(root, Seq("sh", "-c", "printf ready"), capture = true)
+        output   <- LabIo.output(root, Seq("sh", "-c", "printf ready"))
         missing  <- LabIo.probe(root, Seq("sh", "-c", "exit 7"))
         _        <- LabIo.writeAtomic(state, "first")
         _        <- LabIo.writeAtomic(state, "second")
@@ -89,9 +90,9 @@ object LabCliSuite extends SimpleIOSuite {
     Files[IO].tempDirectory.use { directory =>
       val root = directory.toNioPath
       for {
-        _          <- LabScenarios.platform(root, "changes", None)
+        _          <- LabScenarios.platform(root, PlatformAction.Changes)
         lockExists <- LabIo.exists(root.resolve(".lab/platform.lock"))
-        _          <- LabScenarios.platform(root, "changes", None)
+        _          <- LabScenarios.platform(root, PlatformAction.Changes)
       } yield expect(lockExists)
     }
   }
@@ -146,6 +147,13 @@ object LabCliSuite extends SimpleIOSuite {
           List("traffic", "run", "--max-concurrent", "0"),
           List("traffic", "start", "--profile", "unknown"),
           List("traffic", "run", "--modern-percent", "50"),
+          List("traffic", "start", "--setup-timeout", "nonsense"),
+          List("traffic", "start", "--request-timeout", "Inf"),
+          List("traffic", "start", "--duration", "0s"),
+          List("traffic", "start", "--drain-timeout", "-1s"),
+          List("traffic", "start", "--report-interval", "0s"),
+          List("traffic", "start", "--base-url", "http://host/path"),
+          List("verify", "scenario1", "--rate", "10001"),
         ).forall(LabCliParser.command.parse(_).isLeft),
       ),
     )
@@ -167,7 +175,7 @@ object LabCliSuite extends SimpleIOSuite {
       expect(
         parsed.exists(config =>
           config.root.toString == "/tmp/workshop" &&
-            config.action == LabAction.Incident("8f27", Some(750)),
+            config.action == LabAction.DelayIncident(750),
         ),
       )
     }
@@ -178,12 +186,12 @@ object LabCliSuite extends SimpleIOSuite {
       expect(
         LabCliParser.command
           .parse(List("incident", "start", "8f27"))
-          .exists(_.action == LabAction.Incident("8f27", None, false)),
+          .exists(_.action == LabAction.DelayIncident(750, false)),
       ) &&
         expect(
           LabCliParser.command
             .parse(List("incident", "start", "8f27", "--verbose"))
-            .exists(_.action == LabAction.Incident("8f27", None, true)),
+            .exists(_.action == LabAction.DelayIncident(750, true)),
         ) &&
         expect(LabCliParser.command.parse(List("incident", "start", "3c91", "--verbose")).isLeft),
     )
@@ -272,11 +280,56 @@ object LabCliSuite extends SimpleIOSuite {
              "endTimeUnixNano":"1730000000"}]}]}
         ]
       }""").toOption.get
-      val slow = LabVerify.matchingBoundaryTrace("trace-1", trace, slow = true)
-      val fast = LabVerify.matchingBoundaryTrace("trace-1", trace, slow = false)
+      val slow = LabVerify.matchingBoundaryTrace("trace-1", trace, slow = true).toOption.flatten
+      val fast = LabVerify.matchingBoundaryTrace("trace-1", trace, slow = false).toOption.flatten
       expect(slow.exists { case (id, clientMs, serverMs) =>
         id == "trace-1" && clientMs == 750.0 && serverMs == 30.0
       } && fast.isEmpty)
     }
+  }
+
+  test("captured process results retain separate output streams and the exit code") {
+    Files[IO].tempDirectory.use { directory =>
+      LabIo
+        .capture(
+          directory.toNioPath,
+          Seq("sh", "-c", "printf output; printf diagnostic >&2; exit 7"),
+        )
+        .map { result =>
+          expect(result == LabIo.ProcessResult(7, "output", "diagnostic"))
+        }
+    }
+  }
+
+  test("concurrent atomic writes leave one complete value and no temporary files") {
+    Files[IO].tempDirectory.use { directory =>
+      val values = (0 until 20).toList.map(i => s"$i:" + ("x" * 10000))
+      for
+        _ <- values.parTraverse_(value =>
+               LabIo.writeAtomic(directory.toNioPath.resolve("state.json"), value),
+             )
+        finalValue <- LabIo.read(directory.toNioPath.resolve("state.json"))
+        entries    <- Files[IO].list(directory).compile.toList
+      yield expect(values.contains(finalValue)) && expect(
+        entries.map(_.fileName.toString) == List("state.json"),
+      )
+    }
+  }
+
+  test("metric decoding rejects missing, malformed, nonfinite, and ambiguous series") {
+    def response(values: Json*) = Json.obj("data" -> Json.obj("result" -> Json.arr(values*)))
+    def sample(value: String)   =
+      Json.obj("value" -> Json.arr(Json.fromInt(1), Json.fromString(value)))
+    IO.pure(
+      expect.all(
+        LabVerify.decodeMetric(response(sample("1.5"))) == Right(1.5),
+        LabVerify.decodeMetric(response()).isLeft,
+        LabVerify.decodeMetric(response(sample("1"), sample("2"))).isLeft,
+        LabVerify.decodeMetric(response(sample("NaN"))).isLeft,
+        LabVerify.decodeMetric(response(sample("+Inf"))).isLeft,
+        LabVerify.decodeMetric(response(Json.obj("value" -> Json.arr()))).isLeft,
+        LabVerify.matchingBoundaryTrace("bad", Json.obj(), false).isLeft,
+      ),
+    )
   }
 }
