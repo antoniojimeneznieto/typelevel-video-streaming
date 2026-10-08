@@ -22,6 +22,8 @@ import org.typelevel.video.streaming.backend.playback.api.{
 import org.typelevel.video.streaming.backend.playback.domain.PlaybackProgress
 import smithy4s.http.RawErrorResponse
 import typelevel.courses.AppContext
+import typelevel.courses.components.{CatalogSection, SiteHeader}
+import typelevel.courses.data.Catalog
 import typelevel.courses.routing.AppRoute
 import typelevel.courses.state.RemoteStateStatus
 import typelevel.courses.ui.{CourseView, Icon, Icons, LessonView}
@@ -88,18 +90,38 @@ object WatchPage:
       slug: String,
       lessonId: String,
   ): Resource[IO, HtmlElement[IO]] =
-    div(
-      styleAttr := "display: contents",
-      ctx.catalog.course(slug).map {
-        case None => notFound(ctx).map(value => value: Node[IO])
-        case Some(course) =>
-          val lessonIndex = course.lessons.indexWhere(_.id == lessonId)
-          course.lessons.lift(lessonIndex) match
-            case None => notFound(ctx).map(value => value: Node[IO])
-            case Some(lesson) =>
-              renderLesson(ctx, shared, course, lesson, lessonIndex).map(value => value: Node[IO])
-      },
-    )
+    if slug == Catalog.featured.course.slug.value then
+      renderCourse(ctx, shared, Catalog.featured, lessonId)
+    else
+      div(
+        styleAttr := "display: contents",
+        ctx.catalog.signal.map(_.status != RemoteStateStatus.Ready).changes.map { pending =>
+          Option.when(pending)(SiteHeader.AppHeader(ctx))
+        },
+        CatalogSection(ctx, "video") {
+          div(
+            styleAttr := "display: contents",
+            ctx.catalog.course(slug).map {
+              case None => unavailableRoute(ctx)
+              case Some(course) => renderCourse(ctx, shared, course, lessonId)
+            },
+          ).widen
+        },
+      ).widen
+
+  private def renderCourse(
+      ctx: AppContext,
+      shared: SharedState,
+      course: CourseView,
+      lessonId: String,
+  ): Resource[IO, HtmlElement[IO]] =
+    val lessonIndex = course.lessons.indexWhere(_.id == lessonId)
+    course.lessons.lift(lessonIndex) match
+      case None => unavailableRoute(ctx)
+      case Some(lesson) => renderLesson(ctx, shared, course, lesson, lessonIndex)
+
+  private def unavailableRoute(ctx: AppContext): Resource[IO, HtmlElement[IO]] =
+    div(cls := "app-page", SiteHeader.AppHeader(ctx), notFound(ctx)).widen
 
   private def renderLesson(
       ctx: AppContext,

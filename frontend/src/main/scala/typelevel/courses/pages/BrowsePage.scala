@@ -9,9 +9,16 @@ import fs2.concurrent.{Signal, SignallingRef}
 import fs2.dom.{HtmlElement, Node}
 import fs2.Stream
 import org.typelevel.video.streaming.backend.catalog.api.ListCoursesInput
-import org.typelevel.video.streaming.backend.catalog.domain.{LearningPath, PageLimit, Topic}
+import org.typelevel.video.streaming.backend.catalog.domain.{PageLimit, Topic}
 import typelevel.courses.AppContext
-import typelevel.courses.components.{Artwork, CourseCard, FavoriteButton, SiteHeader}
+import typelevel.courses.components.{
+  Artwork,
+  CatalogSection,
+  CourseCard,
+  FavoriteButton,
+  SiteHeader,
+}
+import typelevel.courses.data.Catalog
 import typelevel.courses.routing.AppRoute
 import typelevel.courses.state.AppState
 import typelevel.courses.ui.CatalogPresentation.*
@@ -27,59 +34,58 @@ object BrowsePage:
       status: TopicStatus,
   )
 
-  def apply(ctx: AppContext): Resource[IO, HtmlElement[IO]] = for
+  def apply(ctx: AppContext): Resource[IO, HtmlElement[IO]] =
+    div(
+      cls := "app-page",
+      a(cls := "skip-link", href := "#browse-content", "Skip to content"),
+      SiteHeader.AppHeader(ctx),
+      content(ctx),
+    ).widen
+
+  private def topicLibrary(ctx: AppContext): Resource[IO, HtmlElement[IO]] = for
+    initial      <- Resource.eval(ctx.catalog.courses.get)
     activeTopic  <- SignallingRef[IO].of("All topics").toResource
-    topicRequest <- SignallingRef[IO].of(Option.empty[TopicRequest]).toResource
-    _            <- topicRequests(ctx, activeTopic, topicRequest).background.void
-    page         <- div(
-              cls := "app-page",
-              a(cls := "skip-link", href := "#browse-content", "Skip to content"),
-              SiteHeader.AppHeader(ctx),
-              content(ctx, activeTopic, topicRequest),
-            ).widen
+    topicRequest <- SignallingRef[IO]
+                      .of(TopicRequest("All topics", initial, TopicStatus.Ready))
+                      .toResource
+    _    <- topicRequests(ctx, activeTopic, topicRequest).background.void
+    page <- topicContent(ctx, activeTopic, topicRequest)
   yield page
 
   private def topicRequests(
       ctx: AppContext,
       activeTopic: SignallingRef[IO, String],
-      topicRequest: SignallingRef[IO, Option[TopicRequest]],
+      topicRequest: SignallingRef[IO, TopicRequest],
   ): IO[Unit] =
-    (activeTopic, ctx.catalog.courses)
-      .mapN(_ -> _)
-      .discrete
-      .switchMap {
-        case ("All topics", _) => Stream.eval(topicRequest.set(None))
-        case (topic, courses) =>
-          val local = coursesForTopic(courses, topic)
-          Stream.eval(
-            topicRequest.set(Some(TopicRequest(topic, local, TopicStatus.Loading))) *>
-              IO.fromEither(Topic(topic).leftMap(new IllegalArgumentException(_)))
-                .flatMap { value =>
-                  ctx.catalog.queryCourses(
-                    ListCoursesInput(topic = Some(value), limit = PageLimit.unsafeApply(100)),
-                  )
-                }
-                .attempt
-                .flatMap {
-                  case Right(items) =>
-                    topicRequest.set(Some(TopicRequest(topic, items, TopicStatus.Ready)))
-                  case Left(_) =>
-                    topicRequest.set(Some(TopicRequest(topic, local, TopicStatus.Error)))
-                },
-          )
+    activeTopic.discrete
+      .drop(1) // The page already fetched the initial, unfiltered catalog.
+      .switchMap { topic =>
+        Stream.eval(
+          topicRequest.set(TopicRequest(topic, Vector.empty, TopicStatus.Loading)) *>
+            Option
+              .unless(topic == "All topics")(topic)
+              .traverse(value =>
+                IO.fromEither(Topic(value).leftMap(new IllegalArgumentException(_))),
+              )
+              .flatMap { value =>
+                ctx.catalog.queryCourses(
+                  ListCoursesInput(topic = value, limit = PageLimit.unsafeApply(100)),
+                )
+              }
+              .attempt
+              .flatMap {
+                case Right(items) =>
+                  topicRequest.set(TopicRequest(topic, items, TopicStatus.Ready))
+                case Left(_) =>
+                  topicRequest.set(TopicRequest(topic, Vector.empty, TopicStatus.Error))
+              },
+        )
       }
       .compile
       .drain
 
-  private def content(
-      ctx: AppContext,
-      activeTopic: SignallingRef[IO, String],
-      topicRequest: SignallingRef[IO, Option[TopicRequest]],
-  ): Resource[IO, HtmlElement[IO]] =
-    val courses  = ctx.catalog.courses
-    val featured = courses
-      .map(items => items.find(_.featured).orElse(items.headOption))
-      .changes(using Eq.fromUniversalEquals)
+  private def content(ctx: AppContext): Resource[IO, HtmlElement[IO]] =
+    val courses         = ctx.catalog.courses
     val continueCourses = (courses, ctx.store.progress)
       .mapN { (items, progress) =>
         items.filter { course =>
@@ -88,26 +94,6 @@ object BrowsePage:
         }
       }
       .changes(using Eq.fromUniversalEquals)
-    val filteredCourses = (courses, activeTopic, topicRequest)
-      .mapN { (items, topic, request) =>
-        if topic == "All topics" then items
-        else
-          request
-            .filter(_.topic == topic)
-            .fold(coursesForTopic(items, topic))(_.items)
-      }
-      .changes(using Eq.fromUniversalEquals)
-    val currentRequest = (activeTopic: Signal[IO, String], topicRequest).mapN { (topic, request) =>
-      request.filter(_.topic == topic)
-    }
-
-    def selectTopic(next: String): IO[Unit] =
-      courses.get.flatMap { items =>
-        val request = Option.unless(next == "All topics")(
-          TopicRequest(next, coursesForTopic(items, next), TopicStatus.Loading),
-        )
-        topicRequest.set(request) *> activeTopic.set(next)
-      }
 
     div(
       mainTag(
@@ -119,59 +105,17 @@ object BrowsePage:
             h1(ctx.store.signal.map(welcome).changes),
           ),
         ),
-        featured.map(_.map(course => featuredHero(ctx, course))),
+        featuredHero(ctx, Catalog.featured),
         continueSection(ctx, continueCourses),
         sectionTag(
           cls := "topic-filter-section app-shell",
           div(
             cls := "app-section__heading app-section__heading--topics",
-            div(
-              p(cls := "eyebrow", "Explore the library"),
-              h2("Learn by topic"),
-            ),
-            span(
-              aria.live := "polite",
-              (currentRequest, filteredCourses).mapN { (request, items) =>
-                request match
-                  case Some(value) if value.status == TopicStatus.Loading =>
-                    s"Loading ${value.topic}…"
-                  case _ => s"${items.size} library items"
-              },
-            ),
+            div(p(cls := "eyebrow", "Explore the library"), h2("Learn by topic")),
           ),
-          div(
-            cls := "topic-chips",
-            role := List("group"),
-            aria.label := "Filter courses by topic",
-            children[String] { item =>
-              button(
-                typ := "button",
-                cls <-- activeTopic.map(topic => Option.when(topic == item)("is-active").toList),
-                aria.pressed <-- activeTopic.map(topic => (topic == item).toString),
-                onClick(selectTopic(item)),
-                item,
-              ).map(value => value: Node[IO])
-            } <-- ctx.catalog.topics.map(_.toList),
-          ),
-          p(
-            cls := "topic-filter-message",
-            hidden <-- currentRequest.map(!_.exists(_.status == TopicStatus.Error)),
-            role := List("alert"),
-            "The catalog API could not apply this filter. Showing locally cached results.",
-          ),
-          CourseCard.grid(
-            ctx,
-            filteredCourses.map(_.take(8)),
-            className = "course-grid course-grid--four",
-            compact   = true,
-          ),
-          p(
-            cls := "topic-filter-message",
-            hidden <-- filteredCourses.map(_.nonEmpty),
-            "No content is available for this topic yet.",
-          ),
+          CatalogSection(ctx)(topicLibrary(ctx)),
         ),
-        ctx.catalog.learningPaths.map(pathsSection(ctx, _)),
+        pathsSection(ctx),
       ),
       footerTag(
         cls := "app-footer",
@@ -190,8 +134,72 @@ object BrowsePage:
       ),
     ).widen
 
-  private def coursesForTopic(courses: Vector[CourseView], topic: String): Vector[CourseView] =
-    courses.filter(_.course.topic.value == topic)
+  private def topicContent(
+      ctx: AppContext,
+      activeTopic: SignallingRef[IO, String],
+      topicRequest: SignallingRef[IO, TopicRequest],
+  ): Resource[IO, HtmlElement[IO]] =
+    val currentRequest = (activeTopic: Signal[IO, String], topicRequest).mapN { (topic, request) =>
+      if request.topic == topic then request
+      else TopicRequest(topic, Vector.empty, TopicStatus.Loading)
+    }
+    val filteredCourses = currentRequest.map(_.items).changes(using Eq.fromUniversalEquals)
+
+    def selectTopic(next: String): IO[Unit] =
+      topicRequest.set(TopicRequest(next, Vector.empty, TopicStatus.Loading)) *> activeTopic.set(
+        next,
+      )
+
+    div(
+      span(
+        aria.live := "polite",
+        (currentRequest, filteredCourses).mapN { (request, items) =>
+          request.status match
+            case TopicStatus.Loading => "Loading courses…"
+            case TopicStatus.Error => "Catalog unavailable"
+            case TopicStatus.Ready => s"${items.size} library items"
+        },
+      ),
+      div(
+        cls := "topic-chips",
+        role := List("group"),
+        aria.label := "Filter courses by topic",
+        children[String] { item =>
+          button(
+            typ := "button",
+            cls <-- activeTopic.map(topic => Option.when(topic == item)("is-active").toList),
+            aria.pressed <-- activeTopic.map(topic => (topic == item).toString),
+            onClick(selectTopic(item)),
+            item,
+          ).map(value => value: Node[IO])
+        } <-- ctx.catalog.topics.map(_.toList),
+      ),
+      div(
+        cls := "topic-filter-message",
+        hidden <-- currentRequest.map(_.status != TopicStatus.Error),
+        role := List("alert"),
+        p("We could not load courses from the catalog."),
+        button(
+          typ := "button",
+          cls := "button button--outline",
+          onClick(activeTopic.get.flatMap(selectTopic)),
+          "Try again",
+        ),
+      ),
+      CourseCard.grid(
+        ctx,
+        filteredCourses.map(_.take(8)),
+        className = "course-grid course-grid--four",
+        compact   = true,
+      ),
+      p(
+        cls := "topic-filter-message",
+        hidden <-- currentRequest.map(request =>
+          request.status != TopicStatus.Ready || request.items.nonEmpty,
+        ),
+        "No content is available for this topic yet.",
+      ),
+    ).widen
 
   private def welcome(state: AppState): String = state.user match
     case Some(user) =>
@@ -291,21 +299,23 @@ object BrowsePage:
           )
         },
       ),
-      div(
-        cls := "continue-grid",
-        children[String] { id =>
-          courses.get.toResource
-            .flatMap { items =>
-              items.find(_.course.id.value.toString == id) match
-                case None => div(())
-                case Some(initial) =>
-                  val course = courses
-                    .map(_.find(_.course.id.value.toString == id).getOrElse(initial))
-                    .changes(using Eq.fromUniversalEquals)
-                  continueCard(ctx, course)
-            }
-            .map(value => value: Node[IO])
-        } <-- courses.map(_.map(_.course.id.value.toString).toList),
+      CatalogSection(ctx, "your videos")(
+        div(
+          cls := "continue-grid",
+          children[String] { id =>
+            courses.get.toResource
+              .flatMap { items =>
+                items.find(_.course.id.value.toString == id) match
+                  case None => div(())
+                  case Some(initial) =>
+                    val course = courses
+                      .map(_.find(_.course.id.value.toString == id).getOrElse(initial))
+                      .changes(using Eq.fromUniversalEquals)
+                    continueCard(ctx, course)
+              }
+              .map(value => value: Node[IO])
+          } <-- courses.map(_.map(_.course.id.value.toString).toList),
+        ),
       ),
     ).widen
 
@@ -364,10 +374,7 @@ object BrowsePage:
       ),
     ).widen
 
-  private def pathsSection(
-      ctx: AppContext,
-      learningPaths: Vector[LearningPath],
-  ): Resource[IO, HtmlElement[IO]] =
+  private def pathsSection(ctx: AppContext): Resource[IO, HtmlElement[IO]] =
     sectionTag(
       cls := "app-section app-section--lavender",
       div(
@@ -384,32 +391,36 @@ object BrowsePage:
             )
           },
         ),
-        div(
-          cls := "browse-path-grid",
-          learningPaths.zipWithIndex.toList.map { case (learningPath, index) =>
-            val destination = AppRoute.Paths.uri.withFragment(learningPath.id.value)
-            a.withSelf { self =>
-              (
-                cls := s"browse-path-card browse-path-card--${learningPath.tone.cssName}",
-                href := ctx.navigator.href(destination),
-                ctx.navigator.intercept(self, destination),
-                span(cls := "browse-path-card__icon", Icons(Icon.Compass)),
-                div(
-                  span(
-                    cls := "eyebrow eyebrow--small",
-                    f"Path ${index + 1}%02d · ${learningPath.level.label}",
-                  ),
-                  h3(learningPath.title.value),
-                  p(learningPath.description.value),
-                  span(
-                    cls := "browse-path-card__meta",
-                    s"${learningPath.courseIds.size} courses · ${learningPath.timeLabel.value}",
-                  ),
-                ),
-                Icons(Icon.ChevronRight, className = "browse-path-card__arrow"),
-              )
-            }
-          },
+        CatalogSection(ctx, "learning paths")(
+          div(
+            cls := "browse-path-grid",
+            children <-- ctx.catalog.learningPaths.map(
+              _.zipWithIndex.toList.map { case (learningPath, index) =>
+                val destination = AppRoute.Paths.uri.withFragment(learningPath.id.value)
+                a.withSelf { self =>
+                  (
+                    cls := s"browse-path-card browse-path-card--${learningPath.tone.cssName}",
+                    href := ctx.navigator.href(destination),
+                    ctx.navigator.intercept(self, destination),
+                    span(cls := "browse-path-card__icon", Icons(Icon.Compass)),
+                    div(
+                      span(
+                        cls := "eyebrow eyebrow--small",
+                        f"Path ${index + 1}%02d · ${learningPath.level.label}",
+                      ),
+                      h3(learningPath.title.value),
+                      p(learningPath.description.value),
+                      span(
+                        cls := "browse-path-card__meta",
+                        s"${learningPath.courseIds.size} courses · ${learningPath.timeLabel.value}",
+                      ),
+                    ),
+                    Icons(Icon.ChevronRight, className = "browse-path-card__arrow"),
+                  )
+                }.widen[Node[IO]]
+              },
+            ),
+          ),
         ),
       ),
     ).widen
