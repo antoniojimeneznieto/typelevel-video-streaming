@@ -21,6 +21,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "x": 0, "y": 0, "w": 24, "h": 10 },
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true } },
       "targets": [
         { "refId": "A", "expr": "histogram_quantile(0.95,sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"gateway-service\",classifier=\"/api/catalog/courses\",http_phase=\"body\"}[1m])))", "legendFormat": "gateway server p95", "exemplar": true },
         { "refId": "B", "expr": "histogram_quantile(0.95,sum by (le) (rate(http_client_request_duration_seconds_bucket{service_name=\"gateway-service\",classifier=\"catalog:/courses\",http_phase=\"body\"}[1m])))", "legendFormat": "gateway Catalog client p95", "exemplar": true },
@@ -45,10 +46,22 @@
     },
     {
       "id": 3,
+      "type": "table",
+      "title": "Recent Gateway to Catalog traces",
+      "description": "Recent course-read traces from Gateway. Open one from the period under investigation and compare the Gateway Catalog client span, Catalog server child, and SQL spans. The most recent trace is not necessarily the p95 request.",
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "gridPos": { "x": 0, "y": 19, "w": 24, "h": 10 },
+      "options": { "showHeader": true },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" }, "queryType": "traceql", "query": "{ resource.service.name = \"gateway-service\" && name = \"GET /api/catalog/courses\" } with (most_recent=true)", "tableType": "traces", "limit": 10 }
+      ]
+    },
+    {
+      "id": 4,
       "type": "text",
       "title": "Trace investigation",
-      "gridPos": { "x": 0, "y": 19, "w": 24, "h": 5 },
-      "options": { "mode": "markdown", "content": "Click an exemplar on the latency graph to open its Tempo trace. Compare the Gateway Catalog client span with its Catalog server child and the SQL spans beneath it. Select a trace that began within the period you are investigating. These graphs use a rolling 60-second window: fresh traces may recover before the p95 line." }
+      "gridPos": { "x": 0, "y": 29, "w": 24, "h": 5 },
+      "options": { "mode": "markdown", "content": "Open a recent trace from the table or click an exemplar on the latency graph. Compare the Gateway Catalog client span with its Catalog server child and the SQL spans beneath it. Select a trace that began within the period you are investigating. These graphs use a rolling 60-second window: fresh traces may recover before the p95 line." }
     }
   ]
 }
