@@ -28,6 +28,12 @@ On macOS or Ubuntu/Debian Linux (including WSL):
 bash scripts/setup.sh
 ```
 
+With Nix, `nix develop` provides JDK 21, sbt, Node.js 22, and the command line
+tools used by the lab scripts. Docker must be installed and running on the host,
+with Compose v2 and Buildx available. Check it with `bash scripts/setup.sh --check`
+inside the development shell. The sbt version is selected by
+`project/build.properties`.
+
 ## Run locally
 
 From the repository root:
