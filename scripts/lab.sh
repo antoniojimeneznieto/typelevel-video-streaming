@@ -25,6 +25,7 @@ else
     [[ -z "$staged_jar" ]] ||
     [[ -n "$(find "$project_directory/tools/lab-cli/src" "$project_directory/build.sbt" -type f -newer "$staged_jar" -print -quit 2>/dev/null)" ]]; then
     build_log="$(mktemp)"
+    printf 'Preparing the lab command (first run or CLI sources changed)...\n'
     if ! (cd "$project_directory" && sbt --batch 'labCli/stage') >"$build_log" 2>&1; then
       cat "$build_log" >&2
       rm -f "$build_log"

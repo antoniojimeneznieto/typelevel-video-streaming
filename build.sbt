@@ -237,6 +237,7 @@ lazy val labCli = project
     name := "lab-cli",
     Compile / mainClass := Some("org.typelevel.video.streaming.lab.LabCli"),
     libraryDependencies ++= Seq(
+      "org.slf4j" % "slf4j-nop" % "2.0.17",
       "com.monovore" %% "decline-effect" % DeclineVersion,
       "org.http4s" %% "http4s-ember-client" % Http4sStableVersion,
       "co.fs2" %% "fs2-io" % Fs2Version,

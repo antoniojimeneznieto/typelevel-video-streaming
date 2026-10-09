@@ -10,7 +10,7 @@ private[lab] object LabCommands {
   private val container = "typelevel-video-streaming-lab-traffic"
   private val gateway   = "http://gateway-service:8084"
 
-  private def imageEnvironment(root: Path, followRunning: Boolean): IO[Map[String, String]] = {
+  private[lab] def imageEnvironment(root: Path, followRunning: Boolean): IO[Map[String, String]] = {
     val detected = (Env[IO].get("IMAGE_PREFIX"), Env[IO].get("IMAGE_TAG")).tupled.flatMap {
       (prefix, tag) =>
         if followRunning && prefix.isEmpty && tag.isEmpty then
@@ -38,7 +38,25 @@ private[lab] object LabCommands {
         else IO.pure(Map.empty[String, String])
     }
 
-    detected.flatMap { environment =>
+    val resolved = for
+      environment <- detected
+      file         = root.resolve(".lab/exercise-images.json")
+      exists      <- LabIo.exists(file)
+      saved       <-
+        if exists then
+          LabIo.read(file).flatMap(value => IO.fromEither(io.circe.parser.parse(value))).flatMap {
+            json =>
+              IO.fromEither(json.hcursor.get[Option[Map[String, String]]]("image_environment"))
+                .map(
+                  _.getOrElse(Map.empty).filter((key, _) => Set("IMAGE_PREFIX", "IMAGE_TAG")(key)),
+                )
+          }
+        else IO.pure(Map.empty[String, String])
+      prefix <- Env[IO].get("IMAGE_PREFIX")
+      tag    <- Env[IO].get("IMAGE_TAG")
+    yield environment ++ saved ++ prefix.map("IMAGE_PREFIX" -> _) ++ tag.map("IMAGE_TAG" -> _)
+
+    resolved.flatMap { environment =>
       val script = """set -euo pipefail
 project_directory="$PWD"
 source scripts/images.sh
@@ -118,8 +136,8 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
       env        <- imageEnvironment(root, true)
       settings   <- deployedSettings(root, service)
       environment = env ++ settings ++ extra
-      _          <- LabIo.run(root, Seq("bash", "scripts/build-images.sh", service), environment)
-      _          <- LabIo.run(
+      _          <- LabIo.logged(root, Seq("bash", "scripts/build-images.sh", service), environment)
+      _          <- LabIo.logged(
              root,
              Seq(
                "docker",
@@ -135,6 +153,59 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
                service,
              ),
              environment,
+           )
+    yield ()
+
+  /** Configuration changes use the running immutable image, including participant repairs. */
+  def configure(root: Path, service: String, settings: Map[String, String]): IO[Unit] =
+    for
+      id    <- containerId(root, service)
+      image <- LabIo.output(root, Seq("docker", "inspect", "--format", "{{.Image}}", id))
+      _     <- deployImages(root, Map(service -> image.trim), settings)
+    yield ()
+
+  def deployImages(
+      root: Path,
+      images: Map[String, String],
+      settings: Map[String, String],
+  ): IO[Unit] =
+    for
+      env         <- imageEnvironment(root, true)
+      _           <- LabIo.createDirectories(root.resolve(".lab"))
+      overrideFile = root.resolve(".lab/incident-images.json")
+      _           <- LabIo.writeAtomic(
+             overrideFile,
+             io.circe.Json
+               .obj(
+                 "services" -> io.circe.Json.obj(
+                   images.toSeq.map { (service, image) =>
+                     service -> io.circe.Json.obj("image" -> io.circe.Json.fromString(image))
+                   }*,
+                 ),
+               )
+               .spaces2,
+           )
+      _ <- LabIo.logged(
+             root,
+             Seq(
+               "docker",
+               "compose",
+               "-f",
+               "compose.yaml",
+               "-f",
+               overrideFile.toString,
+               "up",
+               "--detach",
+               "--no-deps",
+               "--no-build",
+               "--pull",
+               "never",
+               "--force-recreate",
+               "--wait",
+               "--wait-timeout",
+               "120",
+             ) ++ images.keys.toSeq.sorted,
+             env ++ settings,
            )
     yield ()
 
@@ -216,7 +287,7 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
           LabIo.output(root, Seq("docker", "container", "rm", container)).void
         case None => IO.unit
       } *> LabIo
-      .run(
+      .logged(
         root,
         Seq(
           "docker",
@@ -258,7 +329,7 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
   } yield ()
 
   def trafficStop(root: Path): IO[Unit] =
-    LabIo.run(root, Seq("docker", "stop", "--time", "40", container)).void
+    LabIo.logged(root, Seq("docker", "stop", "--time", "40", container)).void
 
   def stopTraffic(root: Path): IO[Unit] =
     LabIo

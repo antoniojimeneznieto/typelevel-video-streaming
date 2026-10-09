@@ -198,17 +198,19 @@ requests, network timing, and SQL remain healthy. Standard HTTP telemetry
 locates the rejection but does not identify the validation stage. Participants
 implement the prepared `AccessTokenVerifierTelemetry` observation point in
 Playback by adding bounded result and subject-shape attributes to the existing
-`auth.subject.decode` span in `PlaybackAuthTelemetry.decodeSubject`. Compare a
-rejected `namespaced_uuid` with an accepted `bare_uuid`, then inspect code to
-confirm the exact parser incompatibility. Do not add token contents, subject
-values, user IDs, or cohort flags to core span or metric telemetry. An optional
-after-core trace-to-logs extension may log exact accepted and rejected subjects from
-seeded synthetic accounts only.
+`auth.subject.decode` span in `PlaybackAuthTelemetry.decodeSubject` and a
+decoding log in the same edit. Compare a rejected `namespaced_uuid` with an
+accepted `bare_uuid`, then use a rejected trace ID to find its correlated log
+in Loki before inspecting code to confirm the exact parser incompatibility.
+Do not add token contents, subject values, user IDs, or cohort flags to core
+span or metric telemetry. Log exact verified subjects only for the seeded
+synthetic accounts used in this exercise; never log a JWT or real user subject.
 
 **Required diagnostic checkpoint:** Deploy instrumentation while retaining the
 faulty decoder. Capture a new rejected trace with `auth.result=rejected` and
-`auth.subject.shape=namespaced_uuid` on the subject-decoding span, and a
-successful control trace with `accepted` and `bare_uuid`. Invalid
+`auth.subject.shape=namespaced_uuid` on the subject-decoding span, a
+successful control trace with `accepted` and `bare_uuid`, and a Playback
+decoding log found in Loki by the rejected trace ID. Invalid
 JWTs fail before the subject-decoding span.
 Explain the evidence before changing the decoder.
 
@@ -219,8 +221,9 @@ aggregate `401` rate returns to baseline. Negative checks still reject
 malformed, expired, incorrectly signed, and unsupported tokens.
 
 **Takeaway:** Instrument the point where existing spans stop distinguishing
-plausible causes. Stable synthetic actors expose minority-user failures without
-turning identities into high-cardinality telemetry labels.
+plausible causes, then correlate a request trace with its diagnostic log.
+Stable synthetic actors expose minority-user failures without turning
+identities into high-cardinality telemetry labels.
 
 ### Round 5 — PostgreSQL session leak in Catalog
 

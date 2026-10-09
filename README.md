@@ -69,26 +69,53 @@ for continuous traffic, configuration, and accounting semantics.
 
 ## Run a lab incident
 
-With the stack and traffic running, start the incident using the exercise code
-provided by the facilitator:
+Use the incident ID provided by the facilitator (`1`, `3`, `4`, or `5`):
 
 ```bash
-./scripts/lab.sh incident start CODE
+./scripts/lab.sh incident start ID
+```
+
+This prepares the services and scenario data, starts healthy traffic, and waits
+for a valid 60-second baseline with fresh metrics and traces. It prints the
+Grafana URL. The first run downloads the release images and warms the Scala
+compiler for later source edits; run it before the session. For an unpublished
+checkout, use `incident start ID --build` on the first run.
+
+Inspect the baseline, then activate when instructed:
+
+```bash
+./scripts/lab.sh incident activate ID
+```
+
+For source-editing rounds, deploy your diagnostics or repair with:
+
+```bash
+./scripts/lab.sh incident rebuild
+```
+
+Rebuild preserves the workload and scenario settings. Readiness confirms the
+new deployment emits telemetry; participants must still verify the repair.
+Repeated setup or activation commands preserve an already-running scenario.
+Use `incident status` to inspect its phase and `incident restart ID` for a
+fresh baseline using the saved exercise images. Restart preserves local source
+edits and telemetry history; rebuilding those edits deploys them again.
+
+If a step fails, fix the reported problem and retry the same command. Process
+output is saved in `.lab/commands.log`, and lifecycle timestamps in
+`.lab/incident-history.jsonl`. Initial exercise image IDs are saved per checkout;
+use a fresh checkout when changing workshop releases.
+
+Platform changes remain available for investigation:
+
+```bash
 ./scripts/lab.sh platform changes
 ./scripts/lab.sh platform inspect CHANGE_ID
 ./scripts/lab.sh platform rollback CHANGE_ID
 ```
 
-The change list and inspection command give participants a reviewable route to
-remediation. Run traffic separately with `./scripts/lab.sh traffic start --rate 5`
-and stop it with `./scripts/lab.sh traffic stop`. Facilitator setup and reset
-controls are documented in [Scenario 1](docs/observability/scenario-1.md).
-Facilitators can rehearse the first, third, and fifth exercises with
-`./scripts/lab.sh verify scenario1`, `./scripts/lab.sh verify scenario3`, and
-`./scripts/lab.sh verify scenario5`.
-The Catalog session exercise uses `./scripts/lab.sh scenario5 prepare`,
-`scenario5 baseline`, and `incident start d5e0`; its full sequence is in
-[the playbook](playbook.md).
+See [the facilitator playbook](playbook.md) for scenario evidence, source edits,
+recovery checks, and rehearsal commands. Low-level preparation and traffic
+commands remain available for facilitator diagnostics.
 
 The scenario controller is a packaged JVM command. Build its ZIP with
 `sbt --batch 'labCli/Universal/packageBin'`; CI uploads the same ZIP as the

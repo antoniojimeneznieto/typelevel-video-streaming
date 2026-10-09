@@ -68,6 +68,10 @@ Provide this command card to participants (replace `CHANGE_ID` with an actual ID
 
 ```bash
 ./scripts/lab.sh help
+./scripts/lab.sh incident start ID
+./scripts/lab.sh incident activate ID
+./scripts/lab.sh incident rebuild
+./scripts/lab.sh incident status
 ./scripts/lab.sh platform --help
 ./scripts/lab.sh platform changes
 ./scripts/lab.sh platform inspect CHANGE_ID
@@ -116,9 +120,9 @@ Introduce later concepts only when they become useful:
   been waiting. Introduce this when comparing queue depth, oldest-wait age, and
   acquisition duration, without naming the leaking branch.
 
-Explain logs when opening one: “A log records a discrete event and its context;
-a trace ID can connect that event to the request.” Use an actual relevant event
-if available. Do not manufacture a logging detour just to cover every signal.
+During round 4, explain logs when opening the participant-added decoding entry:
+“A log records a discrete event and its context; a trace ID connects this entry
+to the rejected request.”
 Keep API details, histogram mathematics, sampling configuration, and telemetry
 pipeline internals for questions or the debrief unless needed to interpret the
 current evidence.
@@ -128,11 +132,11 @@ current evidence.
 | Format | Who types the incident command? | What attendees need |
 | --- | --- | --- |
 | Projector/shared stack | Facilitator, from the repository root | The symptom brief, Grafana, and a view of the participant commands when relevant. |
-| Individual laptops | Each attendee, after the facilitator announces the exercise code | A running local stack, the repository, and local Grafana. Each laptop has its own traffic stream, change ledger, and fault state. |
+| Individual laptops | Each attendee, after the facilitator announces the incident ID | A running local stack, the repository, and local Grafana. Each laptop has its own traffic stream, change ledger, and fault state. |
 
 The neutral incident command is safe to project. The `proxy` commands and the
 diagnostic sections below are facilitator controls. The source and facilitator
-documents are in the repository, so the exercise code is a presentation aid,
+documents are in the repository, so the incident ID is a presentation aid,
 not a secrecy mechanism.
 
 ### Request deadlines
@@ -158,19 +162,18 @@ From the repository root, on every machine that will run the lab:
 
 ```bash
 bash scripts/setup.sh --check
-./scripts/lab.sh start --build
-./scripts/lab.sh status
-./scripts/lab.sh proxy check
+./scripts/lab.sh incident start 1
+./scripts/lab.sh incident status
 ```
 
-Use `./scripts/lab.sh start --build` in place of `start` when running an
+Use `./scripts/lab.sh incident start 1 --build` on the first run of an
 unpublished branch or commit. The image workflow publishes automatically from
 `main` and version tags; a feature branch's commit-tagged images usually do
 not exist in GHCR. Build before attendees arrive, since this can take several
-minutes. The later `status` and `proxy check` steps are the same either way.
+minutes. Run setup before attendees arrive; later rounds reuse cached artifacts.
 
 The setup check expects a JDK 17+, sbt, Docker Compose v2, Docker Buildx, and a
-running Docker daemon. `start` launches the full application, including
+running Docker daemon. Scenario setup launches the full application when needed, including
 PostgreSQL, Kafka, Debezium, SeaweedFS, frontend, Toxiproxy, and LGTM. It
 normally pulls images tagged for the current Git commit. If the pull fails,
 check the printed tag and startup log. An `unauthorized` response can mean the
@@ -195,7 +198,9 @@ Before admitting participants, run the automated rehearsal on the same image
 set they will use:
 
 ```bash
+./scripts/lab.sh traffic stop
 ./scripts/lab.sh verify scenario1
+./scripts/lab.sh incident restart 1
 ```
 
 It takes roughly two minutes at its default observation windows, starts and
@@ -211,29 +216,42 @@ do not match the rehearsal environment; the window must be at least 35 seconds.
 ## Controlled workshop isolation
 
 The checked-in source retains the intentional defects. Before each round, run
-`./scripts/lab.sh prepare ROUND` (supported rounds: 1, 3, 4, 5). This stops the
-named workshop generator, restarts the existing Identity, Catalog, Playback and
-Gateway containers, waits for their health checks, and resets the Catalog proxy
-and active platform ledger entries. Round 4 additionally performs actor/read-mode
-setup; round 5 rebuilds Catalog with six sessions. Those existing setup steps
-still compile local source. Start the stack before running preparation.
+`./scripts/lab.sh incident start ID` with its incident ID (`1`, `3`,
+`4`, or `5`). Setup resolves images, warms the compiler on first use,
+stops the previous workload, deploys saved exercise images with the new round's
+settings, resets platform policies, seeds any required data, and starts the
+baseline. Configuration changes reuse images without compiling services.
 
-Use only the round's prescribed requests. Stop any separately launched foreground
-generators and avoid browsing/searching during the demonstration: an arbitrary
-empty Catalog search can activate the leak before round 5. Startup controls do
-not make the faulty application safe for arbitrary exploration.
+The command waits for a healthy 60-second generator window without drops, fresh
+service metrics, acceptable baseline latency, and a fresh trace from the current
+service instance. Inspect the printed dashboard before running
+`incident activate ID`. This preserves the two-phase teaching sequence.
+A repeated start keeps an existing baseline or active incident. A repeated
+activation does not reapply a rolled-back policy or duplicate traffic.
 
-Preparation preserves the images and settings of restarted containers. It does
-not revert source repairs or restore an original faulty image. Before repeating
-an exercise after a repair, restore its intended source and rebuild the affected
-service. Never run preparation between fault and recovery measurements: restarting
-Catalog temporarily relieves the leak and invalidates that comparison.
+Use only the round's prescribed requests. Stop separately launched generators
+and avoid arbitrary Catalog searches, which can trigger the latent leak.
+For a fresh attempt, use `incident restart ID`: this redeploys the saved
+exercise images and starts a new baseline without changing source files or
+clearing telemetry history. Participant edits remain available and will be
+used by the next `incident rebuild`. Review or restore exercise edits before
+asking a new group to repeat a source-editing lesson.
 
-`.lab/preparation.json` records the round, completion status, container IDs and
-image IDs. A failed preparation is not a ready baseline; resolve the failure and
-rerun it. A completed preparation confirms container health and the Catalog proxy
-request only. Check the round's functional baseline, generator reports and fresh
-telemetry before activating the incident; TCP health alone is insufficient.
+Use `incident rebuild` to deploy the active round's edited service. It preserves
+the triggering workload and scenario settings and waits for new telemetry;
+expected incident failures are allowed because diagnostics may precede repair.
+Never restart the scenario between fault and recovery measurements.
+
+`.lab/incident.json` records the current phase and service deployment,
+`.lab/incident-history.jsonl` records phase timestamps, and `.lab/commands.log`
+retains subprocess output. If setup, activation, or rebuild fails, address the
+reported problem and retry the same command. `incident status` shows the
+recorded phase. Saved image IDs belong to one checkout revision; use a separate
+checkout for a different workshop release.
+
+Legacy `prepare`, `scenarioN`, and `traffic` commands remain facilitator tools.
+They can invalidate recorded lifecycle state; use `incident restart ID` after
+manual service changes or rehearsal scripts before returning to participant flow.
 
 ### Source repair and facilitator fallback
 
@@ -244,23 +262,23 @@ group gets stuck, after reviewing any participant edits:
 
 - `infrastructure/lab/solutions/scenario3.patch`: move verification to `IO.blocking`.
 - `infrastructure/lab/solutions/scenario4-diagnostics.patch`: add bounded result and subject-shape attributes to the prepared subject-decoding span, retaining the faulty decoder.
-- `infrastructure/lab/solutions/scenario4-logs.patch`: optional, after the required diagnostic checkpoint; log the exact rejected synthetic subject in the active trace.
+- `infrastructure/lab/solutions/scenario4-logs.patch`: add the decoding log to the diagnostic edit before rebuilding; log the exact synthetic subject in the active trace.
 - `infrastructure/lab/solutions/scenario4.patch`: wire the compatible subject decoder **after** the diagnostic patch.
 - `infrastructure/lab/solutions/scenario5.patch`: scope Catalog session ownership.
 
 Run `git apply --check PATCH` before `git apply PATCH`, substituting the chosen
 path. Do not force a patch over participant changes. Apply round 4 diagnostics
-first, then the optional logs patch only after the core checkpoint. Review
-diagnostic evidence before applying the decoder correction. When resetting,
-reverse the decoder patch, optional logs patch, then diagnostic patch.
+first, then the logs patch before running `incident rebuild`. Review the span and
+log evidence before applying the decoder correction. When resetting, reverse the decoder
+patch, logs patch, then diagnostic patch.
 A successful patch application is not recovery proof: follow the round's rebuild
 and verification steps.
 
-To repeat after using a fallback, first stop the generator and review `git diff`.
+To repeat after using a fallback, review `git diff`.
 Use `git apply --reverse --check PATCH` followed by `git apply --reverse PATCH`
 only if that exact patch is still present and reversing it will preserve other
 work. For hand-written repairs, restore only the reviewed exercise edits manually.
-Rebuild the affected service, then run preparation and the baseline again.
+Run `incident restart ID` to redeploy the saved exercise images and baseline.
 
 Generic `lab.sh rebuild` preserves the deployed Catalog pool size and Playback
 workshop mode. Explicit scenario prepare/restore settings override these values.
@@ -280,8 +298,7 @@ If there is no existing container, Compose defaults apply.
 First restore a healthy proxy and start one continuous Catalog-read stream:
 
 ```bash
-./scripts/lab.sh prepare 1
-./scripts/lab.sh traffic start --rate 5
+./scripts/lab.sh incident start 1
 ./scripts/lab.sh traffic status
 ```
 
@@ -297,11 +314,11 @@ Then activate the incident. On a projector, the facilitator types it; on
 individual laptops, announce the code and have attendees type it:
 
 ```bash
-./scripts/lab.sh incident start 8f27
+./scripts/lab.sh incident activate 1
 ```
 
-The command prints only `Applied traffic policy` on success. Facilitators can
-use `incident start 8f27 --verbose` to show control details; do not project that
+The command prints a neutral policy message and activation timestamp on success. Facilitators can
+use `incident activate 1 --verbose` to show control details; do not project that
 output. Participants discover change IDs through `platform changes`.
 Note the activation time privately. Allow at least 75 seconds before comparing a
 clean fault window; the boundary dashboard uses a fixed 60-second lookback
@@ -431,9 +448,7 @@ Identity exercise source is in the image. It runs synchronous password
 verification in `IO.delay` from startup. Build the generator and start baseline:
 
 ```bash
-./scripts/lab.sh traffic build
-./scripts/lab.sh prepare 3
-./scripts/lab.sh scenario3 baseline
+./scripts/lab.sh incident start 3
 ./scripts/lab.sh traffic status
 ```
 
@@ -452,13 +467,13 @@ Before activation, confirm Grafana loads and the telemetry container is
 healthy. Keep `docker compose ps` and a brief `docker stats --no-stream` sample
 for Identity and LGTM with the generator report. If the dashboard or exporter
 becomes unresponsive, stop the round-3 generator with
-`./scripts/lab.sh scenario3 restore`; do not treat missing telemetry as a
+`./scripts/lab.sh traffic stop`; do not treat missing telemetry as a
 healthy result.
 
 Activate the login-heavy mix with the neutral command:
 
 ```bash
-./scripts/lab.sh incident start 3c91
+./scripts/lab.sh incident activate 3
 ```
 
 This stops the baseline generator and starts a new one at the **same total rate**,
@@ -503,7 +518,7 @@ permit ownership around both hash and verify. The semaphore limits
 concurrent Argon2 operations to four. Review the source diff, then deploy it:
 
 ```bash
-./scripts/lab.sh rebuild identity-service
+./scripts/lab.sh incident rebuild
 ```
 
 Keep the 30 requests per second, 70% login workload running across the rebuild.
@@ -516,17 +531,18 @@ universal thresholds.
 
 The facilitator can run `./scripts/lab.sh verify scenario3` before the session. It
 runs light and heavy samples against the prebuilt exercise image and checks that
-the lightweight operation slows under valid load. It does not edit source.
+the lightweight operation slows under valid load. It does not edit source. Run
+`incident restart 3` afterward to establish the participant baseline.
 
 ### Reset for the next group
 
 ```bash
-./scripts/lab.sh scenario3 restore
+./scripts/lab.sh incident restart 3
 ```
 
-This stops the generator. If participants changed source and rebuilt Identity,
-restore the exercise checkout or redeploy its prebuilt image before the next
-group. Do not clear telemetry history.
+This restores the saved exercise deployment and waits for a healthy baseline.
+Source edits and telemetry history are preserved; review the edits before
+repeating the lesson.
 
 ## Round 4: stable minority-user Playback 401
 
@@ -545,10 +561,7 @@ legitimate actors and seeds their Playback user rows directly. It assumes the
 default local Gateway port `8085`.
 
 ```bash
-./scripts/lab.sh rebuild identity-service
-./scripts/lab.sh traffic build
-./scripts/lab.sh prepare 4
-./scripts/lab.sh scenario4 baseline
+./scripts/lab.sh incident start 4
 ./scripts/lab.sh traffic status
 ```
 
@@ -568,7 +581,7 @@ log if you need the original preparation record.
 Start the mixed workload with the neutral participant command:
 
 ```bash
-./scripts/lab.sh incident start 7b42
+./scripts/lab.sh incident activate 4
 ```
 
 The same ten requests per second now use the two newer-format actors for 20%
@@ -590,9 +603,10 @@ Use traces that began after the latest rebuild when checking new diagnostics.
 2. Where does the Playback trace end? Do rejected requests reach repository
    spans or SQL?
 3. Existing traces show a subject-decoding span on both outcomes, but not
-   why one is rejected. Add bounded result and input-shape attributes to the prepared
-   `PlaybackAuthTelemetry.decodeSubject` method. Use fresh traces to compare a
-   rejected request with a successful control. This step is required.
+   why one is rejected. Add bounded result and input-shape attributes and a
+   decoding log to `PlaybackAuthTelemetry.decodeSubject`. Use fresh traces to
+   compare a rejected request with a successful control, then find the
+   rejected request's log by trace ID. These steps are required.
 4. Once the trace identifies the step, inspect `AccessTokenVerifier.userId`
    and Playback's wiring in `Main.scala` to plan the repair.
 
@@ -607,39 +621,40 @@ set
 `auth.result=accepted|rejected` from the returned `Option` and
 `auth.subject.shape=bare_uuid|namespaced_uuid|other` from the supplied
 `SubjectShape`. The verifier classifies the subject only after JWT verification;
-the telemetry implementation receives both the category and verified subject,
-but the core instrumentation exports only the category and result.
-The fallback patch shows the complete edit using `Tracer[IO].withCurrentSpanOrNoop`;
-no verifier or dependency wiring is needed during the exercise. The span name
-and result are fixed, bounded values. Do not export tokens, subjects, user
-IDs, actor labels, JWT claims, or verification exception
-messages. Do not weaken validation or change which requests succeed as part
-of this step. Invalid JWTs fail before this span appears.
+the telemetry implementation receives both the category and verified subject.
+Participants also log the decoding outcome and exact verified subject from
+these seeded synthetic accounts inside the active span. The diagnostics
+fallback patch shows the attribute edit using
+`Tracer[IO].withCurrentSpanOrNoop`; apply the logs fallback patch on top before
+rebuilding. No verifier or dependency wiring is needed during the exercise.
+The span name and attribute values are fixed and bounded. Do not export tokens,
+subjects, user IDs, actor labels, JWT claims, or verification exception messages
+as span attributes or metric labels. Never log a JWT or use this subject logging
+with real users. Do not weaken validation or change which requests succeed as
+part of this step. Invalid JWTs fail before this span appears.
 
-Rebuild Playback with diagnostics while the same mixed workload continues.
+Rebuild Playback with diagnostics and the log while the same mixed workload continues.
 After restart/warmup, capture a fresh successful trace and a rejected trace.
 **Required checkpoint before the decoder repair:** a fresh 401 trace contains
 `auth.subject.decode` with `auth.result=rejected` and
 `auth.subject.shape=namespaced_uuid`, while a fresh 200 control contains the
 same span with `auth.result=accepted` and `auth.subject.shape=bare_uuid`. The
 401 share remains near 20%. Record both trace IDs and explain the format
-difference and why database work is not reached. Source inspection then
-confirms which namespace Identity emits and what Playback's decoder accepts.
-An aggregate 401 rate alone does not complete this checkpoint.
+difference and why database work is not reached. Use the rejected trace ID to
+find its correlated decoding log in Loki. Source inspection then confirms
+which namespace Identity emits and what Playback's decoder accepts. An
+aggregate 401 rate alone does not complete this checkpoint.
 
 Keep the verifier's `None` result for rejected subjects. The authentication
 middleware maps it to HTTP 401; propagating a decoding exception would skip
-that response path. After the core checkpoint, facilitators may demonstrate
-trace-to-logs correlation using the synthetic workshop accounts. Do not add
-a decoding log to the default implementation: it would reveal the branch
-before participants add telemetry.
+that response path. Do not add a decoding log to the default implementation:
+it would reveal the branch before participants add telemetry.
 
-### Optional after-core exercise: trace to logs
+### Required checkpoint: trace to log
 
-After recording the required 401 and 200 traces, apply
-`infrastructure/lab/solutions/scenario4-logs.patch` on top of the diagnostic
-edit and rebuild Playback. The patch logs the exact *synthetic* rejected subject,
-such as `user:<uuid>`, inside `auth.subject.decode`. Select a fresh 401 trace
+The log is deployed with the diagnostic attributes in the same rebuild. The
+fallback patch logs the exact *synthetic* rejected subject, such as
+`user:<uuid>`, inside `auth.subject.decode`. Select a fresh 401 trace
 from Playback Investigation, copy its trace ID, then find the correlated
 entry in **Explore → Loki** with this query, replacing the trace ID:
 
@@ -648,9 +663,9 @@ entry in **Explore → Loki** with this query, replacing the trace ID:
 ```
 
 The `Playback subject decoding rejected` log shows the exact synthetic subject.
-The optional patch also logs accepted subjects, so compare the rejected
+The log also records accepted subjects, so compare the rejected
 `user:<uuid>` form with a successful bare UUID in the same time range. This is a
-facilitator extension after the span exercise, not a prerequisite to the repair.
+required participant checkpoint before the repair.
 Use it only with the seeded workshop accounts; a subject from real users can
 identify or link a person. Never log the JWT or add the subject as a metric or
 span attribute. Reverse this patch before reversing diagnostics during reset.
@@ -664,7 +679,7 @@ and JWT ID checks. Rebuild Playback while keeping the mixed workload at the
 same rate:
 
 ```bash
-./scripts/lab.sh rebuild playback-service
+./scripts/lab.sh incident rebuild
 ./scripts/lab.sh traffic status
 ```
 
@@ -683,10 +698,9 @@ sbt --batch 'runtime/testOnly *AccessTokenVerifierSuite'
 
 Restore the original Playback verifier wiring and remove the exercise-added
 diagnostics before repeating the instrumentation lesson. If using fallback
-patches, reverse the decoder patch first, then the optional logs patch if used,
-then the diagnostic patch. Run
-`./scripts/lab.sh scenario4 restore` after restoring the source. It stops traffic and rebuilds Playback
-in normal projection mode. Leave the seeded accounts and projection rows in
+patches, reverse the decoder patch first, then the logs patch, then the
+diagnostic patch. Run `./scripts/lab.sh incident restart 4` to restore the
+saved exercise deployment and establish a new baseline. Leave the seeded accounts and projection rows in
 place; preparation is idempotent.
 
 ## Round 5: Catalog PostgreSQL session depletion
@@ -709,24 +723,24 @@ query is a plausible course topic absent from the seeded catalog. All course
 reads share the same generator operation label.
 Keep this mechanism private until the walkthrough.
 
-Before attendees join, run `./scripts/lab.sh traffic build` and
-`./scripts/lab.sh verify scenario5`. The rehearsal rebuilds Catalog with six
+Before attendees join, run `./scripts/lab.sh verify scenario5` while no
+generator is active. The rehearsal rebuilds Catalog with six
 sessions, samples healthy and mixed workloads for about two minutes, checks
 pool depletion in Grafana and unrelated read slowdown, then restores the
 normal pool size. It needs a running stack and Grafana at `localhost:3000`;
 pass `--grafana URL` for a forwarded endpoint. A failed rehearsal needs
-investigation before presenting the round.
+investigation before presenting the round. After verification, run
+`incident restart 5` to restore the six-session participant baseline.
 
 Build the current exercise image and start a healthy window:
 
 ```bash
-./scripts/lab.sh prepare 5
-./scripts/lab.sh scenario5 baseline
+./scripts/lab.sh incident start 5
 ./scripts/lab.sh traffic status
 ```
 
-`prepare` sets Catalog's pool to six sessions. Allow 30–40 seconds of baseline
-traffic and confirm a recent `window.load_valid=true`, successful requests,
+`incident start` sets Catalog's pool to six sessions and waits for a healthy
+60-second baseline. Confirm a recent `window.load_valid=true`, successful requests,
 near-zero acquisition time, and pool occupancy that returns to zero. Open the
 **Catalog Pool Investigation** dashboard from Workshop Overview. Record the baseline and
 the activation time; keep the same 5 requests per second through the round.
@@ -739,7 +753,7 @@ Canceling the oldest waiter can lower the age to that of the next waiter.
 Activate the mixed search workload with the neutral command:
 
 ```bash
-./scripts/lab.sh incident start d5e0
+./scripts/lab.sh incident activate 5
 ```
 
 The generator switches profiles with a short gap. An empty search appears every
@@ -790,7 +804,7 @@ brief; it also switches the existing Catalog service tests back to a pooled
 session fixture so Skunk's leak detector checks empty-result finalization.
 
 ```bash
-./scripts/lab.sh scenario5 rebuild
+./scripts/lab.sh incident rebuild
 ./scripts/lab.sh traffic status
 ```
 
@@ -815,21 +829,20 @@ portable thresholds.
 ### Reset for the next group
 
 ```bash
-./scripts/lab.sh scenario5 restore
+./scripts/lab.sh incident restart 5
 ```
 
-This stops traffic and restores Catalog's normal ten-session setting. Restore
-the exercise source checkout or redeploy its prebuilt image before the next
-group. Leave Grafana history in place.
+This restores the saved exercise deployment with six sessions and waits for a
+healthy baseline. Source edits and Grafana history are preserved.
 
 ## If something goes wrong
 
 | Symptom | Facilitator action |
 | --- | --- |
-| Startup cannot pull the commit-tagged images | Check the branch, image tag, registry access, and printed startup log. Images are published automatically from `main` and version tags. For an unpublished checkout, rerun `./scripts/lab.sh start --build`, then run `status` and `proxy check`. |
+| Scenario setup cannot pull the commit-tagged images | Check the branch, image tag, registry access, and `.lab/commands.log`. Images are published automatically from `main` and version tags. For an unpublished checkout, retry `./scripts/lab.sh incident start ID --build`. |
 | Scenario 1 verification says the generator lost or failed requests | Inspect the printed generator JSON and `docker logs typelevel-video-streaming-lab-traffic` for drops, failures, and scheduler delay warnings. A cumulative `load_valid=false` means at least one arrival was lost during that run, even if the latest window is clean. Let the host settle and repeat the rehearsal with the same rate; keep the failed run's evidence. |
 | No traffic series | Check `./scripts/lab.sh traffic status` and `docker logs typelevel-video-streaming-lab-traffic`; confirm the generator is running and `load_valid=true`. |
-| Traffic drops or failures | Stop the round, inspect the generator JSON report and service health, and reduce the offered rate only for a new baseline/fault/recovery run. Do not change it mid-round. |
+| Traffic drops or failures | Inspect generator reports and service health. If the host recovers, run `incident restart ID` for a fresh baseline. If load stays invalid, recalibrate the fixed scenario rate before the session. |
 | Metrics are absent but requests complete | Check Grafana freshness and the generator JSON independently. Missing telemetry is unknown, not zero requests. |
 | Fault command says a policy is already active | Inspect `./scripts/lab.sh platform changes`; roll back the active change before retrying activation. |
 | Rollback succeeded but old slow traces remain | Select traces whose start times are after rollback and compare a fresh metrics window. |
@@ -864,16 +877,16 @@ For round 5, use this sequence alongside the commands above:
 
 | Phase | Action and evidence |
 | --- | --- |
-| Prepare | Start the current build, build the generator, run `prepare 5`, and check stack status. Confirm fresh telemetry and capacity six. Keep arbitrary browser searches out of the rehearsal. |
-| Baseline | Run `scenario5 baseline` for at least 40 seconds. Save generator logs, a Catalog Pool Investigation screenshot, and a healthy course trace. Record successes, drops, acquisition wait, and occupancy. |
-| Activate | Record the exact UTC time of `incident start d5e0`. Keep 5 requests/s. Record first persistent occupancy increase, capacity exhaustion, first queued request, and first HTTP 504. About one minute to depletion is a hypothesis to measure. |
+| Prepare | Run `incident start 5` and wait for baseline readiness. Confirm fresh telemetry and capacity six. Keep arbitrary browser searches out of the rehearsal. |
+| Baseline | Inspect the baseline left running by setup. Save generator logs, a Catalog Pool Investigation screenshot, and a healthy course trace. Record successes, drops, acquisition wait, and occupancy. |
+| Activate | Record the exact UTC time of `incident activate 5`. Keep 5 requests/s. Record first persistent occupancy increase, capacity exhaustion, first queued request, and first HTTP 504. About one minute to depletion is a hypothesis to measure. |
 | Diagnose | Capture occupancy rising toward six and waiting requests appearing. Save a triggering empty-result request/response and a slow unrelated LearningPath trace. Identify acquisition waiting versus SQL execution; note any evidence unavailable until a span finishes. |
 | Check deadlines | Distinguish Gateway HTTP 504 near 10 seconds from generator timeout near 15 seconds using status/outcome counts and request evidence. Record whether downstream waits actually finish after the response deadline. |
 | Check cleanup | Save fault evidence, stop traffic, and wait through request/drain deadlines plus telemetry export delay. Record whether waiting and oldest-wait age return to zero. Leaked active sessions may remain at six. If waits persist, record duration and traces before resetting. |
-| Resume fault | Restart the mixed workload with `incident start d5e0` without preparing/restarting Catalog. Record this intentional interruption. Confirm the depleted state before the repair. |
-| Repair | Edit source, save the diff, and run `scenario5 rebuild`. Record rebuild duration and the new Catalog instance ID. Exclude the deployment interruption from recovery assessment. |
+| Resume fault | Restart the mixed workload with `incident activate 5` without preparing/restarting Catalog. Record this intentional interruption. Confirm the depleted state before the repair. |
+| Repair | Edit source, save the diff, and run `incident rebuild`. Record rebuild duration and the new Catalog instance ID. Exclude the deployment interruption from recovery assessment. |
 | Recovery | Observe at least 120 seconds of the same mixed workload after readiness. Save two generator reports bracketing this window, pool graphs, and fresh course and LearningPath traces. Require no new failures/drops, bounded waits, and sessions returning after requests. |
-| Reset | Save evidence before `scenario5 restore`. Restore faulty exercise source deliberately, then prepare a new round and confirm a healthy baseline. Record reset time and any manual steps. |
+| Reset | Save evidence before `incident restart 5`. Review source edits separately before repeating the editing lesson. Record reset time and any manual steps. |
 
 The cleanup pause is a calibration check; omit it from the timed participant
 pass, where mixed traffic should continue through diagnosis and repair.

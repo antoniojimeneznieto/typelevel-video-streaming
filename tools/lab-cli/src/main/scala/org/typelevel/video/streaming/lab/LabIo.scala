@@ -50,14 +50,64 @@ private[lab] object LabIo:
       args: Seq[String],
       environment: Map[String, String] = Map.empty,
   ): IO[String] =
-    capture(root, args, environment).flatMap(_.checked(args.head))
+    capture(root, args, environment).flatMap(_.checked(args.head)).timeout(30.seconds)
+
+  /** Keep subprocess diagnostics available without projecting scenario details. */
+  def logged(
+      root: Path,
+      args: Seq[String],
+      environment: Map[String, String] = Map.empty,
+  ): IO[Unit] =
+    for
+      _   <- createDirectories(root.resolve(".lab"))
+      now <- IO.realTimeInstant
+      log  = root.resolve(".lab/commands.log")
+      _   <- append(log, s"\n$now ${args.mkString(" ")}\n")
+      _   <- Stream
+             .awakeEvery[IO](30.seconds)
+             .evalMap(_ => IO.println(s"Still running ${args.head}; full output: $log"))
+             .compile
+             .drain
+             .background
+             .use { _ =>
+               builder(root, args, environment).spawn[IO].use { process =>
+                 for
+                   _ <-
+                     process.stdout
+                       .through(text.utf8.decode)
+                       .merge(process.stderr.through(text.utf8.decode))
+                       .through(
+                         Files[IO]
+                           .writeUtf8(Fs2Path.fromNioPath(log), Flags(Flag.Create, Flag.Append)),
+                       )
+                       .compile
+                       .drain
+                   code <- process.exitValue
+                   _    <- IO.raiseWhen(code != 0)(
+                          new IllegalStateException(
+                            s"${args.head} failed (exit $code). See $log; correct the reported error and retry the same command.",
+                          ),
+                        )
+                 yield ()
+               }
+             }
+    yield ()
+
+  def append(path: Path, value: String): IO[Unit] =
+    Stream
+      .emit(value)
+      .through(Files[IO].writeUtf8(Fs2Path.fromNioPath(path), Flags(Flag.Create, Flag.Append)))
+      .compile
+      .drain
 
   def probe(
       root: Path,
       args: Seq[String],
       environment: Map[String, String] = Map.empty,
   ): IO[Option[String]] =
-    capture(root, args, environment).map(result => Option.when(result.exitCode == 0)(result.stdout))
+    capture(root, args, environment)
+      .map(result => Option.when(result.exitCode == 0)(result.stdout))
+      .timeout(30.seconds)
 
   def exists(path: Path): IO[Boolean]         = Files[IO].exists(Fs2Path.fromNioPath(path))
   def isRegularFile(path: Path): IO[Boolean]  = Files[IO].isRegularFile(Fs2Path.fromNioPath(path))

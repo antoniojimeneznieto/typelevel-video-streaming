@@ -32,7 +32,7 @@ private[lab] object LabVerify:
   private def requireThat(condition: Boolean, message: String): IO[Unit] =
     IO.raiseUnless(condition)(new IllegalStateException(message))
 
-  private def getJson(client: Client[IO], url: String): IO[Json] =
+  private[lab] def getJson(client: Client[IO], url: String): IO[Json] =
     for
       uri  <- IO.fromEither(Uri.fromString(url))
       json <-
@@ -48,7 +48,7 @@ private[lab] object LabVerify:
           .timeout(10.seconds)
     yield json
 
-  private def query(base: String, path: String, parameters: (String, String)*): String =
+  private[lab] def query(base: String, path: String, parameters: (String, String)*): String =
     val suffix = parameters
       .map { (key, value) =>
         s"${URLEncoder.encode(key, StandardCharsets.UTF_8)}=${URLEncoder.encode(value, StandardCharsets.UTF_8)}"
@@ -73,7 +73,7 @@ private[lab] object LabVerify:
                    Left(DecodingFailure("Expected exactly one metric series", json.hcursor.history))
     yield value
 
-  private def metric(client: Client[IO], grafana: String, expression: String): IO[Double] =
+  private[lab] def metric(client: Client[IO], grafana: String, expression: String): IO[Double] =
     for
       json <- getJson(
                 client,

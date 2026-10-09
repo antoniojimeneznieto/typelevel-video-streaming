@@ -129,13 +129,18 @@ object LabCliSuite extends SimpleIOSuite {
         List("traffic", "stop"),
         List("proxy", "latency", "--milliseconds", "750"),
         List("proxy", "reset"),
-        List("incident", "start", "8f27"),
+        List("incident", "start", "1"),
+        List("incident", "start", "3"),
+        List("incident", "start", "4", "--build"),
+        List("incident", "restart", "5"),
+        List("incident", "rebuild"),
+        List("incident", "status"),
         List("scenario3", "baseline"),
         List("scenario4", "prepare"),
         List("scenario5", "prepare"),
         List("scenario5", "baseline"),
         List("scenario5", "rebuild"),
-        List("incident", "start", "d5e0"),
+        List("incident", "start", "5"),
         List("verify", "scenario1"),
         List("verify", "scenario3"),
         List("verify", "scenario5"),
@@ -185,7 +190,7 @@ object LabCliSuite extends SimpleIOSuite {
           "/tmp/workshop",
           "incident",
           "activate",
-          "8f27",
+          "1",
           "--milliseconds",
           "750",
         ),
@@ -193,7 +198,7 @@ object LabCliSuite extends SimpleIOSuite {
       expect(
         parsed.exists(config =>
           config.root.toString == "/tmp/workshop" &&
-            config.action == LabAction.DelayIncident(750),
+            config.action == LabAction.IncidentActivate("1", 750, false),
         ),
       )
     }
@@ -203,33 +208,34 @@ object LabCliSuite extends SimpleIOSuite {
     IO.pure(
       expect(
         LabCliParser.command
-          .parse(List("incident", "start", "8f27"))
-          .exists(_.action == LabAction.DelayIncident(750, false)),
+          .parse(List("incident", "start", "1"))
+          .exists(_.action == LabAction.IncidentStart("1", false)),
       ) &&
         expect(
           LabCliParser.command
-            .parse(List("incident", "start", "8f27", "--verbose"))
-            .exists(_.action == LabAction.DelayIncident(750, true)),
+            .parse(List("incident", "activate", "1", "--verbose"))
+            .exists(_.action == LabAction.IncidentActivate("1", 750, true)),
         ) &&
-        expect(LabCliParser.command.parse(List("incident", "start", "3c91", "--verbose")).isLeft),
+        expect(LabCliParser.command.parse(List("incident", "start", "3", "--verbose")).isLeft),
     )
   }
 
   test("Decline rejects invalid incident combinations and reports help") {
     IO.pure {
       val invalidCode  = LabCliParser.command.parse(List("incident", "activate", "wrong"))
+      val previousCode = LabCliParser.command.parse(List("incident", "start", "8f27"))
       val invalidDelay = LabCliParser.command.parse(
         List(
           "incident",
           "activate",
-          "3c91",
+          "3",
           "--milliseconds",
           "750",
         ),
       )
       val help = LabCliParser.command.parse(List("--root", "/tmp/workshop", "--help"))
       expect(
-        invalidCode.isLeft && invalidDelay.isLeft &&
+        invalidCode.isLeft && previousCode.isLeft && invalidDelay.isLeft &&
           help.left.exists(_.errors.isEmpty),
       )
     }
@@ -316,6 +322,23 @@ object LabCliSuite extends SimpleIOSuite {
         .map { result =>
           expect(result == LabIo.ProcessResult(7, "output", "diagnostic"))
         }
+    }
+  }
+
+  test("failed logged commands retain both streams and point participants to the log") {
+    Files[IO].tempDirectory.use { directory =>
+      val root = directory.toNioPath
+      for
+        result <- LabIo
+                    .logged(root, Seq("sh", "-c", "printf output; printf diagnostic >&2; exit 7"))
+                    .attempt
+        log <- LabIo.read(root.resolve(".lab/commands.log"))
+      yield expect(log.contains("output") && log.contains("diagnostic")) &&
+        expect(
+          result.left.exists(error =>
+            error.getMessage.contains("exit 7") && error.getMessage.contains("commands.log"),
+          ),
+        )
     }
   }
 

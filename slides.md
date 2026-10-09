@@ -161,7 +161,7 @@ Course browsing is responsive. Requests pass through Gateway to Catalog.
 - Gateway and Catalog latency.
 - One Gateway → Catalog trace.
 
-<!-- Presenter: Begin the 18-minute round. `./scripts/lab.sh prepare 1`; `./scripts/lab.sh traffic start --rate 5`; `./scripts/lab.sh traffic status`. Allow at least 75 seconds for warmup and a full metrics window. Check `load_valid`, drops, and failures. If already prepared, keep the existing healthy generator running. -->
+<!-- Presenter: Begin the 18-minute round. `./scripts/lab.sh incident start 1` prepares the round and waits for a healthy 60-second baseline window, fresh metrics, and a trace. Inspect `load_valid`, drops, failures, and the printed dashboard. If already prepared, the command keeps the healthy generator running. -->
 
 ---
 
@@ -173,7 +173,7 @@ Find where the added time occurs. Restore normal response time while traffic con
 
 **Start with the change in user experience. Do not assume the changed component is the cause.**
 
-<!-- Presenter: Activate with `./scripts/lab.sh incident start 8f27`. Record activation time privately. Allow a complete fresh metrics window. The neutral command output should only say `Applied traffic policy`. -->
+<!-- Presenter: Activate with `./scripts/lab.sh incident activate 1`. Record activation time privately. Allow a complete fresh metrics window. Output gives a neutral policy message and activation timestamp. -->
 
 ---
 
@@ -216,7 +216,7 @@ Light login traffic and authenticated current-user requests are responsive.
 - `GET /users/me` latency.
 - Identity runtime signals.
 
-<!-- Presenter: Begin the 19-minute round. The checked-in Identity exercise has a latent defect; workload activation exposes it. Before the session, build the exercise image and generator. `./scripts/lab.sh prepare 3`; `./scripts/lab.sh scenario3 baseline`. Baseline is 30 requests/s with 5% login. Give it at least 30 seconds. If telemetry slows or disappears during the incident, consult generator output and container health. -->
+<!-- Presenter: Begin the 19-minute round. The checked-in Identity exercise has a latent defect; workload activation exposes it. Before the session, cache the exercise images. `./scripts/lab.sh incident start 3` waits for a healthy baseline. Baseline is 30 requests/s with 5% login. If telemetry slows or disappears during the incident, consult generator output and container health. -->
 
 ---
 
@@ -226,7 +226,7 @@ Light login traffic and authenticated current-user requests are responsive.
 
 Explain why work with no password verification also slows down.
 
-<!-- Presenter: Activate with `./scripts/lab.sh incident start 3c91`. It switches to 70% login at the same aggregate offered rate, with a brief generator transition. Record the time. -->
+<!-- Presenter: Activate with `./scripts/lab.sh incident activate 3`. It switches to 70% login at the same aggregate offered rate, with a brief generator transition. Record the time. -->
 
 ---
 
@@ -251,7 +251,7 @@ Synchronous password verification runs on Cats Effect compute workers.
 
 **Proof:** Under the same login-heavy mix, lightweight requests become responsive and verification concurrency stays bounded.
 
-<!-- Presenter: Reveal after participants compare the control operation and runtime signals. Inspect PasswordHasher.scala only after the telemetry diagnosis. Deploy with `./scripts/lab.sh rebuild identity-service`. The existing semaphore still bounds hashing. Moving work off compute does not add CPU capacity; a host-sensitive workload may need calibration. -->
+<!-- Presenter: Reveal after participants compare the control operation and runtime signals. Inspect PasswordHasher.scala only after the telemetry diagnosis. Deploy with `./scripts/lab.sh incident rebuild`. The existing semaphore still bounds hashing. Moving work off compute does not add CPU capacity; a host-sensitive workload may need calibration. -->
 
 ---
 
@@ -261,7 +261,7 @@ Authenticated Playback reads work for the initial group of users.
 
 **Observe:** successful logins, Playback `200` responses, and a successful request trace.
 
-<!-- Presenter: Begin the 28-minute round. This is the central otel4s exercise. Require the diagnostic telemetry checkpoint before a decoder change. Prepare before the session: build Identity and generator, `./scripts/lab.sh prepare 4`, then `./scripts/lab.sh scenario4 baseline`. Setup registers ten synthetic accounts; baseline measured traffic uses the initial eight actors. Keep account and token values out of slides. -->
+<!-- Presenter: Begin the 28-minute round. This is the central otel4s exercise. Require the diagnostic telemetry checkpoint before a decoder change. `./scripts/lab.sh incident start 4` prepares the services, seeds the accounts, and waits for healthy baseline telemetry. Setup registers ten synthetic accounts; baseline measured traffic uses the initial eight actors. Keep account and token values out of slides. -->
 
 ---
 
@@ -273,7 +273,7 @@ Find the compatibility boundary without weakening authentication.
 
 **Which comparison would separate a user-specific problem from random request failures?**
 
-<!-- Presenter: Activate with `./scripts/lab.sh incident start 7b42`. It starts a stable mixed-actor workload at the same 10 requests/s; roughly 20% should return 401. Do not reveal token subject formats yet. -->
+<!-- Presenter: Activate with `./scripts/lab.sh incident activate 4`. It starts a stable mixed-actor workload at the same 10 requests/s; roughly 20% should return 401. Do not reveal token subject formats yet. -->
 
 ---
 
@@ -290,7 +290,7 @@ Compare a fresh `200` trace with a fresh `401` trace.
 
 ---
 
-# Add one diagnostic observation
+# Add diagnostic telemetry
 
 In `PlaybackAuthTelemetry.decodeSubject`, keep the decoder behavior as it is.
 
@@ -301,9 +301,11 @@ auth.result         = accepted | rejected
 auth.subject.shape  = bare_uuid | namespaced_uuid | other
 ```
 
-**Capture a fresh successful trace and a fresh rejected trace before repairing the decoder.**
+Log the decoding outcome and verified subject using the prepared logger (synthetic accounts only).
 
-<!-- Presenter: A contextual `Tracer[IO]` and public logger already exist. Participants edit the prepared method and rebuild Playback. Do not put raw subjects, tokens, or IDs in core span or metric attributes. The required checkpoint is `rejected + namespaced_uuid` for a 401 and `accepted + bare_uuid` for a 200, while the 401 share remains. Use the scenario4-diagnostics.patch only as facilitator fallback. -->
+**Before repair:** compare fresh `200`/`401` spans, then find a decoding log by its trace ID in Loki.
+
+<!-- Presenter: A contextual `Tracer[IO]` and public logger already exist. Participants add attributes and a log inside PlaybackAuthTelemetry.decodeSubject, then rebuild once while keeping the faulty decoder. The required checkpoint is `rejected + namespaced_uuid` for a 401 and `accepted + bare_uuid` for a 200, while the 401 share remains. From a fresh 401 trace, copy its trace ID and find the correlated entry in Explore → Loki: {service_name="playback-service"} |= "Playback subject decoding rejected" | trace_id="<trace-id>". Show why the exact synthetic subject belongs in a controlled log, not a span or metric attribute. Never log a JWT or a real user's subject. The diagnostics and logs patches are facilitator fallbacks. -->
 
 ---
 
@@ -315,7 +317,7 @@ The successful and rejected traces differ at subject decoding.
 
 **Proof:** Both legitimate groups succeed under the same mix; malformed and unsupported tokens still fail.
 
-<!-- Presenter: Reveal after the diagnostic checkpoint. Source inspection confirms the parser mismatch. Change Playback wiring to `AccessTokenVerifier.userIdCompatible`, then `./scripts/lab.sh rebuild playback-service`. Verify a fresh window after the restart, plus negative verifier tests. Optional trace-to-logs correlation can follow the core exercise using seeded synthetic accounts; it is not required for repair. -->
+<!-- Presenter: Reveal after the span-and-log checkpoint. Source inspection confirms the parser mismatch. Change Playback wiring to `AccessTokenVerifier.userIdCompatible`, then `./scripts/lab.sh incident rebuild`. Verify a fresh window after the restart, plus negative verifier tests. -->
 
 ---
 
@@ -325,7 +327,7 @@ Course reads complete normally. Database sessions become available again after r
 
 **Observe:** request outcomes, acquisition wait, active sessions, and a healthy course trace.
 
-<!-- Presenter: Begin the 22-minute round. This one tests resource lifetime and a failure that spreads from a minority request pattern to unrelated reads. Before the session, build the generator and verify the exercise image. `./scripts/lab.sh prepare 5`; `./scripts/lab.sh scenario5 baseline`. Preparation sets a six-session Catalog pool. Allow 30–40 seconds and confirm recent valid load, no failures, near-zero wait, and occupancy returning to zero. -->
+<!-- Presenter: Begin the 22-minute round. This one tests resource lifetime and a failure that spreads from a minority request pattern to unrelated reads. `./scripts/lab.sh incident start 5` prepares the six-session Catalog pool and waits for a healthy baseline. Inspect recent valid load, no failures, near-zero wait, and occupancy returning to zero. -->
 
 ---
 
@@ -335,7 +337,7 @@ Course reads complete normally. Database sessions become available again after r
 
 Find the request pattern that consumes capacity and prove a durable repair.
 
-<!-- Presenter: Activate with `./scripts/lab.sh incident start d5e0`. It switches to the mixed search workload at the same 5 requests/s, with a brief generator gap. Do not announce the empty-result trigger. Watch long enough for multiple pattern cycles; time to depletion varies by host. -->
+<!-- Presenter: Activate with `./scripts/lab.sh incident activate 5`. It switches to the mixed search workload at the same 5 requests/s, with a brief generator gap. Do not announce the empty-result trigger. Watch long enough for multiple pattern cycles; time to depletion varies by host. -->
 
 ---
 
@@ -360,7 +362,7 @@ An empty-result course search returns `200` but leaves its allocated session che
 
 **Proof:** Under the same mixed search load, sessions return, wait stays bounded, and course and LearningPath reads recover.
 
-<!-- Presenter: Reveal after participants connect a successful empty search with an occupancy step. Review CatalogRepositoryImpl.listCourses and replace manual allocated/release handling with `sessions.use`. Deploy with `./scripts/lab.sh scenario5 rebuild`, preserving the six-session pool. Judge a fresh sustained post-rebuild window; a restart alone temporarily clears the leak. Include error and cancellation finalization checks in the repair review. -->
+<!-- Presenter: Reveal after participants connect a successful empty search with an occupancy step. Review CatalogRepositoryImpl.listCourses and replace manual allocated/release handling with `sessions.use`. Deploy with `./scripts/lab.sh incident rebuild`, preserving the six-session pool. Judge a fresh sustained post-rebuild window; a restart alone temporarily clears the leak. Include error and cancellation finalization checks in the repair review. -->
 
 ---
 
@@ -370,7 +372,7 @@ An empty-result course search returns `200` but leaves its allocated session che
 | --- | --- |
 | Boundary delay | Compare client and server time before assigning blame |
 | Identity starvation | Use unrelated operations as controls and inspect runtime signals |
-| Playback rejection | Add a bounded observation where existing spans stop explaining outcomes |
+| Playback rejection | Add bounded span attributes and follow a correlated log when default spans stop explaining outcomes |
 | Session depletion | Separate resource acquisition from execution; verify finalization |
 
 <!-- Presenter: Ask participants which signal made the largest difference in each round. Do not force a logs example into an incident where logs were not decisive. -->
