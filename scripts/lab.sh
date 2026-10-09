@@ -3,11 +3,10 @@ set -euo pipefail
 
 script_directory="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_directory="$(cd -- "$script_directory/.." && pwd)"
+source "$script_directory/version.sh"
 
 find_launcher() {
-  local revision
-  revision="$(git -C "$project_directory" rev-parse HEAD)"
-  for candidate in "$project_directory"/.lab/cli/"$revision"/lab-cli-*/bin/lab-cli; do
+  for candidate in "$project_directory"/.lab/cli/"$LAB_VERSION"/lab-cli-*/bin/lab-cli; do
     if [[ -x "$candidate" ]]; then printf '%s\n' "$candidate"; return 0; fi
   done
   for candidate in "$project_directory"/target/out/jvm/scala-*/lab-cli/universal/stage/bin/lab-cli; do
@@ -20,15 +19,22 @@ if [[ -n "${LAB_CLI_EXEC:-}" ]]; then
   launcher="$LAB_CLI_EXEC"
 else
   launcher="$(find_launcher || true)"
+  if [[ "$launcher" != "$project_directory"/.lab/cli/"$LAB_VERSION"/* &&
+        ( -z "$launcher" || "$LAB_VERSION" == v* ) ]]; then
+    if bash "$script_directory/install-cli.sh"; then
+      launcher="$(find_launcher || true)"
+    fi
+  fi
   staged_jar=""
-  if [[ -n "$launcher" ]]; then
+  if [[ -n "$launcher" && "$launcher" != "$project_directory"/.lab/cli/"$LAB_VERSION"/* ]]; then
     for candidate in "$(dirname "$launcher")"/../lib/org.typelevel.video.streaming.lab-cli-*.jar; do
       if [[ -f "$candidate" ]]; then staged_jar="$candidate"; break; fi
     done
   fi
   if [[ -z "$launcher" || ! -x "$launcher" ]] ||
-    [[ -z "$staged_jar" ]] ||
-    [[ -n "$(find "$project_directory/tools/lab-cli/src" "$project_directory/build.sbt" -type f -newer "$staged_jar" -print -quit 2>/dev/null)" ]]; then
+    { [[ "$launcher" != "$project_directory"/.lab/cli/"$LAB_VERSION"/* ]] &&
+      { [[ -z "$staged_jar" ]] ||
+        [[ -n "$(find "$project_directory/tools/lab-cli/src" "$project_directory/build.sbt" -type f -newer "$staged_jar" -print -quit 2>/dev/null)" ]]; }; }; then
     build_log="$(mktemp)"
     printf 'Preparing the lab command (first run or CLI sources changed)...\n'
     if ! (cd "$project_directory" && sbt --batch 'labCli/stage') >"$build_log" 2>&1; then

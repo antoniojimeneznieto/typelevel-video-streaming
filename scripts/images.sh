@@ -7,12 +7,8 @@ while IFS= read -r setting; do
 done <<< "$image_settings"
 
 export IMAGE_PREFIX="${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}"
-if [[ -z "${IMAGE_TAG:-}" ]]; then
-  IMAGE_TAG="$(git -C "$project_directory" describe --tags --exact-match --match 'v[0-9]*' 2>/dev/null || true)"
-  if [[ -z "$IMAGE_TAG" ]]; then
-    IMAGE_TAG="sha-$(git -C "$project_directory" rev-parse HEAD)"
-  fi
-fi
+source "$(dirname -- "${BASH_SOURCE[0]}")/version.sh"
+IMAGE_TAG="${IMAGE_TAG:-$LAB_VERSION}"
 export IMAGE_TAG
 export LOCAL_UID="${LOCAL_UID:-$(id -u)}"
 export LOCAL_GID="${LOCAL_GID:-$(id -g)}"

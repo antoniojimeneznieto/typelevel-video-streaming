@@ -124,7 +124,7 @@ for `v*` tags. After unpacking, run
 `bin/lab-cli --root /path/to/typelevel-video-streaming platform changes`.
 The command needs Java 17+ and a checkout containing the lab scripts and Compose
 configuration. In a checkout, `bash scripts/install-cli.sh` downloads the CLI
-for the current commit after its publishing run completes. `./scripts/lab.sh`
+for the selected lab version after its publishing run completes. `./scripts/lab.sh`
 uses that copy and builds the CLI from source when needed.
 
 To test publishing from a private repository, push the branch and run
@@ -139,5 +139,13 @@ from their upstream registries.
 For a release, tag the tested commit with a new version such as `v0.2.0` and
 push the tag. The publishing workflow attaches `v0.2.0` to every lab image and
 creates a GitHub Release with `lab-cli-v0.2.0.zip` and its checksum. Check out
-that tag to run the matching images and CLI; development checkouts continue to
-use commit SHA tags. `IMAGE_TAG` can override either choice.
+that tag to run the matching images and CLI. To make `main` use the same release,
+replace the current SHA in [`lab-release`](lab-release) with the published tag
+and commit that change to `main`. Both the images and CLI then use the
+configured release. The initial SHA in that file points to a tested private
+publishing run. Set the file to `auto` for commit SHA selection during
+development; the publishing workflow must finish for that commit before its
+artifacts are available. `LAB_VERSION` overrides the shared choice; `IMAGE_TAG` overrides
+images alone. `LAB_REPOSITORY` overrides the CLI download repository. Use a
+fresh checkout when switching lab versions because local exercise state records
+image IDs.
