@@ -249,7 +249,7 @@ INSERT INTO courses (
     'Typelevel Community',
     'Arman Bilge',
     'Typelevel · Scala Days 2025',
-    2142,
+    300,
     1
   ),
   (
@@ -262,7 +262,7 @@ INSERT INTO courses (
     'Effects & Concurrency',
     'Daniel Spiewak',
     'Speaker',
-    2370,
+    300,
     1
   ),
   (
@@ -275,7 +275,7 @@ INSERT INTO courses (
     'Effects & Concurrency',
     'Daniel Spiewak',
     'Speaker · Sphere.it Conf 2022',
-    1849,
+    300,
     1
   ),
   (
@@ -288,7 +288,7 @@ INSERT INTO courses (
     'Streaming',
     'Michael Pilquist',
     'Speaker',
-    2874,
+    300,
     1
   ),
   (
@@ -301,7 +301,7 @@ INSERT INTO courses (
     'Error Handling',
     'Thanh Le',
     'Speaker · Scala Days 2025',
-    2007,
+    300,
     1
   );
 
@@ -372,11 +372,11 @@ SELECT
   video.is_preview
 FROM (
   VALUES
-    ('threads-at-scale', 'lesson-1', 1, 'Threads at Scale', 1849, TRUE),
-    ('typelevel-retrospective', 'lesson-1', 1, 'A Typelevel Retrospective', 2142, TRUE),
-    ('fs2-chunk', 'lesson-1', 1, 'fs2.Chunk', 2874, TRUE),
-    ('cats-effect-3', 'lesson-1', 1, 'Cats Effect 3', 2370, TRUE),
-    ('rethinking-monad-transformers', 'lesson-1', 1, 'Rethinking Monad Transformers', 2007, TRUE)
+    ('threads-at-scale', 'lesson-1', 1, 'Threads at Scale', 300, TRUE),
+    ('typelevel-retrospective', 'lesson-1', 1, 'A Typelevel Retrospective', 300, TRUE),
+    ('fs2-chunk', 'lesson-1', 1, 'fs2.Chunk', 300, TRUE),
+    ('cats-effect-3', 'lesson-1', 1, 'Cats Effect 3', 300, TRUE),
+    ('rethinking-monad-transformers', 'lesson-1', 1, 'Rethinking Monad Transformers', 300, TRUE)
 ) AS video(course_slug, lesson_id, position, title, duration_seconds, is_preview)
 JOIN courses course ON course.slug = video.course_slug;
 

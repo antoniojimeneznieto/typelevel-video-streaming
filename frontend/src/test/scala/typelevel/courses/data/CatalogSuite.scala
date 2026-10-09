@@ -15,13 +15,13 @@ final class CatalogSuite extends FunSuite:
     assertEquals(view.course.slug.value, "threads-at-scale")
     assertEquals(view.course.title.value, "Threads at Scale")
     assertEquals(view.course.level, CourseLevel.INTERMEDIATE)
-    assertEquals(view.course.durationSeconds.map(_.value), Some(1849))
+    assertEquals(view.course.durationSeconds.map(_.value), Some(300))
     assertEquals(view.thumbnail, Some("/threads-at-scale-thumbnail.jpg"))
     assertEquals(view.artwork, ArtworkVariant.Orbit)
     assert(view.source.exists(_.url == "https://www.youtube.com/watch?v=PLApcas04V0"))
     assert(view.featured)
     assertEquals(view.lessons.map(_.id), Vector("lesson-1"))
-    assertEquals(view.lessons.head.durationSeconds, 1849)
+    assertEquals(view.lessons.head.durationSeconds, 300)
     assert(view.lessons.head.preview)
   }
 

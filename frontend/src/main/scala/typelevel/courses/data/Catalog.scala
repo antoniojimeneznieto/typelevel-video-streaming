@@ -120,7 +120,7 @@ object Catalog:
         InstructorName.unsafeApply("Daniel Spiewak"),
         Some(InstructorRole.unsafeApply("Speaker · Sphere.it Conf 2022")),
       ),
-      durationSeconds = Some(DurationSeconds.unsafeApply(1849)),
+      durationSeconds = Some(DurationSeconds.unsafeApply(300)),
       lessonCount     = Some(LessonCount.unsafeApply(1)),
     ),
     index = 0,
