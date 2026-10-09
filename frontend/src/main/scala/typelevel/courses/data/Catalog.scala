@@ -54,7 +54,7 @@ object Catalog:
           literal(InstructorName("Daniel Spiewak")),
           Some(literal(InstructorRole("Speaker · Sphere.it Conf 2022"))),
         ),
-        durationSeconds = Some(literal(DurationSeconds(1849))),
+        durationSeconds = Some(literal(DurationSeconds(300))),
         lessonCount     = Some(literal(LessonCount(1))),
       ),
       eyebrow          = "Community video",
@@ -86,7 +86,7 @@ object Catalog:
       lessons = lessons(
         lesson(
           "Threads at Scale",
-          "30:49",
+          "5:00",
           "From raw hardware and JVM threads to asynchronous I/O, effect systems, and practical latency improvements.",
         ),
       ),
@@ -110,7 +110,7 @@ object Catalog:
           literal(InstructorName("Arman Bilge")),
           Some(literal(InstructorRole("Typelevel · Scala Days 2025"))),
         ),
-        durationSeconds = Some(literal(DurationSeconds(2142))),
+        durationSeconds = Some(literal(DurationSeconds(300))),
         lessonCount     = Some(literal(LessonCount(1))),
       ),
       eyebrow          = "Community video",
@@ -139,7 +139,7 @@ object Catalog:
       lessons       = lessons(
         lesson(
           "A Typelevel Retrospective",
-          "35:42",
+          "5:00",
           "A tour through Typelevel’s community growth, cross-platform ecosystem, runtime work, and efforts to make the stack easier to adopt.",
         ),
       ),
@@ -163,7 +163,7 @@ object Catalog:
           literal(InstructorName("Michael Pilquist")),
           Some(literal(InstructorRole("Speaker · Scala Love 2022"))),
         ),
-        durationSeconds = Some(literal(DurationSeconds(2874))),
+        durationSeconds = Some(literal(DurationSeconds(300))),
         lessonCount     = Some(literal(LessonCount(1))),
       ),
       eyebrow          = "Community video",
@@ -189,7 +189,7 @@ object Catalog:
       lessons       = lessons(
         lesson(
           "fs2.Chunk",
-          "47:54",
+          "5:00",
           "A close look at the structure that powers FS2, its evolution, and the constraints that shaped its design.",
         ),
       ),
@@ -213,7 +213,7 @@ object Catalog:
           literal(InstructorName("Daniel Spiewak")),
           Some(literal(InstructorRole("Speaker · Scala Love"))),
         ),
-        durationSeconds = Some(literal(DurationSeconds(2370))),
+        durationSeconds = Some(literal(DurationSeconds(300))),
         lessonCount     = Some(literal(LessonCount(1))),
       ),
       eyebrow          = "Community video",
@@ -239,7 +239,7 @@ object Catalog:
       lessons       = lessons(
         lesson(
           "Cats Effect 3",
-          "39:30",
+          "5:00",
           "Daniel Spiewak introduces Cats Effect 3 and its model for functional asynchronous and concurrent programming.",
         ),
       ),
@@ -264,7 +264,7 @@ object Catalog:
           literal(InstructorName("Thanh Le")),
           Some(literal(InstructorRole("Speaker · Scala Days 2025"))),
         ),
-        durationSeconds = Some(literal(DurationSeconds(2007))),
+        durationSeconds = Some(literal(DurationSeconds(300))),
         lessonCount     = Some(literal(LessonCount(1))),
       ),
       eyebrow          = "Community video",
@@ -296,7 +296,7 @@ object Catalog:
       lessons = lessons(
         lesson(
           "Rethinking Monad Transformers",
-          "33:27",
+          "5:00",
           "A Scala 3 approach to carrying typed errors through an effect without a conventional transformer stack.",
         ),
       ),
