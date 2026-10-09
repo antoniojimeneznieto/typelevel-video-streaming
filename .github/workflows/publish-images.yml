@@ -201,6 +201,11 @@ jobs:
         with:
           name: lab-cli-${{ github.sha }}
           path: dist
+      - name: Name CLI download after the release
+        run: |
+          mv "dist/lab-cli-${GITHUB_SHA}.zip" "dist/lab-cli-${GITHUB_REF_NAME}.zip"
+          cd dist
+          sha256sum "lab-cli-${GITHUB_REF_NAME}.zip" > SHA256SUMS
       - name: Create release with CLI and checksums
         env:
           GH_TOKEN: ${{ github.token }}

@@ -7,6 +7,7 @@ project_directory="$(cd -- "$script_directory/.." && pwd)"
 sha="$(git -C "$project_directory" rev-parse HEAD)"
 tag="$(git -C "$project_directory" describe --tags --exact-match --match 'v[0-9]*' 2>/dev/null || true)"
 archive="lab-cli-$sha.zip"
+if [[ -n "$tag" ]]; then archive="lab-cli-$tag.zip"; fi
 repository="$(git -C "$project_directory" remote get-url origin | sed -E 's#^.*github.com[:/]([^/]+/[^/]+)(\.git)?$#\1#; s#\.git$##')"
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf -- "$temporary_directory"' EXIT

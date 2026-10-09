@@ -9,8 +9,8 @@ case "${1:-}" in
   --build) build_images=true ;;
   --help|-h)
     echo "Usage: ./scripts/start.sh [--build]"
-    echo "Pulls published images matching this Git commit; --build uses your local source."
-    echo "Set IMAGE_TAG to select a release tag, or IMAGE_PREFIX to select another registry."
+    echo "Pulls published images matching this release tag or Git commit; --build uses local source."
+    echo "Set IMAGE_TAG or IMAGE_PREFIX to override the selected images."
     exit 0 ;;
   "") ;;
   *) echo "Unknown option: $1. See --help." >&2; exit 2 ;;

@@ -8,7 +8,10 @@ done <<< "$image_settings"
 
 export IMAGE_PREFIX="${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}"
 if [[ -z "${IMAGE_TAG:-}" ]]; then
-  IMAGE_TAG="sha-$(git -C "$project_directory" rev-parse HEAD)"
+  IMAGE_TAG="$(git -C "$project_directory" describe --tags --exact-match --match 'v[0-9]*' 2>/dev/null || true)"
+  if [[ -z "$IMAGE_TAG" ]]; then
+    IMAGE_TAG="sha-$(git -C "$project_directory" rev-parse HEAD)"
+  fi
 fi
 export IMAGE_TAG
 export LOCAL_UID="${LOCAL_UID:-$(id -u)}"

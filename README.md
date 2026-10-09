@@ -36,7 +36,7 @@ From the repository root:
 ./scripts/lab.sh start
 ```
 
-The script builds the images, initializes the databases, uploads the bundled demo videos to SeaweedFS,
+The script pulls the published images, initializes the databases, uploads the bundled demo videos to SeaweedFS,
 and starts the frontend, backend services, and infrastructure. The first run can take several minutes.
 
 Open [http://localhost:8000](http://localhost:8000).
@@ -135,3 +135,9 @@ package's visibility to public for anonymous pulls. A `v*` tag also publishes
 the CLI ZIP and checksum as GitHub Release assets. Release assets in a private
 repository require repository access. PostgreSQL, Kafka, and Debezium are pulled
 from their upstream registries.
+
+For a release, tag the tested commit with a new version such as `v0.2.0` and
+push the tag. The publishing workflow attaches `v0.2.0` to every lab image and
+creates a GitHub Release with `lab-cli-v0.2.0.zip` and its checksum. Check out
+that tag to run the matching images and CLI; development checkouts continue to
+use commit SHA tags. `IMAGE_TAG` can override either choice.
