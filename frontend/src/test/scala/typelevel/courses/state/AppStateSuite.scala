@@ -1,6 +1,9 @@
 package typelevel.courses.state
 
+import java.util.UUID
+
 import munit.FunSuite
+import org.typelevel.video.streaming.backend.catalog.domain as catalog
 import org.typelevel.video.streaming.backend.playback.domain.{
   CourseId,
   Favorite,
@@ -9,14 +12,18 @@ import org.typelevel.video.streaming.backend.playback.domain.{
   PositionSeconds,
 }
 import smithy4s.time.Timestamp
-import typelevel.courses.data.Catalog
+import typelevel.courses.ui.{ArtworkVariant, CourseView, LessonView}
 
 final class AppStateSuite extends FunSuite:
-  private val seed   = Catalog.courses.head
-  private val course = seed.copy(lessons =
-    Vector(
-      seed.lessons.head.copy(id = "lesson-1", durationSeconds = 100),
-      seed.lessons.head.copy(id = "lesson-2", durationSeconds = 300),
+  private val course = CourseView(
+    course           = testCourse(1),
+    eyebrow          = "Test course",
+    shortDescription = "A course for progress tests.",
+    artwork          = ArtworkVariant.Orbit,
+    artLabel         = "TEST",
+    lessons          = Vector(
+      LessonView("lesson-1", "First lesson", 100, "First lesson description.", preview   = true),
+      LessonView("lesson-2", "Second lesson", 300, "Second lesson description.", preview = false),
     ),
   )
   private val courseId  = CourseId(course.course.id.value)
@@ -66,7 +73,7 @@ final class AppStateSuite extends FunSuite:
   }
 
   test("recent courses keep backend order without duplicates") {
-    val otherId = CourseId(Catalog.courses(1).course.id.value)
+    val otherId = CourseId(testCourse(2).id.value)
     val state   = view(
       AppStateData(playbackProgress =
         Vector(
@@ -100,6 +107,20 @@ final class AppStateSuite extends FunSuite:
     assertEquals(state.progressError, Some("progress unavailable"))
     assertEquals(state.favoritesError, Some("favorite unavailable"))
   }
+
+  private def testCourse(id: Long): catalog.Course = catalog.Course(
+    id              = catalog.CourseId(new UUID(0L, id)),
+    slug            = catalog.CourseSlug.unsafeApply(s"test-course-$id"),
+    title           = catalog.CourseTitle.unsafeApply(s"Test course $id"),
+    description     = catalog.CourseDescription.unsafeApply("A course for progress tests."),
+    level           = catalog.CourseLevel.BEGINNER,
+    kind            = catalog.CourseKind.COURSE,
+    topic           = catalog.Topic.unsafeApply("Tests"),
+    technologies    = Nil,
+    instructor      = catalog.Instructor(catalog.InstructorName.unsafeApply("Test instructor")),
+    durationSeconds = Some(catalog.DurationSeconds.unsafeApply(400)),
+    lessonCount     = Some(catalog.LessonCount.unsafeApply(2)),
+  )
 
   private def view(data: AppStateData): AppState = AppState.view(data, Vector(course))
 

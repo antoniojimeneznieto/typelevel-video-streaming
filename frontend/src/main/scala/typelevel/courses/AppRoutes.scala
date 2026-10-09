@@ -14,7 +14,7 @@ import typelevel.courses.state.AuthStatus
 
 object AppRoutes:
   def build(ctx: AppContext): IO[Routes[IO]] = for
-    landing  <- staticRoute(AppRoute.Landing)(LandingPage(ctx))
+    landing  <- staticRoute(AppRoute.Landing)(ctx.catalog.load *> LandingPage(ctx))
     login    <- authRoute(ctx, AppRoute.Login(), AuthPage.Mode.Login)
     register <- authRoute(ctx, AppRoute.Register, AuthPage.Mode.Register)
     browse   <- protectedStatic(ctx, AppRoute.Browse)(BrowsePage(ctx))
@@ -24,12 +24,16 @@ object AppRoutes:
     course   <- Routes.one[IO] { case CoursePath(slug) =>
                 slug
               } { slug =>
-                routeView(slug)(value => requireAuth(ctx)(CoursePage(ctx, value)))
+                routeView(slug)(value =>
+                  requireAuth(ctx)(ctx.catalog.load *> CoursePage(ctx, value)),
+                )
               }
     watch <- Routes.one[IO] { case WatchLessonPath(slug, lessonId) =>
                slug -> lessonId
              } { route =>
-               requireAuth(ctx)(WatchPage(ctx, route))
+               routeView(route.map(_._1).changes) { _ =>
+                 requireAuth(ctx)(ctx.catalog.load *> WatchPage(ctx, route))
+               }
              }
     watchDefault <- Routes.one[IO] { case WatchCoursePath(slug) =>
                       slug
@@ -66,7 +70,7 @@ object AppRoutes:
       ctx: AppContext,
       expected: AppRoute,
   )(page: => Resource[IO, HtmlElement[IO]]): IO[Routes[IO]] =
-    staticRoute(expected)(requireAuth(ctx)(page))
+    staticRoute(expected)(requireAuth(ctx)(ctx.catalog.load *> page))
 
   private def sameTemplate(actual: AppRoute, expected: AppRoute): Boolean =
     (actual, expected) match

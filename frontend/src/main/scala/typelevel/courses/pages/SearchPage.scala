@@ -3,15 +3,25 @@ package typelevel.courses.pages
 import calico.frp.given
 import calico.html.io.{*, given}
 import cats.effect.{IO, Resource}
+import cats.effect.std.Supervisor
 import cats.kernel.Eq
 import cats.syntax.all.*
 import fs2.concurrent.{Signal, SignallingRef}
 import fs2.dom.HtmlElement
+import fs2.Stream
 import org.http4s.{Query, Uri}
-import org.typelevel.video.streaming.backend.catalog.domain.{CourseKind, CourseLevel}
+import org.typelevel.video.streaming.backend.catalog.api.ListCoursesInput
+import org.typelevel.video.streaming.backend.catalog.domain.{
+  CourseKind,
+  CourseLevel,
+  PageLimit,
+  SearchQuery,
+  Topic,
+}
 import typelevel.courses.AppContext
 import typelevel.courses.components.{CourseCard, SiteHeader}
 import typelevel.courses.routing.AppRoute
+import typelevel.courses.state.RemoteStateStatus
 import typelevel.courses.ui.CatalogPresentation.*
 import typelevel.courses.ui.{CourseView, FormEvents, Icon, Icons}
 
@@ -27,27 +37,85 @@ object SearchPage:
 
   final private case class Draft(source: String, value: String)
 
+  final private case class SearchResult(
+      params: SearchParams,
+      items: Vector[CourseView] = Vector.empty,
+      status: RemoteStateStatus = RemoteStateStatus.Loading,
+  )
+
   private val levels  = "All levels" +: CourseLevel.values.map(_.label).toVector
   private val formats = "All formats" +: (CourseKind.values.map(_.label).toVector :+ "Video")
 
   def apply(ctx: AppContext): Resource[IO, HtmlElement[IO]] = for
+    supervisor  <- Supervisor[IO](await = false)
     initialUri  <- Resource.eval(ctx.navigator.location.get)
     initialQuery = params(initialUri).query
     draft       <- SignallingRef[IO].of(Draft(initialQuery, initialQuery)).toResource
-    result      <- render(ctx, draft)
-  yield result
+    result      <- SignallingRef[IO].of(SearchResult(params(initialUri))).toResource
+    retry       <- SignallingRef[IO].of(0).toResource
+    searchParams = ctx.navigator.location.map(params).changes(using Eq.fromUniversalEquals)
+    _           <- searchRequests(ctx, searchParams, retry, result).background
+    retrySearch  = supervisor.supervise {
+                    retry.update(_ + 1) *> ctx.catalog.signal.get.flatMap { catalog =>
+                      IO.whenA(catalog.status == RemoteStateStatus.Error)(ctx.catalog.refresh)
+                    }
+                  }.void
+    page <- render(ctx, draft, searchParams, result, retrySearch)
+  yield page
+
+  private def searchRequests(
+      ctx: AppContext,
+      current: Signal[IO, SearchParams],
+      retry: Signal[IO, Int],
+      result: SignallingRef[IO, SearchResult],
+  ): IO[Unit] =
+    (current, retry).tupled.discrete
+      .switchMap { case (params, _) =>
+        val fetch = IO
+          .fromEither(filters(params).leftMap(new IllegalArgumentException(_)))
+          .flatMap(ctx.catalog.queryCourses)
+          .map(
+            _.filter(view => params.format == "All formats" || view.formatLabel == params.format),
+          )
+        Stream.eval(
+          result.set(SearchResult(params)) *> fetch.attempt.flatMap {
+            case Right(items) => result.set(SearchResult(params, items, RemoteStateStatus.Ready))
+            case Left(_) => result.set(SearchResult(params, status = RemoteStateStatus.Error))
+          },
+        )
+      }
+      .compile
+      .drain
+
+  private def filters(params: SearchParams): Either[String, ListCoursesInput] =
+    (
+      Option.when(params.query.trim.nonEmpty)(params.query.trim).traverse(SearchQuery(_)),
+      Option.unless(params.topic == "All topics")(params.topic).traverse(Topic(_)),
+    ).mapN { (query, topic) =>
+      ListCoursesInput(
+        query = query,
+        topic = topic,
+        level = CourseLevel.values.find(_.label == params.level),
+        kind  = CourseKind.values.find(_.label == params.format),
+        limit = PageLimit.unsafeApply(100),
+      )
+    }
 
   private def render(
       ctx: AppContext,
       draft: SignallingRef[IO, Draft],
+      searchParams: Signal[IO, SearchParams],
+      result: Signal[IO, SearchResult],
+      retry: IO[Unit],
   ): Resource[IO, HtmlElement[IO]] =
-    val searchParams = ctx.navigator.location.map(params).changes(using Eq.fromUniversalEquals)
-    val draftValue   = (searchParams, draft).mapN { (current, value) =>
+    val draftValue = (searchParams, draft).mapN { (current, value) =>
       if value.source == current.query then value.value else current.query
     }
 
     def setQuery(uri: Uri, query: String): IO[Unit] =
-      draft.set(Draft(query, query)) *> ctx.navigator.go(updateParam(uri, "q", query, ""))
+      draft.set(Draft(query, query)) *>
+        (if params(uri).query == query then retry
+         else ctx.navigator.go(updateParam(uri, "q", query, "")))
 
     val submit = (ctx.navigator.location.get, draftValue.get).flatMapN { (uri, value) =>
       setQuery(uri, value.trim)
@@ -79,6 +147,7 @@ object SearchPage:
                 },
               ),
               placeholder := "Try “structured concurrency” or “http4s”…",
+              maxLength := 100,
               aria.label := "Search course library",
               autoFocus := true,
             )
@@ -97,7 +166,7 @@ object SearchPage:
           button(typ := "submit", cls := "button button--primary", "Search"),
         ).flatTap(FormEvents.preventNativeSubmit),
         filters(ctx, searchParams, clearAll),
-        results(ctx, searchParams, ctx.catalog.courses, clearAll),
+        results(ctx, searchParams, result, clearAll, retry),
       ),
     ).widen
 
@@ -148,10 +217,14 @@ object SearchPage:
   private def results(
       ctx: AppContext,
       current: Signal[IO, SearchParams],
-      courses: Signal[IO, Vector[CourseView]],
+      result: Signal[IO, SearchResult],
       clearAll: IO[Unit],
+      retry: IO[Unit],
   ): Resource[IO, HtmlElement[IO]] =
-    val matching = (current, courses).mapN(matchingCourses).changes(using Eq.fromUniversalEquals)
+    val currentResult = (current, result).mapN { (params, result) =>
+      if result.params == params then result else SearchResult(params)
+    }
+    val matching = currentResult.map(_.items).changes(using Eq.fromUniversalEquals)
 
     div(
       div(
@@ -162,31 +235,55 @@ object SearchPage:
             else "Explore everything"
           }),
           span(
-            matching.map(items =>
-              s"${items.size} ${if items.size == 1 then "result" else "results"}",
-            ),
+            aria.live := "polite",
+            currentResult.map { result =>
+              result.status match
+                case RemoteStateStatus.Loading | RemoteStateStatus.Idle => "Searching…"
+                case RemoteStateStatus.Error => "Catalog unavailable"
+                case RemoteStateStatus.Ready =>
+                  s"${result.items.size} ${if result.items.size == 1 then "result" else "results"}"
+            },
           ),
         ),
       ),
-      matching.map(_.nonEmpty).changes.map {
-        case true =>
-          CourseCard.grid(ctx, matching, "course-grid course-grid--three search-results-grid")
-        case false =>
-          div(
-            cls := "empty-state",
-            span(Icons(Icon.Search)),
-            h2("No exact match—yet."),
-            p(
-              "Try a broader topic or clear a filter. “effects”, “Scala”, and “testing” are good places to start.",
-            ),
-            button(
-              cls := "button button--primary",
-              typ := "button",
-              onClick(clearAll),
-              "Explore all courses",
-            ),
-          ).widen
-      },
+      currentResult
+        .map(result => result.status -> result.items.nonEmpty)
+        .changes(using Eq.fromUniversalEquals)
+        .map {
+          case (RemoteStateStatus.Loading | RemoteStateStatus.Idle, _) =>
+            div(
+              cls := "catalog-state",
+              role := List("status"),
+              aria.busy := true,
+              span(cls := "session-check__spinner", aria.hidden := true),
+              "Searching the catalog…",
+            ).widen
+          case (RemoteStateStatus.Error, _) =>
+            div(
+              cls := "catalog-state",
+              role := List("alert"),
+              h3("We could not search the catalog."),
+              p("Please try again."),
+              button(typ := "button", cls := "button button--primary", onClick(retry), "Try again"),
+            ).widen
+          case (RemoteStateStatus.Ready, true) =>
+            CourseCard.grid(ctx, matching, "course-grid course-grid--three search-results-grid")
+          case (RemoteStateStatus.Ready, false) =>
+            div(
+              cls := "empty-state",
+              span(Icons(Icon.Search)),
+              h2("No exact match—yet."),
+              p(
+                "Try a broader topic or clear a filter. “effects”, “Scala”, and “testing” are good places to start.",
+              ),
+              button(
+                cls := "button button--primary",
+                typ := "button",
+                onClick(clearAll),
+                "Explore all courses",
+              ),
+            ).widen
+        },
       (current, matching)
         .mapN((params, items) => params.query.isEmpty && items.nonEmpty)
         .changes
@@ -211,27 +308,6 @@ object SearchPage:
           }
         },
     ).widen
-
-  private def matchingCourses(
-      current: SearchParams,
-      courses: Vector[CourseView],
-  ): Vector[CourseView] =
-    val normalized = current.query.trim.toLowerCase
-    courses.filter { view =>
-      val course   = view.course
-      val haystack = (Vector(
-        course.title.value,
-        view.shortDescription,
-        course.description.value,
-        course.topic.value,
-        course.instructor.name.value,
-      ) ++ course.technologies.map(_.value)).mkString(" ").toLowerCase
-      val matchesQuery  = normalized.isEmpty || haystack.contains(normalized)
-      val matchesTopic  = current.topic == "All topics" || course.topic.value == current.topic
-      val matchesLevel  = current.level == "All levels" || course.level.label == current.level
-      val matchesFormat = current.format == "All formats" || view.formatLabel == current.format
-      matchesQuery && matchesTopic && matchesLevel && matchesFormat
-    }
 
   private def params(uri: Uri): SearchParams = SearchParams(
     query  = uri.query.params.getOrElse("q", ""),
