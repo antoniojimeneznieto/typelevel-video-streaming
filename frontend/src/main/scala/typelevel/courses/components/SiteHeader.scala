@@ -177,7 +177,9 @@ object SiteHeader:
   ): Resource[IO, HtmlElement[IO]] =
     for
       query <- SignallingRef[IO].of("").toResource
-      search = (query, ctx.catalog.courses).mapN { (current, courses) =>
+      search = (query, ctx.catalog.signal).mapN { (current, catalog) =>
+                 val courses = if catalog.status == RemoteStateStatus.Ready then catalog.courses
+                 else Vector.empty
                  current -> quickCourses(current, courses)
                }
       searchInput <- input.withSelf { self =>
@@ -185,6 +187,7 @@ object SiteHeader:
                          value <-- query,
                          onInput(_ => self.value.get.flatMap(query.set)),
                          placeholder := "Search courses, topics, or technology…",
+                         maxLength := 100,
                          aria.label := "Search",
                        )
                      }

@@ -8,7 +8,14 @@ import fs2.concurrent.Signal
 import fs2.dom.HtmlElement
 import org.scalajs.dom
 import typelevel.courses.AppContext
-import typelevel.courses.components.{Artwork, CourseCard, FavoriteButton, SiteHeader}
+import typelevel.courses.components.{
+  Artwork,
+  CatalogSection,
+  CourseCard,
+  FavoriteButton,
+  SiteHeader,
+}
+import typelevel.courses.data.Catalog
 import typelevel.courses.routing.AppRoute
 import typelevel.courses.state.AppState
 import typelevel.courses.ui.CatalogPresentation.*
@@ -17,16 +24,19 @@ import typelevel.courses.ui.{CourseView, Icon, Icons}
 object CoursePage:
   def apply(ctx: AppContext, slug: String): Resource[IO, HtmlElement[IO]] =
     div(
-      cls := "route-view",
-      ctx.catalog.course(slug).map {
-        case None => NotFoundPage(ctx, embedded = true)
-        case Some(course) =>
+      cls := "app-page detail-page",
+      SiteHeader.AppHeader(ctx),
+      if slug == Catalog.featured.course.slug.value then content(ctx, Catalog.featured)
+      else
+        CatalogSection(ctx, "video") {
           div(
-            cls := "app-page detail-page",
-            SiteHeader.AppHeader(ctx),
-            content(ctx, course),
+            styleAttr := "display: contents",
+            ctx.catalog.course(slug).map {
+              case None => NotFoundPage(ctx, embedded = true)
+              case Some(course) => content(ctx, course)
+            },
           ).widen
-      },
+        },
     ).widen
 
   private def content(
@@ -181,10 +191,15 @@ object CoursePage:
         ),
         sidebar(course),
       ),
-      related
-        .map(_.nonEmpty)
-        .changes
-        .map(nonEmpty => Option.when(nonEmpty)(relatedSection(ctx, related))),
+      CatalogSection(ctx, "related videos") {
+        div(
+          styleAttr := "display: contents",
+          related
+            .map(_.nonEmpty)
+            .changes
+            .map(nonEmpty => Option.when(nonEmpty)(relatedSection(ctx, related))),
+        ).widen
+      },
     ).widen
 
   private def outcomes(course: CourseView): Resource[IO, HtmlElement[IO]] =

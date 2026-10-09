@@ -9,7 +9,7 @@ import fs2.concurrent.Signal
 import fs2.dom.HtmlElement
 import org.http4s.Uri
 import typelevel.courses.AppContext
-import typelevel.courses.components.{CourseCard, SiteHeader}
+import typelevel.courses.components.{CatalogSection, CourseCard, SiteHeader}
 import typelevel.courses.routing.AppRoute
 import typelevel.courses.state.{AppState, RemoteStateStatus}
 import typelevel.courses.ui.{CourseView, Icon, Icons}
@@ -91,6 +91,12 @@ object MyLearningPage:
   ): Resource[IO, HtmlElement[IO]] =
     val visible = model.map(_.visible).changes(using Eq.fromUniversalEquals)
 
+    def count(tab: String): Signal[IO, String] =
+      (ctx.catalog.signal, model).mapN { (catalog, learning) =>
+        if catalog.status == RemoteStateStatus.Ready then learning.courses(tab).size.toString
+        else "—"
+      }.changes
+
     mainTag(
       cls := "app-shell learning-main",
       headerTag(
@@ -104,7 +110,7 @@ object MyLearningPage:
         tabs.map { case (value, label, icon) =>
           div(
             span(Icons(icon)),
-            strong(model.map(_.courses(value).size.toString).changes),
+            strong(count(value)),
             small(label),
           )
         },
@@ -115,49 +121,55 @@ object MyLearningPage:
         aria.label := "My learning categories",
         tabs.map { case (value, label, _) =>
           val selected = model.map(_.tab == value).changes
-          val count    = model.map(_.courses(value).size.toString).changes
           button(
             role := List("tab"),
             aria.selected <-- selected,
             cls <-- selected.map(active => Option.when(active)("is-active").toList),
             onClick(ctx.navigator.go(tabUri(value))),
             label,
-            span(count),
+            span(count(value)),
           )
         },
       ),
-      model.map(_.mode).changes(using Eq.fromUniversalEquals).map {
-        case ContentMode.Loading =>
-          div(
-            cls := "empty-state learning-empty",
-            aria.live := "polite",
-            aria.busy := true,
-            span(i(cls := "session-check__spinner", aria.hidden := true)),
-            h2("Syncing your learning…"),
-            p("Loading your latest progress and saved videos from the playback service."),
-          ).widen
-        case ContentMode.Error =>
-          div(
-            cls := "empty-state learning-empty",
-            role := List("alert"),
-            span(Icons(Icon.RefreshCw)),
-            h2("Your learning could not be synced."),
-            p(model.map(_.error.getOrElse("The playback service could not be reached.")).changes),
-            button(
-              typ := "button",
-              cls := "button button--primary",
-              onClick(ctx.store.refreshPlaybackState),
-              "Try again",
-            ),
-          ).widen
-        case ContentMode.Courses(showProgress) =>
-          CourseCard.grid(
-            ctx,
-            visible,
-            "course-grid course-grid--three learning-grid",
-            showProgress = showProgress,
-          )
-        case ContentMode.Empty(tab) => emptyState(ctx, tab)
+      CatalogSection(ctx, "your learning") {
+        div(
+          styleAttr := "display: contents",
+          model.map(_.mode).changes(using Eq.fromUniversalEquals).map {
+            case ContentMode.Loading =>
+              div(
+                cls := "empty-state learning-empty",
+                aria.live := "polite",
+                aria.busy := true,
+                span(i(cls := "session-check__spinner", aria.hidden := true)),
+                h2("Syncing your learning…"),
+                p("Loading your latest progress and saved videos from the playback service."),
+              ).widen
+            case ContentMode.Error =>
+              div(
+                cls := "empty-state learning-empty",
+                role := List("alert"),
+                span(Icons(Icon.RefreshCw)),
+                h2("Your learning could not be synced."),
+                p(
+                  model.map(_.error.getOrElse("The playback service could not be reached.")).changes,
+                ),
+                button(
+                  typ := "button",
+                  cls := "button button--primary",
+                  onClick(ctx.store.refreshPlaybackState),
+                  "Try again",
+                ),
+              ).widen
+            case ContentMode.Courses(showProgress) =>
+              CourseCard.grid(
+                ctx,
+                visible,
+                "course-grid course-grid--three learning-grid",
+                showProgress = showProgress,
+              )
+            case ContentMode.Empty(tab) => emptyState(ctx, tab)
+          },
+        ).widen
       },
     ).widen
 

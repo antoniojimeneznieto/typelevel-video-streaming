@@ -5,12 +5,14 @@ import scala.concurrent.duration.*
 import calico.IOWebApp
 import calico.router.Router
 import cats.effect.{IO, Ref, Resource}
+import cats.syntax.all.*
 import fs2.dom.HtmlElement
+import fs2.Stream
 import org.http4s.dom.FetchClientBuilder
 import org.scalajs.dom
 import typelevel.courses.api.{ApiConfig, CatalogApi, IdentityApi, PlaybackApi}
 import typelevel.courses.routing.{AppRoute, Navigator}
-import typelevel.courses.state.{AppStore, CatalogStore}
+import typelevel.courses.state.{AppStore, CatalogStore, RemoteStateStatus}
 
 object Main extends IOWebApp:
   private val FragmentLookupFrames = 12
@@ -34,17 +36,25 @@ object Main extends IOWebApp:
     app          <- router.dispatch(routes)
     previousPath <- Ref.of[IO, String]("").toResource
     _            <- navigator.location.discrete
-           .evalMap { uri =>
+           .switchMap { uri =>
              val path = AppRoute.normalizedPath(uri)
-             previousPath.getAndSet(path).flatMap { previous =>
+             Stream.eval(previousPath.getAndSet(path)).flatMap { previous =>
                uri.fragment match
                  case Some(fragment) =>
-                   scrollToFragment(fragment).flatMap { found =>
-                     if found || path == previous then IO.unit
-                     else scrollToTop
+                   Stream.eval(scrollToFragment(fragment)).flatMap {
+                     case true => Stream.empty
+                     case false =>
+                       Stream.eval(IO.whenA(path != previous)(scrollToTop)) ++
+                         catalog.signal.discrete
+                           .map(_.status == RemoteStateStatus.Ready)
+                           .changes
+                           .filter(identity)
+                           .evalMap(_ => scrollToFragment(fragment))
+                           .takeThrough(found => !found)
+                           .void
                    }
-                 case None if path != previous => scrollToTop
-                 case None => IO.unit
+                 case None if path != previous => Stream.eval(scrollToTop)
+                 case None => Stream.empty
              }
            }
            .compile
