@@ -14,7 +14,7 @@ object CatalogServiceImplSuite extends SimpleIOSuite with CatalogFixture:
   ///////////////////////////////////////////////////////////////////////////////
 
   private def serviceWithDatabase: Resource[IO, CatalogService[IO]] =
-    sessionPool.map(sessions => new CatalogServiceImpl(new CatalogRepositoryImpl(sessions)))
+    isolatedSessions.map(sessions => new CatalogServiceImpl(new CatalogRepositoryImpl(sessions)))
 
   ///////////////////////////////////////////////////////////////////////////////
   // tests

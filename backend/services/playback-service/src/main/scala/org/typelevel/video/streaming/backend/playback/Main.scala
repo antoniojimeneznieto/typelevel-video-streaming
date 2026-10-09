@@ -41,7 +41,10 @@ object Main extends IOApp.Simple:
       AppConfig.load[IO].flatMap { config =>
         val resources = for
           publicKey     <- Resource.eval(RsaKeyLoader.publicKey(config.jwt.publicKeyPath))
-          verifier       = AccessTokenVerifier.userId(publicKey, "identity", "course-platform")
+          authTelemetry <- Resource.eval(PlaybackAuthTelemetry.create)
+          verifier       = AccessTokenVerifier
+                       .userId(publicKey, "identity", "course-platform")
+                       .withTelemetry(authTelemetry)
           context       <- Resource.eval(IOLocalRequestContext.create[UUID])
           storage       <- S3VideoStorageImpl.resource(config.s3)
           sessions      <- Postgres.sessionPool[IO](config.postgres)
@@ -60,7 +63,8 @@ object Main extends IOApp.Simple:
 
           val routeClassifier = SmithyRouteClassifier(PlaybackService)
 
-          (HttpServer.run(config.server, app, routeClassifier), worker.run).parTupled.void
+          if config.workshopReadMode then HttpServer.run(config.server, app, routeClassifier)
+          else (HttpServer.run(config.server, app, routeClassifier), worker.run).parTupled.void
         }
       }
     }

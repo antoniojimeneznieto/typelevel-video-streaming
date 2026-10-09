@@ -7,7 +7,7 @@ import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Base64, UUID}
 
-import cats.effect.{IO, Resource}
+import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
 import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.{JWT, JWTCreator}
@@ -65,6 +65,24 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
     }
   }
 
+  test("the migration decoder accepts only raw and user-prefixed UUID subjects") {
+    keys.flatMap { pair =>
+      val now      = Instant.now()
+      val subjects =
+        List(userId.toString, s"user:$userId", "user:bad", s"admin:$userId", s"user:user:$userId")
+      val tokens = subjects.map(subject => claims(now).withSubject(subject).sign(algorithm(pair)))
+      val compatible = AccessTokenVerifier.userIdCompatible(publicKey(pair), issuer, audience)
+      val legacy     = AccessTokenVerifier.userId(publicKey(pair), issuer, audience)
+      for
+        migrated <- tokens.traverse(compatible.verify)
+        old      <- tokens.traverse(legacy.verify)
+      yield expect.all(
+        migrated == List(Some(userId), Some(userId), None, None, None),
+        old == List(Some(userId), None, None, None, None),
+      )
+    }
+  }
+
   test("invalid claims and missing required claims are rejected") {
     keys.flatMap { pair =>
       val now           = Instant.now()
@@ -94,9 +112,11 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
         .withJWTId(jwtId)
         .sign(algorithm(pair))
 
-      tokens.traverse(AccessTokenVerifier.userId(publicKey(pair), issuer, audience).verify).map {
-        results =>
-          expect(results.forall(_.isEmpty))
+      List(
+        AccessTokenVerifier.userId(publicKey(pair), issuer, audience),
+        AccessTokenVerifier.userIdCompatible(publicKey(pair), issuer, audience),
+      ).traverse(verifier => tokens.traverse(verifier.verify)).map { results =>
+        expect(results.forall(_.forall(_.isEmpty)))
       }
     }
   }
@@ -111,9 +131,11 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
         claims(now).sign(Algorithm.none()),
       )
 
-      tokens.traverse(AccessTokenVerifier.userId(publicKey(trusted), issuer, audience).verify).map {
-        results =>
-          expect(results.forall(_.isEmpty))
+      List(
+        AccessTokenVerifier.userId(publicKey(trusted), issuer, audience),
+        AccessTokenVerifier.userIdCompatible(publicKey(trusted), issuer, audience),
+      ).traverse(verifier => tokens.traverse(verifier.verify)).map { results =>
+        expect(results.forall(_.forall(_.isEmpty)))
       }
     }
   }
@@ -210,4 +232,73 @@ object AccessTokenVerifierSuite extends SimpleIOSuite:
         .attempt
         .map(result => expect(result == Left(failure)))
     }
+  }
+
+  test("subject telemetry observes bounded shapes and outcomes without changing verification") {
+    keys.flatMap { pair =>
+      for
+        observed <-
+          Ref.of[IO, Vector[(Option[String], AccessTokenVerifierTelemetry.SubjectShape, Boolean)]](
+            Vector.empty,
+          )
+        telemetry = new AccessTokenVerifierTelemetry:
+                      override def decodeSubject(
+                          subject: Option[String],
+                          shape: AccessTokenVerifierTelemetry.SubjectShape,
+                          decode: IO[Option[UUID]],
+                      ): IO[Option[UUID]] =
+                        decode.flatTap(result =>
+                          observed.update(_ :+ ((subject, shape, result.isDefined))),
+                        )
+        legacy = AccessTokenVerifier
+                   .userId(publicKey(pair), issuer, audience)
+                   .withTelemetry(telemetry)
+        modern          = claims(Instant.now()).withSubject(s"user:$userId").sign(algorithm(pair))
+        rejected       <- legacy.verify(modern)
+        legacyOutcomes <- observed.getAndSet(Vector.empty)
+        bare           <- legacy.verify(claims(Instant.now()).sign(algorithm(pair)))
+        bareOutcomes   <- observed.getAndSet(Vector.empty)
+        malformed      <- legacy.verify("not-a-jwt")
+        malformedOutcomes <- observed.getAndSet(Vector.empty)
+        compatible         = AccessTokenVerifier
+                       .userIdCompatible(publicKey(pair), issuer, audience)
+                       .withTelemetry(telemetry)
+        accepted         <- compatible.verify(modern)
+        repairedOutcomes <- observed.get
+      yield expect.all(
+        rejected.isEmpty,
+        legacyOutcomes == Vector(
+          (Some(s"user:$userId"), AccessTokenVerifierTelemetry.SubjectShape.NamespacedUuid, false),
+        ),
+        bare.contains(userId),
+        bareOutcomes == Vector(
+          (Some(userId.toString), AccessTokenVerifierTelemetry.SubjectShape.BareUuid, true),
+        ),
+        malformed.isEmpty,
+        malformedOutcomes.isEmpty,
+        accepted.contains(userId),
+        repairedOutcomes == Vector(
+          (Some(s"user:$userId"), AccessTokenVerifierTelemetry.SubjectShape.NamespacedUuid, true),
+        ),
+      )
+    }
+  }
+
+  test("subject shapes are bounded and do not contain subject values") {
+    import AccessTokenVerifierTelemetry.SubjectShape
+    IO.pure(
+      expect.all(
+        SubjectShape.from(Some(userId.toString)) == SubjectShape.BareUuid,
+        SubjectShape.from(Some(s"user:$userId")) == SubjectShape.NamespacedUuid,
+        SubjectShape.from(Some(s"admin:$userId")) == SubjectShape.NamespacedUuid,
+        SubjectShape.from(Some("user:invalid")) == SubjectShape.Other,
+        SubjectShape.from(None) == SubjectShape.Other,
+        Set(
+          SubjectShape.BareUuid.label,
+          SubjectShape.NamespacedUuid.label,
+          SubjectShape.Other.label,
+        ) ==
+          Set("bare_uuid", "namespaced_uuid", "other"),
+      ),
+    )
   }

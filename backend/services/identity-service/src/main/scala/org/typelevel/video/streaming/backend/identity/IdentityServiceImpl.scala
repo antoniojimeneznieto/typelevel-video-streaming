@@ -55,7 +55,7 @@ final class IdentityServiceImpl(
       _               <- IO.raiseUnless(passwordMatches && user.status == UserStatus.ACTIVE)(
              invalidCredentials,
            )
-      issued <- accessTokenIssuer.issue(user.id, user.role)
+      issued <- accessTokenIssuer.issue(user.id, user.role, user.email)
     yield LoginResponse(
       accessToken = issued.accessToken,
       tokenType   = TokenType.BEARER,

@@ -97,7 +97,6 @@ services:
       IDENTITY_BASE_URL: http://identity-service:8081
       CATALOG_BASE_URL: http://toxiproxy:8666
       PLAYBACK_BASE_URL: http://playback-service:8083
-      UPSTREAM_CONNECTION_TIMEOUT: 2 seconds
       UPSTREAM_REQUEST_TIMEOUT: 10 seconds
     ports:
       - "127.0.0.1:${GATEWAY_PORT:-8085}:8084"
@@ -122,6 +121,7 @@ services:
 
   identity-service:
     image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/identity-service:${IMAGE_TAG:-main}
+    cpus: 4.0
     pull_policy: missing
     # Match the owner of the private signing key, including Linux/Codespaces bind mounts.
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
@@ -129,6 +129,7 @@ services:
       HOST: 0.0.0.0
       PORT: "8081"
       OTEL_SERVICE_NAME: identity-service
+      JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=2
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_LOGS_EXPORTER: otlp
@@ -146,6 +147,7 @@ services:
       JWT_PRIVATE_KEY_PATH: /run/secrets/identity-private-key.pem
       JWT_PUBLIC_KEY_PATH: /run/secrets/identity-public-key.pem
       JWT_ACCESS_TOKEN_EXPIRES_IN_SECONDS: "7200"
+      WORKSHOP_SUBJECT_MIGRATION: "true"
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081"]
       start_period: 5s
@@ -182,7 +184,7 @@ services:
       POSTGRES_USER: catalog
       POSTGRES_DB: catalog
       POSTGRES_PASSWORD: ${CATALOG_POSTGRES_PASSWORD:-catalog-local-secret}
-      POSTGRES_MAX_CONNECTIONS: "10"
+      POSTGRES_MAX_CONNECTIONS: ${CATALOG_POSTGRES_MAX_CONNECTIONS:-10}
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8082"]
       start_period: 5s
@@ -222,6 +224,7 @@ services:
       KAFKA_LESSON_PUBLISHED_TOPIC: ${KAFKA_LESSON_PUBLISHED_TOPIC:-catalog.lesson-published.v1}
       KAFKA_USER_CREATED_TOPIC: ${KAFKA_USER_CREATED_TOPIC:-identity.user-created.v1}
       JWT_PUBLIC_KEY_PATH: /run/secrets/identity-public-key.pem
+      WORKSHOP_READ_MODE: ${PLAYBACK_WORKSHOP_READ_MODE:-false}
       S3_ENDPOINT: ${S3_ENDPOINT:-http://seaweedfs:8333}
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:${FRONTEND_PORT:-8000}}
       S3_BUCKET: ${S3_BUCKET:-videos}

@@ -1,0 +1,90 @@
+{
+  "uid": "playback-investigation",
+  "title": "Playback Investigation",
+  "tags": ["workshop", "playback", "auth"],
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    { "title": "Workshop Overview", "url": "/d/workshop-overview/workshop-overview", "targetBlank": false, "keepTime": true }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Playback favorites responses (60-second window)",
+      "description": "Playback server requests only, avoiding double counting the Gateway hop. Success and rejection rates are stacked.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 0, "w": 16, "h": 9 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "fillOpacity": 18, "stacking": { "mode": "normal", "group": "A" } }
+        },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"playback-service\",classifier=\"/favorites\",http_phase=\"body\",http_response_status_code=\"200\"}[1m]))", "legendFormat": "200 success" },
+        { "refId": "B", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"playback-service\",classifier=\"/favorites\",http_phase=\"body\",http_response_status_code=\"401\"}[1m]))", "legendFormat": "401 rejected" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Playback 401 percentage (60-second window)",
+      "description": "A repeatable minority 401 share is the incident symptom. A zero requires observed favorites traffic; absence of traffic leaves the panel empty.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 9 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "100 * (sum(rate(http_server_request_duration_seconds_count{service_name=\"playback-service\",classifier=\"/favorites\",http_phase=\"body\",http_response_status_code=\"401\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"playback-service\",classifier=\"/favorites\",http_phase=\"body\"}[1m]))", "legendFormat": "401 share" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Playback server duration p95 with exemplars (60-second window)",
+      "description": "The server headers histogram carries trace exemplars. Click one to open a representative distributed trace; use the two recent-trace tables below to select a guaranteed 200 or 401 outcome.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 9, "w": 24, "h": 9 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"playback-service\",classifier=\"/favorites\",http_phase=\"headers\"}[1m])))", "legendFormat": "server p95", "exemplar": true }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Recent rejected Playback traces",
+      "description": "Tempo searches Playback server spans with HTTP 401. Open a row to inspect the Gateway parent and see whether repository/SQL spans exist.",
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "gridPos": { "x": 0, "y": 18, "w": 12, "h": 10 },
+      "options": { "showHeader": true },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" }, "queryType": "traceql", "query": "{ resource.service.name = \"playback-service\" && name = \"GET /favorites\" && span.http.response.status_code = 401 } with (most_recent=true)", "tableType": "traces", "limit": 10 }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Recent successful Playback traces",
+      "description": "Tempo searches Playback server spans with HTTP 200. Use one as a control from the same period.",
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "gridPos": { "x": 12, "y": 18, "w": 12, "h": 10 },
+      "options": { "showHeader": true },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" }, "queryType": "traceql", "query": "{ resource.service.name = \"playback-service\" && name = \"GET /favorites\" && span.http.response.status_code = 200 } with (most_recent=true)", "tableType": "traces", "limit": 10 }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "text",
+      "title": "Trace comparison",
+      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 5 },
+      "options": { "mode": "markdown", "content": "Compare a fresh **401** trace with a **200** control. Before adding diagnostics, the HTTP spans show that Playback rejects the request before repository work; they do not name the validation stage. After adding the required subject-decoding telemetry, repeat the comparison on *new* traces before editing the decoder. Identity logins happen during actor setup and separate expiry-driven maintenance. Renewal is excluded from measured Playback latency; renewal failures stop the workload." }
+    }
+  ]
+}

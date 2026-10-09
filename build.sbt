@@ -73,7 +73,7 @@ def serviceSettings(serviceName: String, mainClassName: String, exposedPort: Int
 
 lazy val root = project
   .in(file("."))
-  .aggregate(backend, frontend, apiContractsJS, trafficGenerator)
+  .aggregate(backend, frontend, apiContractsJS, trafficGenerator, labCli)
   .settings(noPublishSettings)
   .settings(
     name := "typelevel-video-streaming",
@@ -198,7 +198,7 @@ lazy val trafficGenerator = project
   .settings(noPublishSettings)
   .settings(
     name := "traffic-generator",
-    Compile / mainClass := Some("org.typelevel.video.streaming.traffic.Main"),
+    Compile / mainClass := Some("org.typelevel.video.streaming.traffic.TrafficGeneratorMain"),
     Compile / run / fork := true,
     Compile / run / javaOptions += "-Dcats.effect.trackFiberContext=true",
     Universal / javaOptions += "-Dcats.effect.trackFiberContext=true",
@@ -218,11 +218,30 @@ lazy val trafficGenerator = project
       "org.http4s" %% "http4s-ember-client" % Http4sStableVersion,
       "com.disneystreaming.smithy4s" %% "smithy4s-http4s" % Smithy4sVersion,
       "io.circe" %% "circe-core" % "0.14.16",
+      "io.circe" %% "circe-parser" % "0.14.16",
       "org.typelevel" %% "otel4s-oteljava" % Otel4sVersion,
       "org.typelevel" %% "otel4s-oteljava-context-storage" % Otel4sVersion,
       "io.opentelemetry" % "opentelemetry-exporter-otlp" % OpenTelemetryVersion % Runtime,
       "org.slf4j" % "slf4j-nop" % "2.0.17",
       "org.typelevel" %% "cats-effect-testkit" % CatsEffectVersion % Test,
+      "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
+  )
+
+lazy val labCli = project
+  .in(file("tools/lab-cli"))
+  .enablePlugins(JavaAppPackaging)
+  .settings(noPublishSettings)
+  .settings(
+    name := "lab-cli",
+    Compile / mainClass := Some("org.typelevel.video.streaming.lab.LabCli"),
+    libraryDependencies ++= Seq(
+      "com.monovore" %% "decline-effect" % DeclineVersion,
+      "org.http4s" %% "http4s-ember-client" % Http4sStableVersion,
+      "co.fs2" %% "fs2-io" % Fs2Version,
+      "io.circe" %% "circe-core" % "0.14.16",
+      "io.circe" %% "circe-parser" % "0.14.16",
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
     testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
@@ -293,8 +312,11 @@ lazy val identityService = project
       "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
       "com.password4j" % "password4j" % Password4jVersion,
+      "org.typelevel" %% "otel4s-oteljava-metrics-testkit" % Otel4sVersion % Test,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
+    Test / fork := true,
+    Test / javaOptions += "-Dcats.effect.trackFiberContext=true",
     testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
 
@@ -317,8 +339,11 @@ lazy val catalogService = project
       "com.comcast" %% "ip4s-core" % Ip4sVersion,
       "org.http4s" %% "http4s-dsl" % Http4sStableVersion,
       "org.tpolecat" %% "skunk-core" % SkunkVersion,
+      "org.typelevel" %% "otel4s-oteljava-metrics-testkit" % Otel4sVersion % Test,
       "org.typelevel" %% "weaver-cats" % WeaverVersion % Test,
     ),
+    Test / fork := true,
+    Test / javaOptions += "-Dcats.effect.trackFiberContext=true",
     testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
   )
 

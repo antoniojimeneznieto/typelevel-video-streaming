@@ -1,0 +1,10 @@
+--- a/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/PlaybackAuthTelemetry.scala
++++ b/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/PlaybackAuthTelemetry.scala
+@@ -29,6 +29,7 @@
+                  Attribute("auth.subject.shape", shape.label),
+                ),
+              )
++        _ <- logger.info(s"Playback subject decoding $outcome: ${subject.getOrElse("<missing>")}")
+       yield result
+     }
+ 

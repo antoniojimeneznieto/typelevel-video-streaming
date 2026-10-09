@@ -18,11 +18,17 @@ final class CatalogRepositoryImpl(
 ) extends CatalogRepository:
 
   override def listCourses(filter: CourseFilter): IO[CoursePage] =
-    sessions.use { session =>
-      for
-        rows  <- session.execute(selectCourses)(filter)
-        total <- session.unique(countCourses)(filter)
-      yield CoursePage(toCourses(rows), total, filter.limit, filter.offset)
+    sessions.allocated.flatMap { case (session, release) =>
+      IO.uncancelable { poll =>
+        poll {
+          for
+            rows  <- session.execute(selectCourses)(filter)
+            total <- session.unique(countCourses)(filter)
+          yield (rows, total)
+        }.onCancel(release)
+          .handleErrorWith(error => release *> IO.raiseError(error))
+          .flatMap((rows, total) => coursePage(rows, total, filter, release))
+      }
     }
 
   override def listLearningPaths(filter: LearningPathFilter): IO[LearningPathPage] =
@@ -32,6 +38,16 @@ final class CatalogRepositoryImpl(
         total <- session.unique(countLearningPaths)(filter)
       yield LearningPathPage(toLearningPaths(rows), total, filter.limit, filter.offset)
     }
+
+  private def coursePage(
+      rows: List[CourseRow],
+      total: TotalCount,
+      filter: CourseFilter,
+      release: IO[Unit],
+  ): IO[CoursePage] =
+    val page = CoursePage(toCourses(rows), total, filter.limit, filter.offset)
+    if rows.isEmpty then IO.pure(page)
+    else release.as(page)
 
 object CatalogRepositoryImpl:
 

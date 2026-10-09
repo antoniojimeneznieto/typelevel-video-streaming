@@ -1,0 +1,11 @@
+--- a/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/Main.scala
++++ b/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/Main.scala
+@@ -43,7 +43,7 @@
+           publicKey     <- Resource.eval(RsaKeyLoader.publicKey(config.jwt.publicKeyPath))
+           authTelemetry <- Resource.eval(PlaybackAuthTelemetry.create)
+           verifier       = AccessTokenVerifier
+-                       .userId(publicKey, "identity", "course-platform")
++                       .userIdCompatible(publicKey, "identity", "course-platform")
+                        .withTelemetry(authTelemetry)
+           context       <- Resource.eval(IOLocalRequestContext.create[UUID])
+           storage       <- S3VideoStorageImpl.resource(config.s3)

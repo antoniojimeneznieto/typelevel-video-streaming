@@ -1,0 +1,31 @@
+--- a/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/PlaybackAuthTelemetry.scala
++++ b/backend/services/playback-service/src/main/scala/org/typelevel/video/streaming/backend/playback/PlaybackAuthTelemetry.scala
+@@ -4,6 +4,7 @@
+ 
+ import cats.effect.IO
+ import org.typelevel.log4cats.LoggerFactory
++import org.typelevel.otel4s.Attribute
+ import org.typelevel.otel4s.trace.{Tracer, TracerProvider}
+ import org.typelevel.video.streaming.backend.runtime.auth.AccessTokenVerifierTelemetry
+ import org.typelevel.video.streaming.backend.runtime.auth.AccessTokenVerifierTelemetry.SubjectShape
+@@ -17,7 +18,19 @@
+       subject: Option[String],
+       shape: SubjectShape,
+       decode: IO[Option[UUID]],
+-  ): IO[Option[UUID]] = Tracer[IO].span("auth.subject.decode").surround(decode)
++  ): IO[Option[UUID]] =
++    Tracer[IO].span("auth.subject.decode").surround {
++      for
++        result <- decode
++        outcome = if result.isDefined then "accepted" else "rejected"
++        _ <- Tracer[IO].withCurrentSpanOrNoop(
++               _.addAttributes(
++                 Attribute("auth.result", outcome),
++                 Attribute("auth.subject.shape", shape.label),
++               ),
++             )
++      yield result
++    }
+ 
+ object PlaybackAuthTelemetry:
+   def create(using TracerProvider[IO], LoggerFactory[IO]): IO[PlaybackAuthTelemetry] =

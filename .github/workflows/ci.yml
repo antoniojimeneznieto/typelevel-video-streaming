@@ -45,6 +45,8 @@ jobs:
         run: sbt --batch ';scalafmtCheckAll;scalafmtSbtCheck'
       - name: Run all tests
         run: sbt --batch test
+      - name: Package lab CLI
+        run: sbt --batch 'labCli/Universal/packageBin'
       - name: Build frontend
         working-directory: frontend
         run: |

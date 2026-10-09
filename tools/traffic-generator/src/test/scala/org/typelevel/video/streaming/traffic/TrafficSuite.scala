@@ -8,7 +8,7 @@ import cats.syntax.all.*
 import weaver.SimpleIOSuite
 
 object TrafficSuite extends SimpleIOSuite:
-  private val ok = RequestResult(Some(200), "success")
+  private val ok = RequestResult(Some(200), Outcome.Success)
 
   private def run(config: Config, request: IO[RequestResult]): IO[Stats] =
     TestControl.executeEmbed(for
@@ -101,6 +101,29 @@ object TrafficSuite extends SimpleIOSuite:
         count == 5,
         s.inFlight == 0L,
         s.valid,
+      ),
+    )
+  }
+
+  test("timeouts retain the operation selected for each arrival") {
+    TestControl.executeEmbed(
+      for
+        stats <- Ref.of[IO, Stats](Stats())
+        _     <- Traffic.run(
+               Config(rate = 2, duration = Some(1.second), requestTimeout = 100.millis),
+               Workload(slot =>
+                 PreparedRequest(
+                   if slot == 0 then Operation.LearningPaths else Operation.Courses,
+                   IO.never[RequestResult],
+                 ),
+               ),
+               stats,
+               TrafficMetrics.noop,
+             )
+        s <- stats.get
+      yield expect.all(
+        s.operations.get("catalog-learning-paths").exists(_.count == 1),
+        s.operations.get("catalog-courses").exists(_.count == 1),
       ),
     )
   }

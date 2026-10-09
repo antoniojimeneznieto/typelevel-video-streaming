@@ -3,6 +3,9 @@
 A demo video streaming platform for the Scala Days 2026 interactive lab:
 **A Distributed System On Fire: Diagnosing Failures with otel4s**.
 
+Facilitators: use the [lab playbook](playbook.md) for setup, delivery, and reset.
+It contains the hidden incident diagnosis; share only its participant brief.
+
 ## Stack
 
 - Backend: [Cats Effect](https://typelevel.org/cats-effect/), [FS2](https://fs2.io/),
@@ -64,21 +67,33 @@ offered load, completions, failures, missed arrivals, and latency independently 
 application telemetry. See [traffic generator usage](docs/observability/traffic-generator.md)
 for continuous traffic, configuration, and accounting semantics.
 
-## Inject a catalog network fault
+## Run a lab incident
 
-The gateway always reaches Catalog through a healthy Toxiproxy listener. While
-the stack is running, use the facilitator controls to inspect or change that
-connection without restarting the application:
+With the stack and traffic running, start the incident using the exercise code
+provided by the facilitator:
 
 ```bash
-./scripts/lab.sh proxy check
-./scripts/lab.sh proxy status
-./scripts/lab.sh proxy latency --milliseconds 750
-./scripts/lab.sh proxy reset
+./scripts/lab.sh incident start CODE
+./scripts/lab.sh platform changes
+./scripts/lab.sh platform inspect CHANGE_ID
+./scripts/lab.sh platform rollback CHANGE_ID
 ```
 
-`proxy timeout --milliseconds 3000` drops catalog responses after three seconds;
-`proxy down` disables the catalog listener. `proxy reset` removes all toxics,
-reenables the listener, restores its Catalog mapping, and checks connectivity.
-Run traffic separately with `./scripts/lab.sh traffic start --rate 5` and stop it with
-`./scripts/lab.sh traffic stop`.
+The change list and inspection command give participants a reviewable route to
+remediation. Run traffic separately with `./scripts/lab.sh traffic start --rate 5`
+and stop it with `./scripts/lab.sh traffic stop`. Facilitator setup and reset
+controls are documented in [Scenario 1](docs/observability/scenario-1.md).
+Facilitators can rehearse the first, third, and fifth exercises with
+`./scripts/lab.sh verify scenario1`, `./scripts/lab.sh verify scenario3`, and
+`./scripts/lab.sh verify scenario5`.
+The Catalog session exercise uses `./scripts/lab.sh scenario5 prepare`,
+`scenario5 baseline`, and `incident start d5e0`; its full sequence is in
+[the playbook](playbook.md).
+
+The scenario controller is a packaged JVM command. Build its ZIP with
+`sbt --batch 'labCli/Universal/packageBin'`; CI uploads the same ZIP as the
+`lab-cli-jvm` artifact. After unpacking, run
+`bin/lab-cli --root /path/to/typelevel-video-streaming platform changes`.
+The command needs Java 17+ and a checkout containing the lab scripts and Compose
+configuration. In a checkout, `./scripts/lab.sh` stages the Scala CLI on first use
+and runs all lab commands.

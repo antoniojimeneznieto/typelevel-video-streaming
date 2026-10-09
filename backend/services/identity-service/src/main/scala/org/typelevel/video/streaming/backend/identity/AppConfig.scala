@@ -20,6 +20,7 @@ final case class AppConfig(
     server: HttpServerConfig,
     postgres: PostgresConfig,
     jwt: JwtConfig,
+    workshopSubjectMigration: Boolean,
 )
 
 object AppConfig:
@@ -56,6 +57,7 @@ object AppConfig:
         defaultPassword = "identity-local-secret",
       ),
       jwtConfig,
+      env("WORKSHOP_SUBJECT_MIGRATION").as[Boolean].default(false),
     ).parMapN(AppConfig.apply)
 
   def load[F[_]: Async]: F[AppConfig] =

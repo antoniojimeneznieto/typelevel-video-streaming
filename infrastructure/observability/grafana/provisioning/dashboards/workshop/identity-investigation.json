@@ -1,0 +1,87 @@
+{
+  "uid": "identity-investigation",
+  "title": "Identity Investigation",
+  "tags": ["workshop", "identity", "runtime"],
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    { "title": "Workshop Overview", "url": "/d/workshop-overview/workshop-overview", "targetBlank": false, "keepTime": true },
+    { "title": "Cats Effect Runtime (select Identity)", "url": "/d/cats-effect-runtime/cats-effect-runtime-metrics?var-job=identity-service", "targetBlank": false, "keepTime": true },
+    { "title": "JVM Runtime (select Identity)", "url": "/d/jvm-runtime/jvm-runtime-metrics?var-job=identity-service", "targetBlank": false, "keepTime": true }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Identity routes p95 (60-second window)",
+      "description": "Compare login with the lightweight current-user route. Click an exemplar from the incident period to inspect the Gateway and Identity spans. Each line is an Identity server route, not an aggregate across both services.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 9 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"identity-service\",classifier=\"/auth/login\",http_phase=\"body\"}[1m])))", "legendFormat": "POST /auth/login", "exemplar": true },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"identity-service\",classifier=\"/users/me\",http_phase=\"body\"}[1m])))", "legendFormat": "GET /users/me", "exemplar": true }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Password verification and permit wait p95 (60-second window)",
+      "description": "The verify duration includes waiting for a permit. Compare it with permit wait and the login trace's password verification spans. No credential or user identifier is exported.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 9, "w": 16, "h": 9 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(identity_password_verify_duration_seconds_bucket{service_name=\"identity-service\"}[1m])))", "legendFormat": "verification incl. wait p95" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le) (rate(identity_password_permit_wait_duration_seconds_bucket{service_name=\"identity-service\"}[1m])))", "legendFormat": "permit wait p95" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Password verifications holding permits",
+      "description": "At most four verifications should hold permits. Separate series identify old and rebuilt Identity instances when both appear in history.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 16, "y": 9, "w": 8, "h": 9 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "identity_password_verify_active{service_name=\"identity-service\"}", "legendFormat": "{{service_instance_id}} active" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Identity Cats Effect scheduler signals",
+      "description": "Clock drift and starvation events can indicate scheduler delay, but absence of an event does not exclude a shorter scheduling problem. Inspect the Identity service and current instance in the full Cats Effect dashboard.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 18, "w": 16, "h": 9 },
+      "targets": [
+        { "refId": "A", "expr": "cats_effect_runtime_cpu_starvation_clock_drift_current_milliseconds{job=\"identity-service\"}", "legendFormat": "{{service_instance_id}} drift ms" },
+        { "refId": "B", "expr": "increase(cats_effect_runtime_cpu_starvation_count_total{job=\"identity-service\"}[1m])", "legendFormat": "{{service_instance_id}} starvation events / 1m" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Identity JVM CPU utilization",
+      "description": "Corroborate with Docker CPU and memory readings; JVM utilization does not identify the code using CPU.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 16, "y": 18, "w": 8, "h": 9 },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "jvm_cpu_recent_utilization_ratio{job=\"identity-service\"}", "legendFormat": "{{service_instance_id}} CPU" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "text",
+      "title": "Trace investigation",
+      "gridPos": { "x": 0, "y": 27, "w": 24, "h": 5 },
+      "options": { "mode": "markdown", "content": "Open a **login** exemplar above, then compare the Identity server span with its SQL, `identity.password.permit.wait`, and `identity.password.verify.work` children. Open a **current-user** exemplar from the same period as a control. If the trace is missing during saturation, compare route, password, scheduler, and Docker metrics; exported spans may lag or be dropped when the process is overloaded." }
+    }
+  ]
+}

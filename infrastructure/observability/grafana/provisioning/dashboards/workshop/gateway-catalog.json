@@ -1,0 +1,67 @@
+{
+  "uid": "gateway-catalog-boundary",
+  "title": "Gateway and Catalog Boundary",
+  "tags": ["workshop", "gateway", "catalog"],
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    { "title": "Workshop Overview", "url": "/d/workshop-overview/workshop-overview", "targetBlank": false, "keepTime": true },
+    { "title": "Workshop Traffic", "url": "/d/workshop-traffic-generator/workshop-traffic", "targetBlank": false }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Catalog read p95 across the boundary (60s window)",
+      "description": "Compare the gateway server, gateway Catalog client, and Catalog server. The difference between histogram p95 values indicates where to investigate; it is not an exact per-request decomposition. Fixed 60-second lookback for the live workshop (5-second metric exports). Recovery becomes visible after old observations leave the window plus export/refresh delay. Click a metric exemplar to open a representative trace.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 10 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true } },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95,sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"gateway-service\",classifier=\"/api/catalog/courses\",http_phase=\"body\"}[1m])))", "legendFormat": "gateway server p95", "exemplar": true },
+        { "refId": "B", "expr": "histogram_quantile(0.95,sum by (le) (rate(http_client_request_duration_seconds_bucket{service_name=\"gateway-service\",classifier=\"catalog:/courses\",http_phase=\"body\"}[1m])))", "legendFormat": "gateway Catalog client p95", "exemplar": true },
+        { "refId": "C", "expr": "histogram_quantile(0.95,sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"catalog-service\",classifier=\"/courses\",http_phase=\"body\"}[1m])))", "legendFormat": "Catalog server p95", "exemplar": true }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Offered load and request rates (60s window)",
+      "description": "One Catalog read currently makes one outbound attempt. Compare offered arrivals with sent requests, Gateway inbound, Gateway client attempts, and Catalog server requests. Fixed 60-second lookback, matching the latency panel. A missing series is unknown, not zero.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 10, "w": 24, "h": 9 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(lab_traffic_arrivals_total{profile=\"catalog-courses\"}[1m]))", "legendFormat": "offered" },
+        { "refId": "B", "expr": "sum(rate(lab_traffic_arrivals_total{profile=\"catalog-courses\",result=\"sent\"}[1m]))", "legendFormat": "sent" },
+        { "refId": "C", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"gateway-service\",classifier=\"/api/catalog/courses\",http_phase=\"body\"}[1m]))", "legendFormat": "gateway inbound" },
+        { "refId": "D", "expr": "sum(rate(http_client_request_duration_seconds_count{service_name=\"gateway-service\",classifier=\"catalog:/courses\",http_phase=\"body\"}[1m]))", "legendFormat": "gateway Catalog attempts" },
+        { "refId": "E", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"catalog-service\",classifier=\"/courses\",http_phase=\"body\"}[1m]))", "legendFormat": "Catalog server" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Recent Gateway to Catalog traces",
+      "description": "Recent course-read traces from Gateway. Open one from the period under investigation and compare the Gateway Catalog client span, Catalog server child, and SQL spans. The most recent trace is not necessarily the p95 request.",
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "gridPos": { "x": 0, "y": 19, "w": 24, "h": 10 },
+      "options": { "showHeader": true },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" }, "queryType": "traceql", "query": "{ resource.service.name = \"gateway-service\" && name = \"GET /api/catalog/courses\" } with (most_recent=true)", "tableType": "traces", "limit": 10 }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "text",
+      "title": "Trace investigation",
+      "gridPos": { "x": 0, "y": 29, "w": 24, "h": 5 },
+      "options": { "mode": "markdown", "content": "Open a recent trace from the table or click an exemplar on the latency graph. Compare the Gateway Catalog client span with its Catalog server child and the SQL spans beneath it. Select a trace that began within the period you are investigating. These graphs use a rolling 60-second window: fresh traces may recover before the p95 line." }
+    }
+  ]
+}

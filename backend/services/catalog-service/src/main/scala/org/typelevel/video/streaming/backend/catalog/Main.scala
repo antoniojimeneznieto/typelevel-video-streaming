@@ -1,7 +1,6 @@
 package org.typelevel.video.streaming.backend.catalog
 
-import cats.effect.{IO, IOApp}
-import org.http4s.HttpApp
+import cats.effect.{IO, IOApp, Resource}
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.video.streaming.backend.catalog.api.CatalogService
@@ -20,20 +19,16 @@ object Main extends IOApp.Simple:
       given MeterProvider[IO]  = otel.meterProvider
       given TracerProvider[IO] = otel.tracerProvider
 
-      AppConfig.load[IO].flatMap { config =>
-        Postgres.sessionPool[IO](config.postgres).use { sessions =>
-          val repository = new CatalogRepositoryImpl(sessions)
-          val service    = new CatalogServiceImpl(repository)
+      val resources = for
+        config    <- Resource.eval(AppConfig.load[IO])
+        sessions  <- Postgres.sessionPool[IO](config.postgres)
+        measured  <- CatalogSessionMetrics.instrument(sessions, config.postgres.maxConnections)
+        repository = new CatalogRepositoryImpl(measured)
+        service    = new CatalogServiceImpl(repository)
+        routes    <- SimpleRestJsonBuilder.routes(service).resource
+      yield (config, routes.orNotFound)
 
-          SimpleRestJsonBuilder
-            .routes(service)
-            .resource
-            .use { catalogRoutes =>
-              val app: HttpApp[IO] = catalogRoutes.orNotFound
-              val routeClassifier  = SmithyRouteClassifier(CatalogService)
-
-              HttpServer.run(config.server, app, routeClassifier)
-            }
-        }
+      resources.use { (config, app) =>
+        HttpServer.run(config.server, app, SmithyRouteClassifier(CatalogService))
       }
     }
