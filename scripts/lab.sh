@@ -5,6 +5,11 @@ script_directory="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_directory="$(cd -- "$script_directory/.." && pwd)"
 
 find_launcher() {
+  local revision
+  revision="$(git -C "$project_directory" rev-parse HEAD)"
+  for candidate in "$project_directory"/.lab/cli/"$revision"/lab-cli-*/bin/lab-cli; do
+    if [[ -x "$candidate" ]]; then printf '%s\n' "$candidate"; return 0; fi
+  done
   for candidate in "$project_directory"/target/out/jvm/scala-*/lab-cli/universal/stage/bin/lab-cli; do
     if [[ -x "$candidate" ]]; then printf '%s\n' "$candidate"; return 0; fi
   done

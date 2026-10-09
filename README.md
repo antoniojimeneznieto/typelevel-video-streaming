@@ -123,8 +123,9 @@ CLI ZIP and checksum as a workflow artifact for every run and as release assets
 for `v*` tags. After unpacking, run
 `bin/lab-cli --root /path/to/typelevel-video-streaming platform changes`.
 The command needs Java 17+ and a checkout containing the lab scripts and Compose
-configuration. In a checkout, `./scripts/lab.sh` stages the Scala CLI on first use
-and runs all lab commands.
+configuration. In a checkout, `bash scripts/install-cli.sh` downloads the CLI
+for the current commit after its publishing run completes. `./scripts/lab.sh`
+uses that copy and builds the CLI from source when needed.
 
 To test publishing from a private repository, push the branch and run
 `./scripts/publish.sh branch-name`. The workflow publishes versioned images to
