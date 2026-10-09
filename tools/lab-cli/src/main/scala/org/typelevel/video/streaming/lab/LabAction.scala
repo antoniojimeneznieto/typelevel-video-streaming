@@ -26,6 +26,9 @@ private[lab] enum Scenario5Action:
   case Prepare, Rebuild, Baseline, Activate, Restore
 
 private[lab] enum LabAction:
+  case IncidentStart(code: String, build: Boolean, restart: Boolean = false)
+  case IncidentActivate(code: String, milliseconds: Int, verbose: Boolean)
+  case IncidentRebuild, IncidentStatus
   case Start(build: Boolean)
   case Prepare(round: Int)
   case Rebuild(service: String)
@@ -34,7 +37,6 @@ private[lab] enum LabAction:
   case TrafficStart(options: TrafficOptions)
   case Proxy(action: ProxyAction)
   case Platform(action: PlatformAction)
-  case DelayIncident(milliseconds: Int, verbose: Boolean = false)
   case Scenario3(action: Scenario3Action)
   case Scenario4(action: Scenario4Action)
   case Scenario5(action: Scenario5Action)

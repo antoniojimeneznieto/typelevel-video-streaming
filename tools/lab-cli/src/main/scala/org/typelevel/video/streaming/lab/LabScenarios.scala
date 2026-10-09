@@ -180,6 +180,29 @@ private[lab] object LabScenarios {
       IO.println(if verbose then s"Applied $id" else "Applied traffic policy")
     }
 
+  /** Reconcile an interrupted lifecycle activation without adding a second policy. */
+  def ensurePlatform(root: Path, milliseconds: Int, verbose: Boolean): IO[Unit] =
+    for
+      changes <- ledger(root)((values, _) => IO.pure(values))
+      active   = changes.filter(_.status == ChangeStatus.Active)
+      _       <- if active.nonEmpty then {
+             IO.raiseUnless(
+               active.size == 1 && active.head.json.hcursor
+                 .downField("configuration")
+                 .get[Int]("catalog_egress_delay_ms")
+                 .contains(milliseconds),
+             )(
+               new IllegalStateException(
+                 "An unrelated traffic policy is active; inspect platform changes before continuing.",
+               ),
+             )
+           } else {
+             (if changes.exists(_.status == ChangeStatus.Pending) then resetPlatform(root)
+              else IO.unit) *>
+               activatePlatform(root, milliseconds, verbose)
+           }
+    yield ()
+
   private[lab] def playbackEventId(id: UUID): UUID = {
     // Preserve the Python uuid5(NAMESPACE_URL, name) seed IDs.
     val namespace = UUID.fromString("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
@@ -214,19 +237,19 @@ private[lab] object LabScenarios {
   }
 
   private def playbackMode(root: Path, enabled: Boolean): IO[Unit] =
-    LabCommands.rebuild(
+    LabCommands.configure(
       root,
       "playback-service",
       Map("PLAYBACK_WORKSHOP_READ_MODE" -> enabled.toString),
     )
 
-  private def preparePlayback(root: Path): IO[Unit] = {
+  private[lab] def preparePlayback(root: Path, configure: Boolean = true): IO[Unit] = {
     EmberClientBuilder.default[IO].withTimeout(15.seconds).build.use { client =>
       for
         gatewayPort <- Env[IO].get("GATEWAY_PORT").map(_.getOrElse("8085"))
         gateway     <-
           IO.fromEither(Uri.fromString(s"http://localhost:$gatewayPort/api/identity/users"))
-        _ <- playbackMode(root, true)
+        _ <- if configure then playbackMode(root, true) else IO.unit
         _ <- (0 until 10).toList.traverse_ { actor =>
                val kind  = if actor < 8 then "old" else "new"
                val email = s"lab-playback-$kind-$actor@example.invalid"
@@ -290,7 +313,7 @@ private[lab] object LabScenarios {
                         .void
                } yield ()
              }
-        _ <- IO.println("Ten actors registered; Playback user projections seeded")
+        _ <- IO.println("Scenario data ready")
       yield ()
     }
   }
@@ -318,7 +341,9 @@ private[lab] object LabScenarios {
   }
 
   def scenario5(root: Path, action: Scenario5Action): IO[Unit] = action match {
-    case Scenario5Action.Prepare | Scenario5Action.Rebuild =>
+    case Scenario5Action.Prepare =>
+      LabCommands.configure(root, "catalog-service", Map("CATALOG_POSTGRES_MAX_CONNECTIONS" -> "6"))
+    case Scenario5Action.Rebuild =>
       LabCommands.rebuild(root, "catalog-service", Map("CATALOG_POSTGRES_MAX_CONNECTIONS" -> "6"))
     case Scenario5Action.Baseline =>
       LabCommands.trafficStart(
@@ -334,7 +359,7 @@ private[lab] object LabScenarios {
         IO.println("Search workload rollout applied")
     case Scenario5Action.Restore =>
       LabCommands.stopTraffic(root) *>
-        LabCommands.rebuild(
+        LabCommands.configure(
           root,
           "catalog-service",
           Map("CATALOG_POSTGRES_MAX_CONNECTIONS" -> "10"),

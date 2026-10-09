@@ -175,35 +175,55 @@ private[lab] object LabCliParser {
       })
   }
 
+  private val incidentId = Opts
+    .argument[String]("ID")
+    .validate("ID must be 1, 3, 4, or 5")(Set("1", "3", "4", "5"))
+
   private val incidentArgs: Opts[LabAction] =
     (
       Opts
-        .argument[String]("CODE")
-        .validate("CODE must be 8f27, 3c91, 7b42, or d5e0")(
-          Set("8f27", "3c91", "7b42", "d5e0"),
+        .argument[String]("ID")
+        .validate("ID must be 1, 3, 4, or 5")(
+          Set("1", "3", "4", "5"),
         ),
       Opts
-        .option[Int]("milliseconds", help = "Catalog delay for incident 8f27 (1–9999)")
+        .option[Int]("milliseconds", help = "Catalog delay for incident 1 (1–9999)")
         .validate("--milliseconds must be between 1 and 9999")(n => n >= 1 && n <= 9999)
         .orNone,
-      Opts.flag("verbose", help = "Show facilitator control details for incident 8f27").orFalse,
+      Opts.flag("verbose", help = "Show facilitator control details for incident 1").orFalse,
     ).tupled
-      .validate("--milliseconds and --verbose are only valid for incident 8f27") {
-        case (code, milliseconds, verbose) => code == "8f27" || (milliseconds.isEmpty && !verbose)
+      .validate("--milliseconds and --verbose are only valid for incident 1") {
+        case (code, milliseconds, verbose) => code == "1" || (milliseconds.isEmpty && !verbose)
       }
-      .map {
-        case ("8f27", milliseconds, verbose) => DelayIncident(milliseconds.getOrElse(750), verbose)
-        case ("3c91", _, _) => Scenario3(Scenario3Action.Activate)
-        case ("7b42", _, _) => Scenario4(Scenario4Action.Activate)
-        case _ => Scenario5(Scenario5Action.Activate)
+      .map { case (code, milliseconds, verbose) =>
+        IncidentActivate(code, milliseconds.getOrElse(750), verbose)
       }
 
-  private val incident = Command("incident", "Activate a workshop incident") {
-    Opts.subcommand(Command("start", "Start an incident using its exercise code") {
-      incidentArgs
-    }) orElse
-      Opts.subcommand(Command("activate", "Start an incident using its exercise code") {
+  private val incident = Command("incident", "Prepare, activate, and rebuild a workshop incident") {
+    Opts.subcommand(
+      Command("start", "Prepare the scenario and wait for healthy baseline telemetry") {
+        (incidentId, Opts.flag("build", help = "Build local images during setup").orFalse)
+          .mapN((code, build) => IncidentStart(code, build))
+      },
+    ) orElse
+      Opts.subcommand(Command("activate", "Activate after inspecting the healthy baseline") {
         incidentArgs
+      }) orElse
+      Opts.subcommand(
+        Command(
+          "restart",
+          "Start a fresh baseline using the saved exercise images; preserve source edits",
+        ) {
+          incidentId.map(code => IncidentStart(code, false, true))
+        },
+      ) orElse
+      Opts.subcommand(
+        Command("rebuild", "Deploy the active scenario's source edits and check telemetry") {
+          Opts(IncidentRebuild)
+        },
+      ) orElse
+      Opts.subcommand(Command("status", "Show the recorded scenario phase") {
+        Opts(IncidentStatus)
       })
   }
 
@@ -235,7 +255,7 @@ private[lab] object LabCliParser {
   }
 
   private val scenario5 = Command("scenario5", "Control the Catalog session exercise") {
-    Opts.subcommand(Command("prepare", "Rebuild Catalog with a small session pool") {
+    Opts.subcommand(Command("prepare", "Configure Catalog with a small session pool") {
       Opts(Scenario5(Scenario5Action.Prepare))
     }) orElse
       Opts.subcommand(Command("rebuild", "Rebuild Catalog after a source fix") {
