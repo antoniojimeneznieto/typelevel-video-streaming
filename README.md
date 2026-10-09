@@ -118,9 +118,19 @@ recovery checks, and rehearsal commands. Low-level preparation and traffic
 commands remain available for facilitator diagnostics.
 
 The scenario controller is a packaged JVM command. Build its ZIP with
-`sbt --batch 'labCli/Universal/packageBin'`; CI uploads the same ZIP as the
-`lab-cli-jvm` artifact. After unpacking, run
+`sbt --batch 'labCli/Universal/packageBin'`. The publishing workflow provides a
+CLI ZIP and checksum as a workflow artifact for every run and as release assets
+for `v*` tags. After unpacking, run
 `bin/lab-cli --root /path/to/typelevel-video-streaming platform changes`.
 The command needs Java 17+ and a checkout containing the lab scripts and Compose
 configuration. In a checkout, `./scripts/lab.sh` stages the Scala CLI on first use
 and runs all lab commands.
+
+To test publishing from a private repository, push the branch and run
+`./scripts/publish.sh branch-name`. The workflow publishes versioned images to
+GHCR and uploads the CLI ZIP as a workflow artifact. New GHCR packages are
+private by default; grant Codespaces access to private packages or change each
+package's visibility to public for anonymous pulls. A `v*` tag also publishes
+the CLI ZIP and checksum as GitHub Release assets. Release assets in a private
+repository require repository access. PostgreSQL, Kafka, and Debezium are pulled
+from their upstream registries.
