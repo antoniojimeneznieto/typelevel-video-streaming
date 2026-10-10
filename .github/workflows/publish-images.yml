@@ -1,4 +1,4 @@
-name: Publish workshop images
+name: Publish workshop images and CLI
 
 on:
   push:
@@ -46,7 +46,7 @@ jobs:
       - name: Stage applications without building Docker images
         run: >-
           sbt --batch
-          ';statusService/Docker/stage;gatewayService/Docker/stage;identityService/Docker/stage;catalogService/Docker/stage;playbackService/Docker/stage;trafficGenerator/Docker/stage'
+          ';statusService/Docker/stage;gatewayService/Docker/stage;identityService/Docker/stage;catalogService/Docker/stage;playbackService/Docker/stage;trafficGenerator/Docker/stage;labCli/Universal/packageBin'
       - name: Archive staged images
 
         run: |
@@ -65,6 +65,21 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
+      - name: Prepare versioned CLI download
+        run: |
+          cli_zip="$(find target/out -path '*/lab-cli/universal/*.zip' -type f -print -quit)"
+          test -n "$cli_zip"
+          mkdir -p dist
+          cp "$cli_zip" "dist/lab-cli-${GITHUB_SHA}.zip"
+          cd dist
+          sha256sum "lab-cli-${GITHUB_SHA}.zip" > SHA256SUMS
+      - name: Share CLI download
+        uses: actions/upload-artifact@v7
+        with:
+          name: lab-cli-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
 
   publish:
     name: Publish ${{ matrix.image }}
@@ -106,10 +121,6 @@ jobs:
           - image: frontend
             context: .
             dockerfile: frontend/Dockerfile
-            staged: false
-          - image: debezium-connect
-            context: infrastructure/debezium
-            dockerfile: infrastructure/debezium/Dockerfile.connect
             staged: false
           - image: outbox-init
             context: infrastructure/debezium
@@ -176,3 +187,29 @@ jobs:
           labels: ${{ steps.metadata.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  release:
+    name: Publish CLI release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [stage, publish]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download CLI package
+        uses: actions/download-artifact@v8
+        with:
+          name: lab-cli-${{ github.sha }}
+          path: dist
+      - name: Name CLI download after the release
+        run: |
+          mv "dist/lab-cli-${GITHUB_SHA}.zip" "dist/lab-cli-${GITHUB_REF_NAME}.zip"
+          cd dist
+          sha256sum "lab-cli-${GITHUB_REF_NAME}.zip" > SHA256SUMS
+      - name: Create release with CLI and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" dist/*
+          --repo "$GITHUB_REPOSITORY" --verify-tag
+          --title "$GITHUB_REF_NAME" --generate-notes
