@@ -9,7 +9,7 @@
   "timezone": "browser",
   "schemaVersion": 41,
   "version": 1,
-  "refresh": "10s",
+  "refresh": "5s",
   "time": {
     "from": "now-15m",
     "to": "now"
@@ -20,30 +20,35 @@
     {
       "title": "Workshop Traffic",
       "url": "/d/workshop-traffic-generator/workshop-traffic",
-      "targetBlank": false
-    },
-    {
-      "title": "Gateway and Catalog Boundary",
-      "url": "/d/gateway-catalog-boundary/gateway-and-catalog-boundary",
-      "targetBlank": false
-    },
-    {
-      "title": "Identity Investigation",
-      "url": "/d/identity-investigation/identity-investigation",
       "targetBlank": false,
-      "keepTime": true
+      "includeVars": true
     },
     {
-      "title": "Playback Investigation",
-      "url": "/d/playback-investigation/playback-investigation",
+      "title": "Gateway–Catalog: Request Path",
+      "url": "/d/gateway-catalog-boundary/gatewaye28093-catalog3a-request-path",
       "targetBlank": false,
-      "keepTime": true
+      "includeVars": true
     },
     {
-      "title": "Catalog Pool Investigation",
-      "url": "/d/catalog-sessions/catalog-sessions",
+      "title": "Identity: Login Latency",
+      "url": "/d/identity-investigation/identity3a-login-latency",
       "targetBlank": false,
-      "keepTime": true
+      "keepTime": true,
+      "includeVars": true
+    },
+    {
+      "title": "Playback: Favorites Authentication",
+      "url": "/d/playback-investigation/playback3a-favorites-authentication",
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
+    },
+    {
+      "title": "Catalog: Session Pool",
+      "url": "/d/catalog-sessions/catalog3a-session-pool",
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Cats Effect Runtime Metrics",
@@ -62,6 +67,15 @@
   ],
   "templating": {
     "list": [
+      {
+        "name": "metric_window",
+        "label": "Metric window",
+        "type": "custom",
+        "query": "15s,30s,60s",
+        "includeAll": false,
+        "multi": false,
+        "current": { "text": "30s", "value": "30s" }
+      },
       {
         "name": "service",
         "label": "Service",
@@ -170,13 +184,13 @@
       "targets": [
         {
           "refId": "Success",
-          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"2..|3..\"}[$__rate_interval]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"2..|3..\"}[$metric_window]))",
           "legendFormat": "successful",
           "exemplar": true
         },
         {
           "refId": "Failure",
-          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"4..|5..\"}[$__rate_interval]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"4..|5..\"}[$metric_window]))",
           "legendFormat": "failed",
           "exemplar": true
         }
@@ -208,7 +222,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 * sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"5..\"}[$__rate_interval])) / sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))"
+          "expr": "100 * sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"5..\"}[$metric_window])) / sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window]))"
         }
       ]
     },
@@ -237,7 +251,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval])))"
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window])))"
         }
       ]
     },
@@ -266,7 +280,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval])))"
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window])))"
         }
       ]
     },
@@ -344,6 +358,7 @@
     {
       "type": "timeseries",
       "title": "Request rate by service",
+      "description": "Rates use the selected Metric window. Try 15s, 30s, and 60s while traffic changes: shorter windows react sooner but fluctuate more. This selector changes the query lookback, not the five-second metric export interval.",
       "id": 9,
       "datasource": {
         "type": "prometheus",
@@ -352,8 +367,11 @@
       "gridPos": {
         "x": 0,
         "y": 10,
-        "w": 8,
-        "h": 8
+        "w": 24,
+        "h": 10
+      },
+      "options": {
+        "legend": { "calcs": ["max", "lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }
       },
       "fieldConfig": {
         "defaults": {
@@ -364,7 +382,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))",
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window]))",
           "legendFormat": "{{service_name}}",
           "exemplar": true
         }
@@ -373,17 +391,20 @@
     {
       "type": "timeseries",
       "title": "HTTP error percentage by status",
-      "description": "4xx and 5xx shares of all selected server requests. Status series are stacked; use Playback Investigation for the single-service 401 evidence.",
+      "description": "4xx and 5xx shares of all selected server requests. Status series are stacked; use Playback: Favorites Authentication for the single-service 401 evidence.",
       "id": 10,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 8,
-        "y": 10,
-        "w": 8,
-        "h": 8
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 10
+      },
+      "options": {
+        "legend": { "calcs": ["max", "lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }
       },
       "fieldConfig": {
         "defaults": {
@@ -402,7 +423,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 * sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"[45]..\"}[1m])) / scalar(sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[1m])))",
+          "expr": "100 * sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"[45]..\"}[$metric_window])) / scalar(sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window])))",
           "legendFormat": "HTTP {{http_response_status_code}}",
           "exemplar": true
         }
@@ -411,16 +432,20 @@
     {
       "type": "timeseries",
       "title": "Duration by service",
+      "description": "Histogram p50, p95, and p99 over the selected Metric window. Compare 15s, 30s, and 60s around a fault and its recovery; old observations stay in longer windows longer. Sparse traffic can make short-window percentiles jump.",
       "id": 11,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 16,
-        "y": 10,
-        "w": 8,
-        "h": 8
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 14
+      },
+      "options": {
+        "legend": { "calcs": ["max", "lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }
       },
       "fieldConfig": {
         "defaults": {
@@ -432,19 +457,19 @@
       "targets": [
         {
           "refId": "p50",
-          "expr": "histogram_quantile(0.50, sum by (service_name, le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum by (service_name, le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window])))",
           "legendFormat": "{{service_name}} p50",
           "exemplar": true
         },
         {
           "refId": "p95",
-          "expr": "histogram_quantile(0.95, sum by (service_name, le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (service_name, le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window])))",
           "legendFormat": "{{service_name}} p95",
           "exemplar": true
         },
         {
           "refId": "p99",
-          "expr": "histogram_quantile(0.99, sum by (service_name, le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (service_name, le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window])))",
           "legendFormat": "{{service_name}} p99",
           "exemplar": true
         }
@@ -456,7 +481,7 @@
       "id": 12,
       "gridPos": {
         "x": 0,
-        "y": 18,
+        "y": 44,
         "w": 24,
         "h": 1
       },
@@ -474,7 +499,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 19,
+        "y": 45,
         "w": 12,
         "h": 8
       },
@@ -490,7 +515,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(20, histogram_quantile(0.99, sum by (service_name, classifier, http_request_method, le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))))",
+          "expr": "topk(20, histogram_quantile(0.99, sum by (service_name, classifier, http_request_method, le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window]))))",
           "format": "table",
           "instant": true
         }
@@ -506,7 +531,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 19,
+        "y": 45,
         "w": 12,
         "h": 8
       },
@@ -519,7 +544,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))",
+          "expr": "sum by (classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window]))",
           "legendFormat": "{{classifier}}",
           "exemplar": true
         }
@@ -536,7 +561,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 27,
+        "y": 53,
         "w": 12,
         "h": 8
       },
@@ -550,7 +575,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 * sum by (classifier, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"[45]..\"}[1m])) / ignoring(http_response_status_code) group_left sum by (classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[1m]))",
+          "expr": "100 * sum by (classifier, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"[45]..\"}[$metric_window])) / ignoring(http_response_status_code) group_left sum by (classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window]))",
           "legendFormat": "{{classifier}} HTTP {{http_response_status_code}}",
           "exemplar": true
         }
@@ -566,14 +591,14 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 27,
+        "y": 53,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$__rate_interval]))",
+          "expr": "sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window]))",
           "format": "heatmap",
           "legendFormat": "{{le}}"
         }
@@ -585,7 +610,7 @@
       "id": 17,
       "gridPos": {
         "x": 0,
-        "y": 35,
+        "y": 61,
         "w": 24,
         "h": 1
       },
@@ -598,7 +623,7 @@
       "id": 18,
       "gridPos": {
         "x": 0,
-        "y": 36,
+        "y": 62,
         "w": 24,
         "h": 6
       },

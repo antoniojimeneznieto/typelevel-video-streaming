@@ -20,7 +20,8 @@
       "title": "Workshop Overview",
       "url": "/d/workshop-overview/workshop-overview",
       "targetBlank": false,
-      "keepTime": true
+      "keepTime": true,
+      "includeVars": true
     }
   ],
   "panels": [
@@ -48,12 +49,12 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(lab_traffic_arrivals_total{profile=~\"$profile\"}[$__rate_interval]))",
+          "expr": "sum(rate(lab_traffic_arrivals_total{profile=~\"$profile\"}[$metric_window]))",
           "legendFormat": "generator offered"
         },
         {
           "refId": "B",
-          "expr": "sum(rate(lab_traffic_arrivals_total{profile=~\"$profile\",result=\"sent\"}[$__rate_interval]))",
+          "expr": "sum(rate(lab_traffic_arrivals_total{profile=~\"$profile\",result=\"sent\"}[$metric_window]))",
           "legendFormat": "generator sent"
         }
       ]
@@ -82,17 +83,17 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (operation,outcome) (rate(lab_traffic_requests_total{profile=~\"$profile\"}[$__rate_interval]))",
+          "expr": "sum by (operation,outcome) (rate(lab_traffic_requests_total{profile=~\"$profile\"}[$metric_window]))",
           "legendFormat": "{{operation}} {{outcome}}"
         },
         {
           "refId": "B",
-          "expr": "sum by (result) (rate(lab_traffic_arrivals_total{profile=~\"$profile\",result=~\"dropped_capacity|dropped_late\"}[$__rate_interval]))",
+          "expr": "sum by (result) (rate(lab_traffic_arrivals_total{profile=~\"$profile\",result=~\"dropped_capacity|dropped_late\"}[$metric_window]))",
           "legendFormat": "{{result}}"
         },
         {
           "refId": "C",
-          "expr": "sum(rate(lab_traffic_cancellations_total{profile=~\"$profile\"}[$__rate_interval]))",
+          "expr": "sum(rate(lab_traffic_cancellations_total{profile=~\"$profile\"}[$metric_window]))",
           "legendFormat": "cancelled"
         }
       ]
@@ -120,7 +121,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le,operation) (rate(lab_traffic_request_duration_seconds_bucket{profile=~\"$profile\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le,operation) (rate(lab_traffic_request_duration_seconds_bucket{profile=~\"$profile\"}[$metric_window])))",
           "legendFormat": "{{operation}} p95"
         }
       ]
@@ -156,6 +157,15 @@
   ],
   "templating": {
     "list": [
+      {
+        "name": "metric_window",
+        "label": "Metric window",
+        "type": "custom",
+        "query": "15s,30s,60s",
+        "includeAll": false,
+        "multi": false,
+        "current": { "text": "30s", "value": "30s" }
+      },
       {
         "name": "profile",
         "label": "Profile",
