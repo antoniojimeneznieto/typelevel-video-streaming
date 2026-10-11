@@ -34,7 +34,7 @@ private[lab] object LabPreparation {
   private def prepareLocked(root: Path, round: Int): IO[Unit] = {
     val record = root.resolve(".lab/preparation.json")
     for {
-      _ <- IO.raiseUnless(Set(1, 3, 4, 5)(round))(new IllegalArgumentException("Unsupported round"))
+      _ <- IO.raiseUnless(Set(1, 2, 3, 4)(round))(new IllegalArgumentException("Unsupported round"))
       _ <- LabIo.createDirectories(root.resolve(".lab"))
       _ <- LabIo.writeAtomic(
              record,
@@ -53,8 +53,8 @@ private[lab] object LabPreparation {
       _ <- ids.traverse_(awaitHealth(root, _))
       _ <- LabScenarios.resetPlatform(root)
       _ <- round match {
-             case 4 => LabScenarios.scenario4(root, Scenario4Action.Prepare)
-             case 5 => LabScenarios.scenario5(root, Scenario5Action.Prepare)
+             case 3 => LabScenarios.scenario4(root, Scenario4Action.Prepare)
+             case 4 => LabScenarios.scenario5(root, Scenario5Action.Prepare)
              case _ => IO.unit
            }
       currentIds <- services.traverse(service => LabCommands.containerId(root, service))

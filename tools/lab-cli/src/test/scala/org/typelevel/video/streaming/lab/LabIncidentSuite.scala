@@ -1,11 +1,114 @@
 package org.typelevel.video.streaming.lab
 
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import fs2.io.file.Files
 import io.circe.Json
 import weaver.SimpleIOSuite
 
 object LabIncidentSuite extends SimpleIOSuite:
+  test("saved incident numbering migrates once and keeps the original scenario") {
+    Files[IO].tempDirectory.use { directory =>
+      val root     = directory.toNioPath
+      val examples = List(
+        ("1", None, "1"),
+        ("3", None, "2"),
+        ("4", None, "3"),
+        ("5", None, "4"),
+        ("3c91", None, "2"),
+        ("7b42", None, "3"),
+        ("d5e0", None, "4"),
+        ("2", Some(2), "2"),
+        ("3", Some(2), "3"),
+        ("4", Some(2), "4"),
+      )
+      for
+        _      <- LabIo.createDirectories(root.resolve(".lab"))
+        checks <- examples.traverse { case (code, version, expected) =>
+                    val json = Json
+                      .obj(
+                        "code" -> Json.fromString(code),
+                        "phase" -> Json.fromString("Active"),
+                        "since" -> Json.fromLong(1),
+                        "deployment" -> Json.obj(),
+                        "milliseconds" -> Json.fromInt(750),
+                      )
+                      .deepMerge(
+                        version.fold(Json.obj())(v =>
+                          Json.obj("numbering_version" -> Json.fromInt(v)),
+                        ),
+                      )
+                    LabIo.writeAtomic(root.resolve(".lab/incident.json"), json.noSpaces) *>
+                      LabIncident
+                        .load(root)
+                        .map(state =>
+                          state.exists(s =>
+                            s.code == expected && s.phase == LabIncident.Phase.Active && s.since == 1,
+                          ),
+                        )
+                  }
+      yield expect(checks.forall(identity))
+    }
+  }
+
+  test("incident IDs select the intended service and baseline and active workloads") {
+    IO.pure(
+      expect.all(
+        IncidentRuntime.service("2") == "identity-service",
+        IncidentRuntime.arguments("2", false) == Seq(
+          "--profile",
+          "identity",
+          "--rate",
+          "30",
+          "--login-percent",
+          "5",
+        ),
+        IncidentRuntime.arguments("2", true) == Seq(
+          "--profile",
+          "identity",
+          "--rate",
+          "30",
+          "--login-percent",
+          "70",
+        ),
+        IncidentRuntime.service("3") == "playback-service",
+        IncidentRuntime.arguments("3", false) == Seq(
+          "--profile",
+          "playback",
+          "--rate",
+          "10",
+          "--modern-percent",
+          "0",
+        ),
+        IncidentRuntime.arguments("3", true) == Seq(
+          "--profile",
+          "playback",
+          "--rate",
+          "10",
+          "--modern-percent",
+          "20",
+        ),
+        IncidentRuntime.service("4") == "catalog-service",
+        IncidentRuntime.arguments("4", false) == Seq(
+          "--profile",
+          "catalog-courses",
+          "--rate",
+          "5",
+          "--request-timeout",
+          "15s",
+        ),
+        IncidentRuntime.arguments("4", true) == Seq(
+          "--profile",
+          "catalog-soak",
+          "--rate",
+          "5",
+          "--request-timeout",
+          "15s",
+        ),
+      ),
+    )
+  }
+
   test("existing incident state loads with the numeric ID") {
     Files[IO].tempDirectory.use { directory =>
       val root = directory.toNioPath
@@ -16,7 +119,7 @@ object LabIncidentSuite extends SimpleIOSuite:
                """{"code":"7b42","phase":"Ready","since":1,"deployment":{},"milliseconds":750}""",
              )
         state <- LabIncident.load(root)
-      yield expect(state.exists(_.code == "4"))
+      yield expect(state.exists(_.code == "3"))
     }
   }
 
@@ -71,12 +174,12 @@ object LabIncidentSuite extends SimpleIOSuite:
   test("setup and activation are separate and repeated commands preserve the running scenario") {
     fixture { (lab, world) =>
       for
-        _        <- lab.start("4", false, false)
-        _        <- lab.start("4", false, false)
+        _        <- lab.start("3", false, false)
+        _        <- lab.start("3", false, false)
         baseline <- world.get
-        _        <- lab.activate("4", 750, false)
-        _        <- lab.activate("4", 750, false)
-        _        <- lab.start("4", false, false)
+        _        <- lab.activate("3", 750, false)
+        _        <- lab.activate("3", 750, false)
+        _        <- lab.start("3", false, false)
         active   <- world.get
       yield expect(
         baseline.prepares == 1 && baseline.baselines == 1 && baseline.activations == 0,
@@ -89,10 +192,10 @@ object LabIncidentSuite extends SimpleIOSuite:
     fixture { (lab, world) =>
       for
         _          <- world.update(_.copy(ready = false))
-        failed     <- lab.start("4", false, false).attempt
-        activation <- lab.activate("4", 750, false).attempt
+        failed     <- lab.start("3", false, false).attempt
+        activation <- lab.activate("3", 750, false).attempt
         _          <- world.update(_.copy(ready = true))
-        _          <- lab.start("4", false, false)
+        _          <- lab.start("3", false, false)
         result     <- world.get
       yield expect(
         failed.isLeft && activation.isLeft && result.prepares == 1 && result.baselines == 1 && result.activations == 0,
@@ -103,11 +206,11 @@ object LabIncidentSuite extends SimpleIOSuite:
   test("activation rechecks readiness and rejects a different scenario") {
     fixture { (lab, world) =>
       for
-        missing <- lab.activate("4", 750, false).attempt
-        _       <- lab.start("4", false, false)
-        wrong   <- lab.activate("3", 750, false).attempt
+        missing <- lab.activate("3", 750, false).attempt
+        _       <- lab.start("3", false, false)
+        wrong   <- lab.activate("2", 750, false).attempt
         _       <- world.update(_.copy(ready = false))
-        stale   <- lab.activate("4", 750, false).attempt
+        stale   <- lab.activate("3", 750, false).attempt
         result  <- world.get
       yield expect(missing.isLeft && wrong.isLeft && stale.isLeft && result.activations == 0)
     }
@@ -131,8 +234,8 @@ object LabIncidentSuite extends SimpleIOSuite:
   test("a failed build can be retried and does not recreate baseline traffic") {
     fixture { (lab, world) =>
       for
-        _      <- lab.start("4", false, false)
-        _      <- lab.activate("4", 750, false)
+        _      <- lab.start("3", false, false)
+        _      <- lab.activate("3", 750, false)
         _      <- world.update(_.copy(buildFails = true))
         failed <- lab.rebuild.attempt
         _      <- world.update(_.copy(buildFails = false))
@@ -147,8 +250,8 @@ object LabIncidentSuite extends SimpleIOSuite:
   test("a deployed edit waits for telemetry on retry without compiling twice") {
     fixture { (lab, world) =>
       for
-        _      <- lab.start("4", false, false)
-        _      <- lab.activate("4", 750, false)
+        _      <- lab.start("3", false, false)
+        _      <- lab.activate("3", 750, false)
         _      <- world.update(_.copy(ready = false))
         failed <- lab.rebuild.attempt
         _      <- world.update(_.copy(ready = true))
@@ -161,8 +264,8 @@ object LabIncidentSuite extends SimpleIOSuite:
   test("an edit after a telemetry failure is rebuilt on retry") {
     fixture { (lab, world) =>
       for
-        _      <- lab.start("4", false, false)
-        _      <- lab.activate("4", 750, false)
+        _      <- lab.start("3", false, false)
+        _      <- lab.activate("3", 750, false)
         _      <- world.update(_.copy(ready = false))
         failed <- lab.rebuild.attempt
         _      <- world.update(_.copy(source = "revised", ready = true))
@@ -179,9 +282,9 @@ object LabIncidentSuite extends SimpleIOSuite:
       for
         _      <- LabIo.createDirectories(source.getParent)
         _      <- LabIo.writeAtomic(source, "object Telemetry")
-        first  <- new IncidentRuntime(root).source("4")
+        first  <- new IncidentRuntime(root).source("3")
         _      <- LabIo.writeAtomic(source, "object Telemetry { val changed = true }")
-        second <- new IncidentRuntime(root).source("4")
+        second <- new IncidentRuntime(root).source("3")
       yield expect(first.nonEmpty && first != second)
     }
   }
@@ -191,10 +294,10 @@ object LabIncidentSuite extends SimpleIOSuite:
   ) {
     fixture { (lab, world) =>
       for
-        _      <- lab.start("4", false, false)
+        _      <- lab.start("3", false, false)
         _      <- world.update(_.copy(deployed = "external"))
-        failed <- lab.start("4", false, false).attempt
-        _      <- lab.start("4", false, true)
+        failed <- lab.start("3", false, false).attempt
+        _      <- lab.start("3", false, true)
         result <- world.get
       yield expect(failed.isLeft && result.prepares == 2 && result.baselines == 2)
     }
@@ -203,9 +306,9 @@ object LabIncidentSuite extends SimpleIOSuite:
   test("switching scenarios creates a fresh baseline without activating") {
     fixture { (lab, world) =>
       for
+        _      <- lab.start("3", false, false)
+        _      <- lab.activate("3", 750, false)
         _      <- lab.start("4", false, false)
-        _      <- lab.activate("4", 750, false)
-        _      <- lab.start("5", false, false)
         result <- world.get
       yield expect(result.prepares == 2 && result.baselines == 2 && result.activations == 1)
     }
@@ -230,7 +333,7 @@ object LabIncidentSuite extends SimpleIOSuite:
     def ready(
         values: Vector[Json],
         time: Long       = now,
-        code: String     = "4",
+        code: String     = "3",
         healthy: Boolean = true,
     ) =
       IncidentRuntime.reportsReady(values, time, 100000L, code, healthy)
@@ -245,7 +348,7 @@ object LabIncidentSuite extends SimpleIOSuite:
         !ready(reports.takeRight(2)),
         !ready(failing),
         !ready(invalid),
-        !ready(reports, code = "3"),
+        !ready(reports, code = "2"),
         ready(failing, healthy = false),
         !ready(invalid, healthy = false),
       ),

@@ -5,10 +5,18 @@ script_directory="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_directory="$(cd -- "$script_directory/.." && pwd)"
 source "$script_directory/version.sh"
 
+local_cli_changes=false
+if ! git -C "$project_directory" diff --quiet HEAD -- tools/lab-cli/src build.sbt; then
+  local_cli_changes=true
+fi
+
 find_launcher() {
-  for candidate in "$project_directory"/.lab/cli/"$LAB_VERSION"/lab-cli-*/bin/lab-cli; do
-    if [[ -x "$candidate" ]]; then printf '%s\n' "$candidate"; return 0; fi
-  done
+  # Source edits must use the locally staged CLI, even when a release is cached.
+  if [[ "$local_cli_changes" != true ]]; then
+    for candidate in "$project_directory"/.lab/cli/"$LAB_VERSION"/lab-cli-*/bin/lab-cli; do
+      if [[ -x "$candidate" ]]; then printf '%s\n' "$candidate"; return 0; fi
+    done
+  fi
   for candidate in "$project_directory"/target/out/jvm/scala-*/lab-cli/universal/stage/bin/lab-cli; do
     if [[ -x "$candidate" ]]; then printf '%s\n' "$candidate"; return 0; fi
   done
@@ -19,7 +27,8 @@ if [[ -n "${LAB_CLI_EXEC:-}" ]]; then
   launcher="$LAB_CLI_EXEC"
 else
   launcher="$(find_launcher || true)"
-  if [[ "$launcher" != "$project_directory"/.lab/cli/"$LAB_VERSION"/* &&
+  if [[ "$local_cli_changes" != true &&
+        "$launcher" != "$project_directory"/.lab/cli/"$LAB_VERSION"/* &&
         ( -z "$launcher" || "$LAB_VERSION" == v* ) ]]; then
     if bash "$script_directory/install-cli.sh"; then
       launcher="$(find_launcher || true)"

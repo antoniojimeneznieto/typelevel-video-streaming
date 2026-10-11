@@ -37,55 +37,100 @@ style: |
 
 **An interactive Typelevel lab**
 
-<!-- Presenter: Welcome. Antonio introduces the platform; Maksim introduces the investigation approach. Environments should already be running. -->
+<!-- Presenter: Welcome. Move straight to setup so downloads run during the introduction. Maksim starts with telemetry and the investigation approach. Hand over to Antonio for the application and stack overview when he arrives. -->
+
+---
+
+# Start the lab now
+
+[tinyurl.com/tl-otel4s-lab](https://tinyurl.com/tl-otel4s-lab)
+
+Clone the repository, then run from its root:
+
+```bash
+./scripts/lab.sh start
+```
+
+[Setup instructions and prerequisites](https://github.com/antoniojimeneznieto/typelevel-video-streaming#requirements)
+
+**Leave this running while we introduce the system.**
+
+<!-- Presenter: Start downloads immediately. The README currently contains the participant setup instructions: Java 17+, sbt, and Docker with Compose v2 running. Help participants clone the repository and run the command from its root. The first start pulls published images and initializes the application, so it can take several minutes. Continue the introduction while setup runs. -->
 
 ---
 
 # Your mission
 
-> Investigate an unfamiliar system from evidence emitted by the running system.
+> Investigate an unfamiliar service through the evidence it emits.
 
-**Find the affected users → locate the failure → explain the cause → verify recovery**
+- Find the affected users and requests.
+- Follow the request path and locate the failure.
+- Record a hypothesis and the observations supporting it.
+- Verify recovery under the workload that exposed the problem.
 
-Write down your hypothesis before changing anything.
+Inspect source when the evidence narrows the search.
 
-<!-- Presenter: Tell participants they can work in pairs. Ask for both a claim and the observation supporting it. Avoid showing source before the runtime evidence narrows the search. -->
-
----
-
-# The platform you will investigate
-
-```text
-                  ┌─────────────┐
-User / FS2 load ──▶   Gateway   ├─────▶ Catalog ────▶ PostgreSQL
-                  └──────┬──────┘
-                         ├────────────▶ Identity ────▶ PostgreSQL
-                         └────────────▶ Playback ────▶ PostgreSQL
-
-                  Services ── telemetry ──▶ Grafana LGTM
-```
-
-Browse courses. Log in. Read Playback data.
-
-<!-- Presenter: Antonio gives the 5-minute platform overview. These are the HTTP request paths used in the lab. Name the stack by role: Cats Effect for effects, FS2 for workload, http4s for HTTP, Smithy4s for contracts, Skunk for PostgreSQL, otel4s for telemetry. The full application contains more infrastructure; do not spend time on it here. -->
+<!-- Presenter: Participants can work in pairs. They do not need prior knowledge of the code or APIs. Start with runtime evidence and discover the request path through traces. Source becomes useful for explaining an operation or adding missing observations. -->
 
 ---
 
 # Three kinds of evidence
 
-| Signal | First question |
+| Signal | Question it helps answer |
 | --- | --- |
-| **Metrics** | What changed, when, and for whom? |
+| **Metrics** | What changed, when, and how broadly? |
 | **Traces** | Which operations did a request reach, and where did time go? |
-| **Logs** | What did one component observe or decide? |
+| **Logs** | What did a component observe or decide? |
 
-Runtime metrics and source may answer questions the request trace cannot.
+Use the same service, time window, and request context to connect them.
 
-<!-- Presenter: Adapted from the observability-with-otel4s talk. Use one lab request as the running example. Logs are useful when they answer a specific question; not every round needs a logging step. -->
+<!-- Presenter: Introduce the following examples as navigation and signal reading, not an incident diagnosis. Runtime metrics are also metrics. A useful investigation may need several signals, but every incident does not require a logging step. -->
 
 ---
 
-# One request, several boundaries
+# Metrics
+
+![bg right:60% contain](docs/scenario1-gateway-catalog-boundary.png)
+
+Summarize many requests over time.
+
+Compare **rate, errors, and duration** with a healthy window.
+
+Check the route, service, and time range before interpreting a change.
+
+<!-- Presenter: Rehearsal screenshot from docs/scenario1-gateway-catalog-boundary.png. Point out the time axis, units, series labels, latency percentiles, and request rates. Explain p95 briefly: a duration percentile summarizes a population, not one request. Do not diagnose the caller/server difference yet. The screenshot illustrates reading a dashboard, not the current lab state. -->
+
+---
+
+# Traces
+
+![bg right:50% contain](docs/scenario3-trace.png)
+
+Show one request's lifecycle.
+
+This successful login crosses **Gateway, Identity, and SQL**.
+
+Spans identify operations, parent relationships, and elapsed time.
+
+<!-- Presenter: Healthy rehearsal trace from docs/scenario3-trace.png. Point to the trace ID, POST /api/identity/auth/login, status 200, child Identity span, and SQL children. Nested durations overlap and cannot simply be added. This request is an example, not proof that all requests are healthy. -->
+
+---
+
+# Logs
+
+Capture events and decisions inside an operation.
+
+A useful application log explains **what happened**, with context for that event.
+
+In Grafana, follow a trace's log link to Loki and filter to the same request.
+
+**A trace ID connects the event to its request lifecycle.**
+
+<!-- Presenter: Show the configured trace-to-log link during the live tour if logs are available. Compare timestamp, service, trace ID, and span ID. A message without request context can be difficult to place in a distributed flow. Log contents depend on application instrumentation. Avoid revealing Playback diagnostic fields here. Source: infrastructure/observability/grafana/provisioning/datasources.yaml. -->
+
+---
+
+# Propagation and correlation
 
 ```text
 Gateway server span
@@ -94,63 +139,135 @@ Gateway server span
             └─ SQL span
 ```
 
-**Propagation** connects the spans. A latency exemplar opens one measured trace;
-its trace ID also lets us find correlated logs.
+**Propagation** carries trace context across the HTTP call.
 
-<!-- Presenter: Show the lab's configured metric-to-trace and trace-to-log links. An exemplar is a sampled measurement, not necessarily the p95 request. Open a healthy request in Tempo. Show the trace ID, parent and child spans, and the time axis. Nested span durations cannot simply be added. Mention context propagation across fibers briefly; no API details yet. -->
+An **exemplar** links a metric observation to a recorded trace.
+The trace ID connects that request to its logs.
+
+<!-- Presenter: Follow one exemplar in Grafana, then show a trace-to-log link. The outgoing instrumentation injects context and incoming instrumentation extracts it. Parent and child spans form one trace. An exemplar is a sampled observation, not necessarily the request at p95. The lab's datasource configuration supplies the navigation links. Trace/log correlation requires logging within the active context. -->
 
 ---
 
-<!-- _class: small -->
+# otel4s and the Typelevel ecosystem
 
-# The approach extends beyond this lab
-
-| Boundary | Available integration |
+| Boundary or runtime | Instrumentation |
 | --- | --- |
-| HTTP | http4s + otel4s middleware |
-| Database | Skunk; doobie + otel4s |
-| gRPC | fs2-grpc + otel4s |
-| Kafka | fs2-kafka + otel4s |
-| Other HTTP clients | sttp otel4s backends |
+| HTTP | http4s middleware, sttp backends |
+| Database | Skunk tracing, doobie integration |
+| gRPC | fs2-grpc client and server tracing |
+| Messaging | fs2-kafka-otel4s producer and consumer tracing |
+| Cats Effect runtime | otel4s runtime metrics |
 
-Cats Effect runtime metrics help reveal scheduler pressure.
+Add spans, metrics, and contextual logs for application questions.
 
-**Instrument boundaries first. Add observations where a question remains unanswered.**
-
-<!-- Presenter: This lab exercises HTTP and Skunk. Integration availability and setup vary by library. References: https://typelevel.org/otel4s/ecosystem.html ; https://typelevel.org/doobie/docs/20-Otel4s-Tracing.html ; https://sttp.softwaremill.com/en/stable/backends/wrappers/opentelemetry.html -->
+<!-- Presenter: This lab uses HTTP and Skunk boundary instrumentation and Cats Effect runtime metrics. Integrations reduce the work needed to establish request context and boundary observations. Configure propagation, exporters, and dashboard links, then add domain instrumentation where a question remains unanswered. Integration APIs and platform support vary. References: https://typelevel.org/otel4s/ecosystem.html ; https://typelevel.org/otel4s/how-to-metrics/register-cats-effect-runtime-metrics.html . Skunk use is evidenced by this repository's runtime and repository modules. -->
 
 ---
 
 # Our investigation loop
 
-**Observe → hypothesize → seek distinguishing evidence → correct → verify**
+1. **Observe:** compare the baseline with the incident window.
+2. **Hypothesize:** write a cause and its supporting evidence.
+3. **Distinguish:** collect an observation that tests the explanation.
+4. **Correct:** apply the change the evidence supports.
+5. **Verify:** check fresh requests under the same workload.
 
-1. Compare the healthy and changed windows.
-2. Check offered load, errors, and latency by route.
-3. Follow a representative request through a trace.
-4. Inspect logs, runtime signals, or source when the evidence points there.
-5. Test the correction under the same triggering workload.
+Use runtime metrics, logs, or source when a request trace leaves a question open.
 
-<!-- Presenter: Live tool tour now: Workshop Overview, time picker, route link, healthy trace, and participant command card. Show `./scripts/lab.sh help` and `platform changes`; do not demonstrate a rollback. Give tool help without revealing the coming cause. -->
+<!-- Presenter: Ask for a claim and an observation, then ask what would distinguish it from another explanation. A deployment becoming ready is not recovery proof. Keep the triggering traffic and verify the affected routes after the change. -->
 
 ---
 
-<!-- _class: small -->
+# The application
 
-# The next two hours
+A video learning platform: users browse courses, sign in, and save favorites.
 
-| Time | Activity |
+| Service | Responsibility | Example service API |
+| --- | --- | --- |
+| Gateway | Routes browser and generator requests | `/api/catalog/courses` |
+| Catalog | Courses and learning paths | `GET /courses` |
+| Identity | Login and current user | `POST /auth/login` |
+| Playback | Favorites and playback progress | `GET /favorites` |
+
+When setup finishes, open **http://localhost:8000**.
+
+<!-- Presenter: Hand over to Antonio for the application and stack overview. Briefly show the running application if available. Catalog also provides GET /learning-paths, Identity provides GET /users/me, and Playback provides playback URLs and progress updates. Gateway prefixes downstream routes with /api/catalog, /api/identity, or /api/playback. The FS2 generator exercises these APIs while participants investigate in Grafana. Sources: shared/api-contracts/src/main/smithy/{catalog,identity,playback}-api.smithy. -->
+
+---
+
+# Request paths in the lab
+
+![w:1050](docs/slides/request-paths.svg)
+
+Gateway routes requests. Each backend service owns its database access.
+
+<!-- Presenter: This diagram shows the HTTP request paths used in the workshop, not the full deployment inventory. Walk through browsing, login, and a favorites request. Telemetry takes a separate path through the collector. Grafana connects the views of that evidence. -->
+
+---
+
+# The Typelevel stack
+
+| Component | Role in the application |
 | --- | --- |
-| 00–18 | Platform, telemetry, and tool tour |
-| 18–36 | Incident 1 · Catalog slowdown |
-| 36–55 | Incident 3 · Identity slowdown |
-| 55–83 | Incident 4 · Playback 401s |
-| 83–105 | Incident 5 · Catalog depletion |
-| 105–120 | Lessons, AI-assisted investigation, questions |
+| Cats Effect | Effects, concurrency, and resource lifetimes |
+| FS2 | Streams and generated workshop traffic |
+| http4s + Smithy4s | HTTP transport and shared API contracts |
+| Skunk | PostgreSQL access |
+| Calico + Scala.js | Browser application |
+| otel4s | OpenTelemetry instrumentation |
 
-The live system and your evidence drive the pace.
+<!-- Presenter: Antonio introduces the stack by role. The workshop exercises HTTP and database boundaries, runtime behavior, and application observations. Avoid implementation detail before participants see a request. Source: README.md and build.sbt. -->
 
-<!-- Presenter: These are provisional targets. Rehearse preparation, source rebuilds, and sustained recovery windows on the actual workshop host before treating this as a commitment. Scenario 2 is planned but not in this live sequence. -->
+---
+
+# CLI and incident phases
+
+The stack startup is already running: `./scripts/lab.sh start`.
+
+| Command | What it does |
+| --- | --- |
+| `incident start ID` | Prepares the round and starts healthy baseline traffic |
+| `incident activate ID` | Applies the incident workload or platform fault |
+| `incident rebuild` | Deploys source edits while the incident workload continues |
+| `incident status` | Reports the saved incident phase |
+
+Prefix each command with `./scripts/lab.sh`.
+Open the dashboard URL printed by the baseline command.
+
+<!-- Presenter: Explain the distinction between stack start and incident start. Use the ID shown on the incident slide. Wait for baseline readiness, then observe the healthy window before activation. Allow 2–5 minutes for setup and baseline orientation, and 2–5 minutes to see degradation after activation. Rebuild applies to source-editing rounds, not the platform rollback round. Status reports phase, not workload validity or recovery. -->
+
+---
+
+# Participant instructions and tools
+
+Keep the [setup instructions](https://github.com/antoniojimeneznieto/typelevel-video-streaming#requirements)
+and [incident command guide](https://github.com/antoniojimeneznieto/typelevel-video-streaming#run-a-lab-incident) open.
+
+- **Grafana:** http://localhost:3000 · login `admin` / `admin`.
+- **Workshop Overview:** choose the service, route, and time window.
+- **Tempo and Loki:** inspect traces and related logs.
+- **CLI help:** `./scripts/lab.sh help`.
+
+Follow each round's briefing. Hints appear one at a time.
+
+<!-- Presenter: The README supplies the current participant setup and command instructions. Do not direct participants to the facilitator playbook, which contains solutions. Give a short Grafana tour: time picker, service and route selection, dashboard navigation, exemplar, trace, and correlated log link. Show platform --help and platform changes as available tools without demonstrating a rollback. Participants record symptom, hypothesis, supporting evidence, change, and recovery evidence. -->
+
+---
+
+# Workshop agenda
+
+| Part | Activity |
+| --- | --- |
+| Introduction | Telemetry and investigation loop, then application, stack, and tools |
+| Incident 1 | Catalog slowdown |
+| Incident 2 | Identity slowdown |
+| Incident 3 | Playback authentication failures |
+| Incident 4 | Catalog depletion |
+| Closing | Lessons, application to your services, and questions |
+
+Each round starts with healthy traffic, then symptoms, hints, and a takeaway.
+
+<!-- Presenter: The session targets two hours. Pace the introduction while initial downloads run, and preserve time for baseline observation, source rebuilds, and sustained recovery. Incident IDs 1–4 follow presentation order. Use a rehearsal to calibrate timing instead of committing participants to exact minute allocations. -->
 
 ---
 
@@ -278,12 +395,12 @@ The same workload confirmed recovery after the platform rollback.
 
 ---
 
-# Incident 3 · Healthy Identity traffic
+# Incident 2 · Healthy Identity traffic
 
 Run the baseline:
 
 ```bash
-./scripts/lab.sh incident start 3
+./scripts/lab.sh incident start 2
 ```
 
 Users occasionally log in and regularly check their accounts with
@@ -297,12 +414,12 @@ Observe both routes while the baseline settles.
 
 ---
 
-# Incident 3 · Slow account operations
+# Incident 2 · Slow account operations
 
 Activate the incident:
 
 ```bash
-./scripts/lab.sh incident activate 3
+./scripts/lab.sh incident activate 2
 ```
 
 > More users are logging in. Logins and lightweight account requests
@@ -314,7 +431,7 @@ Explain why work without password verification also slows down.
 
 ---
 
-# Incident 3 · Hint 1: affected routes
+# Incident 2 · Hint 1: affected routes
 
 Compare login and `GET /users/me` latency in the same time window.
 
@@ -324,7 +441,7 @@ Compare login and `GET /users/me` latency in the same time window.
 
 ---
 
-# Incident 3 · Hint 2: request traces
+# Incident 2 · Hint 2: request traces
 
 Open a fresh login trace and a fresh current-user trace.
 
@@ -336,7 +453,7 @@ Compare their SQL spans and the time spent outside SQL.
 
 ---
 
-# Incident 3 · Hint 3: password work
+# Incident 2 · Hint 3: password work
 
 Compare password verification duration, permit wait, and active verifications.
 
@@ -346,7 +463,7 @@ Compare password verification duration, permit wait, and active verifications.
 
 ---
 
-# Incident 3 · Hint 4: runtime pressure
+# Incident 2 · Hint 4: runtime pressure
 
 Follow the dashboard links to **Cats Effect Runtime Metrics** and
 **JVM Runtime Metrics**. Select Identity and its current instance.
@@ -359,7 +476,7 @@ Compare scheduler drift and starvation with CPU activity.
 
 ---
 
-# Incident 3 · Hint 5: executor and repair
+# Incident 2 · Hint 5: executor and repair
 
 Inspect password verification in `PasswordHasher.scala`.
 
@@ -377,7 +494,7 @@ Keep the login-heavy workload and check fresh current-user latency.
 
 ---
 
-# Incident 3 · Takeaway
+# Incident 2 · Takeaway
 
 **Runtime telemetry explained why expensive work delayed unrelated requests.**
 
@@ -391,12 +508,12 @@ The repair restored lightweight requests under the same login-heavy workload.
 
 ---
 
-# Incident 4 · Healthy Playback traffic
+# Incident 3 · Healthy Playback traffic
 
 Run the baseline:
 
 ```bash
-./scripts/lab.sh incident start 4
+./scripts/lab.sh incident start 3
 ```
 
 Users log in and open their favorites in Playback. Traffic is steady and
@@ -410,12 +527,12 @@ Observe the response rates and a successful request trace.
 
 ---
 
-# Incident 4 · Some users receive 401
+# Incident 3 · Some users receive 401
 
 Activate the incident:
 
 ```bash
-./scripts/lab.sh incident activate 4
+./scripts/lab.sh incident activate 3
 ```
 
 A new authentication token model adds a namespace to the subject.
@@ -429,7 +546,7 @@ Find the incompatible step while preserving authentication checks.
 
 ---
 
-# Incident 4 · Hint 1: failure rate
+# Incident 3 · Hint 1: failure rate
 
 Compare Playback's `200` and `401` rates with the baseline.
 
@@ -439,7 +556,7 @@ Compare Playback's `200` and `401` rates with the baseline.
 
 ---
 
-# Incident 4 · Hint 2: Gateway and Playback
+# Incident 3 · Hint 2: Gateway and Playback
 
 Open a fresh rejected Playback trace and a successful control.
 
@@ -449,7 +566,7 @@ Open a fresh rejected Playback trace and a successful control.
 
 ---
 
-# Incident 4 · Hint 3: repository work
+# Incident 3 · Hint 3: repository work
 
 Follow the rejected request inside Playback.
 
@@ -459,7 +576,7 @@ Follow the rejected request inside Playback.
 
 ---
 
-# Incident 4 · Hint 4: subject decoding
+# Incident 3 · Hint 4: subject decoding
 
 The `auth.subject.decode` span surrounds conversion of a verified token
 subject into a user UUID.
@@ -472,7 +589,7 @@ Both successful and rejected requests have this span.
 
 ---
 
-# Incident 4 · Hint 5: diagnostic attributes
+# Incident 3 · Hint 5: diagnostic attributes
 
 Open `PlaybackAuthTelemetry.decodeSubject`.
 
@@ -486,7 +603,7 @@ Keep the decoder behavior during this diagnostic step.
 
 ---
 
-# Incident 4 · Hint 6: a correlated log
+# Incident 3 · Hint 6: a correlated log
 
 Log the decoding outcome and verified subject for the synthetic accounts
 inside the active span. Deploy the diagnostics:
@@ -504,7 +621,7 @@ by trace ID in Loki.
 
 ---
 
-# Incident 4 · Hint 7: compatibility and repair
+# Incident 3 · Hint 7: compatibility and repair
 
 Compare the formats that Identity emits with the formats Playback accepts.
 
@@ -522,7 +639,7 @@ Verify fresh requests under the same mixed workload.
 
 ---
 
-# Incident 4 · Takeaway
+# Incident 3 · Takeaway
 
 **Extra context explained a failure affecting a small share of users.**
 
@@ -537,12 +654,12 @@ and keep sensitive details out of telemetry.
 
 ---
 
-# Incident 5 · Healthy Catalog traffic
+# Incident 4 · Healthy Catalog traffic
 
 Run the baseline:
 
 ```bash
-./scripts/lab.sh incident start 5
+./scripts/lab.sh incident start 4
 ```
 
 Users browse video courses. Traffic is steady, requests succeed, and database
@@ -556,12 +673,12 @@ Observe active sessions and acquisition wait while the baseline settles.
 
 ---
 
-# Incident 5 · Catalog gradually slows
+# Incident 4 · Catalog gradually slows
 
 Activate the incident:
 
 ```bash
-./scripts/lab.sh incident activate 5
+./scripts/lab.sh incident activate 4
 ```
 
 > Course browsing starts normally, then becomes progressively slower.
@@ -573,7 +690,7 @@ Find what consumes capacity and verify a sustained recovery.
 
 ---
 
-# Incident 5 · Hint 1: traffic mix
+# Incident 4 · Hint 1: traffic mix
 
 Compare the request mix before and after activation.
 
@@ -583,7 +700,7 @@ Compare the request mix before and after activation.
 
 ---
 
-# Incident 5 · Hint 2: acquisition time
+# Incident 4 · Hint 2: acquisition time
 
 Compare time spent acquiring a database session with SQL execution time.
 
@@ -593,7 +710,7 @@ Compare time spent acquiring a database session with SQL execution time.
 
 ---
 
-# Incident 5 · Hint 3: waiting requests
+# Incident 4 · Hint 3: waiting requests
 
 Watch active sessions and requests waiting for a session over time.
 
@@ -603,7 +720,7 @@ Watch active sessions and requests waiting for a session over time.
 
 ---
 
-# Incident 5 · Hint 4: the oldest wait
+# Incident 4 · Hint 4: the oldest wait
 
 Check the age of the oldest request waiting for a database session.
 
@@ -613,7 +730,7 @@ Check the age of the oldest request waiting for a database session.
 
 ---
 
-# Incident 5 · Hint 5: healthy and slow traces
+# Incident 4 · Hint 5: healthy and slow traces
 
 Compare a healthy Catalog trace with a fresh slow or timed-out request.
 
@@ -623,7 +740,7 @@ Compare a healthy Catalog trace with a fresh slow or timed-out request.
 
 ---
 
-# Incident 5 · Hint 6: shared repository resource
+# Incident 4 · Hint 6: shared repository resource
 
 Find the LearningPath handler and follow its repository dependency.
 
@@ -635,7 +752,7 @@ Trace the course request path and check how it releases that resource.
 
 ---
 
-# Incident 5 · Hint 7: sustained recovery
+# Incident 4 · Hint 7: sustained recovery
 
 Correct the resource lifetime and deploy the change:
 
@@ -651,7 +768,7 @@ Keep the same mixed workload. Watch at least two minutes of fresh requests.
 
 ---
 
-# Incident 5 · Takeaway
+# Incident 4 · Takeaway
 
 **Metrics can reveal accumulating resource loss before every request fails.**
 

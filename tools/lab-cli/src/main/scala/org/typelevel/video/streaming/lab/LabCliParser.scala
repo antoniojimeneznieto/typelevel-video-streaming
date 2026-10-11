@@ -177,14 +177,14 @@ private[lab] object LabCliParser {
 
   private val incidentId = Opts
     .argument[String]("ID")
-    .validate("ID must be 1, 3, 4, or 5")(Set("1", "3", "4", "5"))
+    .validate("ID must be 1, 2, 3, or 4")(Set("1", "2", "3", "4"))
 
   private val incidentArgs: Opts[LabAction] =
     (
       Opts
         .argument[String]("ID")
-        .validate("ID must be 1, 3, 4, or 5")(
-          Set("1", "3", "4", "5"),
+        .validate("ID must be 1, 2, 3, or 4")(
+          Set("1", "2", "3", "4"),
         ),
       Opts
         .option[Int]("milliseconds", help = "Catalog delay for incident 1 (1–9999)")
@@ -309,7 +309,7 @@ private[lab] object LabCliParser {
           Command("prepare", "Reset transient state before a controlled workshop round") {
             Opts
               .argument[Int]("ROUND")
-              .validate("ROUND must be 1, 3, 4, or 5; round 2 is not implemented")(Set(1, 3, 4, 5))
+              .validate("ROUND must be 1, 2, 3, or 4")(Set(1, 2, 3, 4))
               .map(Prepare.apply)
           },
         ) orElse

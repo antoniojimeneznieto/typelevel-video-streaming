@@ -19,26 +19,26 @@ private[lab] object IncidentRuntime:
   val generator = "typelevel-video-streaming-lab-traffic"
 
   def service(code: String): String = code match
-    case "3" => "identity-service"
-    case "4" => "playback-service"
+    case "2" => "identity-service"
+    case "3" => "playback-service"
     case _ => "catalog-service"
 
   def profile(code: String, active: Boolean): String = code match
-    case "3" => "identity"
-    case "4" => "playback"
-    case "5" if active => "catalog-soak"
+    case "2" => "identity"
+    case "3" => "playback"
+    case "4" if active => "catalog-soak"
     case _ => "catalog-courses"
 
   def rate(code: String): Int = code match
-    case "3" => 30
-    case "4" => 10
+    case "2" => 30
+    case "3" => 10
     case _ => 5
 
   def arguments(code: String, active: Boolean): Seq[String] =
     Seq("--profile", profile(code, active), "--rate", rate(code).toString) ++ (code match
-      case "3" => Seq("--login-percent", if active then "70" else "5")
-      case "4" => Seq("--modern-percent", if active then "20" else "0")
-      case "5" => Seq("--request-timeout", "15s")
+      case "2" => Seq("--login-percent", if active then "70" else "5")
+      case "3" => Seq("--modern-percent", if active then "20" else "0")
+      case "4" => Seq("--request-timeout", "15s")
       case _ => Seq.empty)
 
   def requireThat(condition: Boolean, message: String): IO[Unit] =
@@ -207,13 +207,13 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
              root,
              images,
              Map(
-               "PLAYBACK_WORKSHOP_READ_MODE" -> (code == "4").toString,
-               "CATALOG_POSTGRES_MAX_CONNECTIONS" -> (if code == "5" then "6" else "10"),
+               "PLAYBACK_WORKSHOP_READ_MODE" -> (code == "3").toString,
+               "CATALOG_POSTGRES_MAX_CONNECTIONS" -> (if code == "4" then "6" else "10"),
              ),
            )
       _ <- LabScenarios.resetPlatform(root)
       _ <- IO.println("[3/5] Preparing scenario data")
-      _ <- if code == "4" then LabScenarios.preparePlayback(root, configure = false) else IO.unit
+      _ <- if code == "3" then LabScenarios.preparePlayback(root, configure = false) else IO.unit
     yield ()
 
   private def trafficMatches(code: String, active: Boolean): IO[Boolean] =
@@ -351,7 +351,7 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
                       s"histogram_quantile(0.95,sum by (le)(rate(http_server_request_duration_seconds_bucket{$selector}[60s])))",
                     )
                   _ <- requireThat(
-                         math.max(latency, gatewayLatency) < (if code == "3" then 2.0 else 0.5),
+                         math.max(latency, gatewayLatency) < (if code == "2" then 2.0 else 0.5),
                          "Baseline latency is too high; inspect host capacity and scenario state",
                        )
                 yield ()
@@ -413,8 +413,8 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
             )
       dashboard = code match
                     case "1" => "gateway-catalog-boundary"
-                    case "3" => "identity-investigation"
-                    case "4" => "playback-investigation"
+                    case "2" => "identity-investigation"
+                    case "3" => "playback-investigation"
                     case _ => "catalog-sessions"
       _ <-
         IO.println(
