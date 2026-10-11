@@ -214,7 +214,15 @@ private[lab] object LabCliParser {
           "restart",
           "Start a fresh baseline using saved or newly built scenario images; preserve source edits",
         ) {
-          (incidentId, Opts.flag("build", help = "Build and save scenario and traffic images from current source").orFalse)
+          (
+            incidentId,
+            Opts
+              .flag(
+                "build",
+                help = "Build and save scenario and traffic images from current source",
+              )
+              .orFalse,
+          )
             .mapN((code, build) => IncidentStart(code, build, true))
         },
       ) orElse

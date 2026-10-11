@@ -165,25 +165,27 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
               root.resolve(".lab/compiler-ready"),
               revision.trim,
             )
-      images <- saved.filter(_ => !build).fold(
-                  (if pinned then List(service(code)) else services)
-                    .traverse { name =>
-                      LabIo
-                        .output(
-                          root,
-                          Seq(
-                            "docker",
-                            "image",
-                            "inspect",
-                            "--format",
-                            "{{.Id}}",
-                            s"${env("IMAGE_PREFIX")}/$name:${env("IMAGE_TAG")}",
-                          ),
-                        )
-                        .map(image => name -> image.trim)
-                    }
-                    .map(built => saved.getOrElse(Map.empty) ++ built.toMap),
-                )(IO.pure)
+      images <- saved
+                  .filter(_ => !build)
+                  .fold(
+                    (if pinned then List(service(code)) else services)
+                      .traverse { name =>
+                        LabIo
+                          .output(
+                            root,
+                            Seq(
+                              "docker",
+                              "image",
+                              "inspect",
+                              "--format",
+                              "{{.Id}}",
+                              s"${env("IMAGE_PREFIX")}/$name:${env("IMAGE_TAG")}",
+                            ),
+                          )
+                          .map(image => name -> image.trim)
+                      }
+                      .map(built => saved.getOrElse(Map.empty) ++ built.toMap),
+                  )(IO.pure)
       _ <-
         images.values.toList.traverse_(image =>
           LabIo.output(root, Seq("docker", "image", "inspect", "--format", "{{.Id}}", image)).void,
@@ -243,16 +245,26 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
     for
       target <- LabCommands.containerId(root, service(code))
       state  <- inspect(target, "{{.State.Status}} (exit code {{.State.ExitCode}})")
-      _      <- IO.raiseUnless(state.startsWith("running "))(
-                  new StoppedWorkload(
-                    s"${service(code)} is $state. Run incident restart $code to restore the scenario before starting traffic.",
-                  ),
-                )
+      _      <-
+        IO.raiseUnless(state.startsWith("running "))(
+          new StoppedWorkload(
+            s"${service(code)} is $state. Run incident restart $code to restore the scenario before starting traffic.",
+          ),
+        )
     yield ()
 
   private def requireGeneratorRunning: IO[Unit] =
     LabIo
-      .probe(root, Seq("docker", "inspect", "--format", "{{.State.Status}} (exit code {{.State.ExitCode}})", generator))
+      .probe(
+        root,
+        Seq(
+          "docker",
+          "inspect",
+          "--format",
+          "{{.State.Status}} (exit code {{.State.ExitCode}})",
+          generator,
+        ),
+      )
       .flatMap {
         case Some(state) if state.trim.startsWith("exited ") =>
           LabIo.output(root, Seq("docker", "logs", "--tail", "8", generator)).flatMap { logs =>
