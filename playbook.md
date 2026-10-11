@@ -236,6 +236,10 @@ exercise images and starts a new baseline without changing source files or
 clearing telemetry history. Participant edits remain available and will be
 used by the next `incident rebuild`. Review or restore exercise edits before
 asking a new group to repeat a source-editing lesson.
+When developing a new exercise in the same checkout, use
+`incident restart ID --build` to build the scenario service and traffic
+generator from the current source and save the new scenario image.
+A plain restart continues to use the previously saved image IDs.
 
 Use `incident rebuild` to deploy the active round's edited service. It preserves
 the triggering workload and scenario settings and waits for new telemetry;

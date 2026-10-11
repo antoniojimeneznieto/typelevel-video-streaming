@@ -23,6 +23,7 @@ object LabIncidentSuite extends SimpleIOSuite:
   final private case class World(
       prepares: Int            = 0,
       baselines: Int           = 0,
+      baselineChecks: Int      = 0,
       activations: Int         = 0,
       builds: Int              = 0,
       ready: Boolean           = true,
@@ -46,6 +47,10 @@ object LabIncidentSuite extends SimpleIOSuite:
                 def snapshot               = world.get.map(w => Map("service" -> w.deployed))
                 def observe(code: String, since: Long, healthy: Boolean) = world.get.flatMap(w =>
                   IO.raiseUnless(w.ready)(new IllegalStateException("telemetry unavailable")),
+                )
+                def baselineCurrent(code: String) = world.get.flatMap(w =>
+                  world.update(_.copy(baselineChecks = w.baselineChecks + 1)) *>
+                    IO.raiseUnless(w.ready)(new IllegalStateException("baseline unavailable")),
                 )
                 def activate(code: String, milliseconds: Int, verbose: Boolean) =
                   world.get.flatMap { w =>
@@ -81,7 +86,7 @@ object LabIncidentSuite extends SimpleIOSuite:
       yield expect(
         baseline.prepares == 1 && baseline.baselines == 1 && baseline.activations == 0,
       ) &&
-        expect(active.prepares == 1 && active.activations == 1)
+        expect(active.prepares == 1 && active.activations == 1 && active.baselineChecks == 1)
     }
   }
 
@@ -243,7 +248,9 @@ object LabIncidentSuite extends SimpleIOSuite:
         ready(reports),
         !ready(reports, now + 20000),
         !ready(reports.takeRight(2)),
+        IncidentRuntime.reportsReady(reports.takeRight(1), now, 100000L, "4", healthy = true, fullWindow = false),
         !ready(failing),
+        !IncidentRuntime.reportsReady(failing.takeRight(1), now, 100000L, "4", healthy = true, fullWindow = false),
         !ready(invalid),
         !ready(reports, code = "3"),
         ready(failing, healthy = false),

@@ -212,9 +212,10 @@ private[lab] object LabCliParser {
       Opts.subcommand(
         Command(
           "restart",
-          "Start a fresh baseline using the saved exercise images; preserve source edits",
+          "Start a fresh baseline using saved or newly built scenario images; preserve source edits",
         ) {
-          incidentId.map(code => IncidentStart(code, false, true))
+          (incidentId, Opts.flag("build", help = "Build and save scenario and traffic images from current source").orFalse)
+            .mapN((code, build) => IncidentStart(code, build, true))
         },
       ) orElse
       Opts.subcommand(

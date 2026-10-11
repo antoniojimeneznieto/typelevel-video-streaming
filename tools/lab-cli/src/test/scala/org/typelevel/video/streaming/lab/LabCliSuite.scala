@@ -133,6 +133,7 @@ object LabCliSuite extends SimpleIOSuite {
         List("incident", "start", "3"),
         List("incident", "start", "4", "--build"),
         List("incident", "restart", "5"),
+        List("incident", "restart", "4", "--build"),
         List("incident", "rebuild"),
         List("incident", "status"),
         List("scenario3", "baseline"),
@@ -211,6 +212,11 @@ object LabCliSuite extends SimpleIOSuite {
           .parse(List("incident", "start", "1"))
           .exists(_.action == LabAction.IncidentStart("1", false)),
       ) &&
+        expect(
+          LabCliParser.command
+            .parse(List("incident", "restart", "4", "--build"))
+            .exists(_.action == LabAction.IncidentStart("4", true, true)),
+        ) &&
         expect(
           LabCliParser.command
             .parse(List("incident", "activate", "1", "--verbose"))
