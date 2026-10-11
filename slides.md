@@ -37,7 +37,7 @@ style: |
 
 **An interactive Typelevel lab**
 
-<!-- Presenter: Welcome. Move straight to setup so downloads run during the introduction. Maksim starts with telemetry and the investigation approach. Hand over to Antonio for the application and stack overview when he arrives. -->
+<!-- Presenter: Welcome. Move straight to setup so downloads run during the introduction. Antonio introduces the application and stack before Maksim explains telemetry and the investigation approach. -->
 
 ---
 
@@ -71,6 +71,143 @@ Clone the repository, then run from its root:
 Inspect source when the evidence narrows the search.
 
 <!-- Presenter: Participants can work in pairs. They do not need prior knowledge of the code or APIs. Start with runtime evidence and discover the request path through traces. Source becomes useful for explaining an operation or adding missing observations. -->
+
+---
+
+# The Typelevel stack
+
+| Component | Role in the application |
+| --- | --- |
+| Cats Effect | Effects, concurrency, and resource lifetimes |
+| FS2 | Streams and generated workshop traffic |
+| http4s + Smithy4s | HTTP transport and shared API contracts |
+| Skunk | PostgreSQL access |
+| Calico + Scala.js | Browser application |
+| otel4s | OpenTelemetry instrumentation |
+
+**Smithy contracts** define routes, payloads, and authentication requirements.
+Their route templates also label HTTP telemetry.
+
+<!-- Presenter: Hand over to Antonio for the backend tour. Introduce the stack by role before showing the application and its architecture. The workshop exercises HTTP and database boundaries, runtime behavior, and application observations. Identity, Catalog, and Playback expose generated Smithy4s service interfaces implemented in Scala; http4s serves them. The shared contract also supplies stable route templates such as /courses/{courseId}/lessons/{lessonId}/playback, instead of a metric label for every ID. Gateway reuses those contracts for its public prefixes. Sources: build.sbt; shared/api-contracts/src/main/smithy; backend/modules/runtime/src/main/scala/org/typelevel/video/streaming/backend/runtime/http/SmithyRouteClassifier.scala; GatewayRouteClassifier.scala. -->
+
+---
+
+# The application
+
+A video learning platform: browse courses, sign in, play videos, and save progress.
+
+| Service | Responsibility |
+| --- | --- |
+| Gateway | Routes application API requests |
+| Identity | Accounts, login, and access tokens |
+| Catalog | Course discovery and learning paths |
+| Playback | Video access, favorites, and progress |
+
+When setup finishes, open **http://localhost:8000**.
+
+<!-- Presenter: Continue the 5–7 minute backend tour. Briefly show browsing, login, and playback in the running application if available. In Codespaces use the forwarded frontend port instead of localhost. The following slides explain the normal architecture and API surface; keep incident mechanisms and fixes for the investigation rounds. Sources: shared/api-contracts/src/main/smithy/{catalog,identity,playback}-api.smithy. -->
+
+---
+
+# Backend architecture
+
+![w:1100](docs/slides/backend-architecture.svg)
+
+One PostgreSQL instance hosts **three service-owned databases**.
+
+Services export telemetry to the **OpenTelemetry collector → Grafana stack**.
+
+<!-- Presenter: Follow a browser API request through the frontend's Nginx proxy, Gateway, and the selected backend. The FS2 generator calls Gateway directly. Each backend uses its own database and pool; they share one PostgreSQL server in the lab. The Catalog HTTP path includes the lab's network proxy; explain its place without demonstrating any fault. This view covers API requests and SQL. The next slide covers asynchronous data, and the Playback slide covers video bytes. Telemetry flows separately through the collector in the LGTM container to Tempo, Loki, and Prometheus, viewed in Grafana. Sources: compose.yaml; frontend/nginx.conf; GatewayRoutes.scala. -->
+
+---
+
+# How data reaches Playback
+
+![w:1100](docs/slides/playback-projections.svg)
+
+Registration writes the user and its outbox event in **one transaction**.
+
+Playback maintains local users and lessons **asynchronously**.
+
+<!-- Presenter: An outbox is a database table holding events alongside business data. Identity inserts a user and UserCreated event atomically, then returns the registration response. Debezium reads committed database changes and publishes them to Kafka; Playback consumes them and updates its own database. Catalog's LessonPublished events are seeded during lab setup: the current Catalog API has no publishing operation. Playback can therefore answer using local user and lesson data instead of calling Identity or Catalog on each request. These copies become available after consumption; registration does not wait for Playback. HTTP trace context is propagated across service calls, but do not promise one end-to-end trace through Debezium: asynchronous correlation depends on the configured instrumentation. Sources: IdentityRepository.create; PlaybackEventWorker; PlaybackProjectionRepository; infrastructure/debezium/*-outbox.json; infrastructure/postgres/init/01-schema.sql. -->
+
+---
+
+# Gateway · the application API entry point
+
+| Incoming prefix | Destination |
+| --- | --- |
+| `/api/identity/*` | Identity |
+| `/api/catalog/*` | Catalog, through the network proxy |
+| `/api/playback/*` | Playback |
+
+```text
+GET /api/catalog/courses?q=fs2
+                 ↓
+Catalog: GET /courses?q=fs2
+```
+
+Gateway forwards the bearer token. **The destination service authenticates it.**
+
+<!-- Presenter: Gateway removes the service prefix and preserves the remaining path and query. It wraps inbound and outbound HTTP with telemetry, so one API call has a Gateway server span and an outgoing client span before the downstream server span. The default local browser origin is port 8000 through Nginx; Gateway itself is exposed on host port 8085. Prefixes shown here apply to all service-local paths in the following tables. Source: GatewayRoutes.scala; GatewayClient.scala; Identity and Playback Main.scala and BearerAuthenticationMiddleware. -->
+
+---
+
+# Identity · accounts and access tokens
+
+Gateway prefix: `/api/identity`
+
+| Service API | Purpose | Authentication |
+| --- | --- | --- |
+| `POST /users` | Register an account | Public |
+| `POST /auth/login` | Obtain an access token | Public |
+| `GET /users/me` | Read the current user | Bearer JWT |
+
+Login returns `accessToken`, `tokenType`, and `expiresIn`.
+
+Send the token as **`Authorization: Bearer <token>`** on protected requests.
+
+<!-- Presenter: Registration accepts email, password, and displayName; it returns the new user with HTTP 201. Login accepts email and password. Identity signs the JWT, and Identity/Playback validate protected requests with the public key in their authentication middleware. Playback does not call Identity to validate each token. Identity stores account data in its own database and produces UserCreated through the outbox shown earlier. Keep incident-specific behavior for the investigation rounds. Source: shared/api-contracts/src/main/smithy/identity-api.smithy; IdentityServiceImpl.scala; Main.scala. -->
+
+---
+
+# Catalog · discover the content
+
+Gateway prefix: `/api/catalog` · **Public read APIs**
+
+| Service API | Returns |
+| --- | --- |
+| `GET /courses` | Course metadata, instructors, levels, and technologies |
+| `GET /learning-paths` | Curated paths containing course IDs |
+
+```http
+GET /api/catalog/courses?q=fs2&level=intermediate&limit=10
+```
+
+Both collections support **search, filters, and `limit` / `offset` pagination**.
+
+<!-- Presenter: The frontend fetches these collections from Catalog. Courses include descriptions, duration, and lesson count; the video objects live in storage. Course filters also include kind, topic, and technology. Learning paths support level and tone. Both endpoints default to limit=20 and offset=0. The app reads seeded catalog data; there is no course-write or lesson-publish HTTP API in this version. Source: catalog-api.smithy and catalog-domain.smithy. -->
+
+---
+
+<!-- _class: small -->
+
+# Playback · watching and personal learning data
+
+Gateway prefix: `/api/playback` · **All APIs require a bearer JWT**
+
+| Service API | Purpose |
+| --- | --- |
+| `GET /courses/{courseId}/lessons/{lessonId}/playback` | Return a signed video URL and expiry |
+| `PUT /courses/{courseId}/lessons/{lessonId}/progress` | Save `positionSeconds` |
+| `GET /progress` | List the current user's progress |
+| `GET /favorites` | List the current user's favorites |
+| `PUT /favorites/{courseId}` | Add a favorite |
+| `DELETE /favorites/{courseId}` | Remove a favorite |
+
+**Video bytes:** Browser → frontend/Nginx → SeaweedFS (S3-compatible storage).
+
+<!-- Presenter: Playback uses its local projections to find the user and lesson. For a playback URL it checks the S3 object with HEAD, then returns JSON containing an expiring signed URL and expiresIn. The browser follows this URL through the frontend's media proxy to SeaweedFS for the MP4, including Range requests; the bytes do not pass through Gateway or Playback. Favorites and progress belong to the authenticated user and are stored in Playback's database. GET /progress can filter by courseId and completed; progress and favorites lists are paginated. Sources: playback-api.smithy; PlaybackServiceImpl.scala; S3VideoStorage.scala; frontend/nginx.conf. -->
 
 ---
 
@@ -178,48 +315,6 @@ Use runtime metrics, logs, or source when a request trace leaves a question open
 
 ---
 
-# The application
-
-A video learning platform: users browse courses, sign in, and save favorites.
-
-| Service | Responsibility | Example service API |
-| --- | --- | --- |
-| Gateway | Routes browser and generator requests | `/api/catalog/courses` |
-| Catalog | Courses and learning paths | `GET /courses` |
-| Identity | Login and current user | `POST /auth/login` |
-| Playback | Favorites and playback progress | `GET /favorites` |
-
-When setup finishes, open **http://localhost:8000**.
-
-<!-- Presenter: Hand over to Antonio for the application and stack overview. Briefly show the running application if available. Catalog also provides GET /learning-paths, Identity provides GET /users/me, and Playback provides playback URLs and progress updates. Gateway prefixes downstream routes with /api/catalog, /api/identity, or /api/playback. The FS2 generator exercises these APIs while participants investigate in Grafana. Sources: shared/api-contracts/src/main/smithy/{catalog,identity,playback}-api.smithy. -->
-
----
-
-# Request paths in the lab
-
-![w:1050](docs/slides/request-paths.svg)
-
-Gateway routes requests. Each backend service owns its database access.
-
-<!-- Presenter: This diagram shows the HTTP request paths used in the workshop, not the full deployment inventory. Walk through browsing, login, and a favorites request. Telemetry takes a separate path through the collector. Grafana connects the views of that evidence. -->
-
----
-
-# The Typelevel stack
-
-| Component | Role in the application |
-| --- | --- |
-| Cats Effect | Effects, concurrency, and resource lifetimes |
-| FS2 | Streams and generated workshop traffic |
-| http4s + Smithy4s | HTTP transport and shared API contracts |
-| Skunk | PostgreSQL access |
-| Calico + Scala.js | Browser application |
-| otel4s | OpenTelemetry instrumentation |
-
-<!-- Presenter: Antonio introduces the stack by role. The workshop exercises HTTP and database boundaries, runtime behavior, and application observations. Avoid implementation detail before participants see a request. Source: README.md and build.sbt. -->
-
----
-
 # CLI and incident phases
 
 The stack startup is already running: `./scripts/lab.sh start`.
@@ -258,7 +353,7 @@ Follow each round's briefing. Hints appear one at a time.
 
 | Part | Activity |
 | --- | --- |
-| Introduction | Telemetry and investigation loop, then application, stack, and tools |
+| Introduction | Application and stack, then telemetry, investigation loop, and tools |
 | Incident 1 | Catalog slowdown |
 | Incident 2 | Identity slowdown |
 | Incident 3 | Playback authentication failures |
