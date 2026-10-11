@@ -1,8 +1,8 @@
 package org.typelevel.video.streaming.lab
 
 import cats.effect.IO
-import io.circe.Codec
-import io.circe.parser.decode
+import io.circe.{Codec, Json}
+import io.circe.parser.parse
 import io.circe.syntax.*
 import java.nio.file.Path
 
@@ -44,26 +44,46 @@ private[lab] object LabIncident:
 
   def load(root: Path): IO[Option[State]] =
     val file        = root.resolve(".lab/incident.json")
-    val previousIds = Map("8f27" -> "1", "3c91" -> "3", "7b42" -> "4", "d5e0" -> "5")
+    val previousIds = Map(
+      "8f27" -> "1",
+      "3c91" -> "2",
+      "7b42" -> "3",
+      "d5e0" -> "4",
+      "1" -> "1",
+      "3" -> "2",
+      "4" -> "3",
+      "5" -> "4",
+    )
     for
       exists <- LabIo.exists(file)
       state  <-
         if exists then
-          LabIo
-            .read(file)
-            .flatMap(value => IO.fromEither(decode[State](value)))
-            .map(state => Some(state.copy(code = previousIds.getOrElse(state.code, state.code))))
+          for
+            json    <- LabIo.read(file).flatMap(value => IO.fromEither(parse(value)))
+            version <- IO.fromEither(json.hcursor.get[Option[Int]]("numbering_version"))
+            _       <- IO.raiseUnless(version.forall(v => v == 1 || v == 2))(
+                   new IllegalStateException("Unsupported incident numbering version"),
+                 )
+            decoded <- IO.fromEither(json.as[State])
+            code     =
+              if version.contains(2) then decoded.code
+              else previousIds.getOrElse(decoded.code, decoded.code)
+            _ <- IO.raiseUnless(Set("1", "2", "3", "4")(code))(
+                   new IllegalStateException("Unknown saved incident ID"),
+                 )
+          yield Some(decoded.copy(code = code))
         else IO.pure(None)
     yield state
 
   final class Lifecycle(root: Path, operations: Operations):
     private def save(state: State): IO[Unit] =
+      val json = state.asJson.deepMerge(Json.obj("numbering_version" -> Json.fromInt(2)))
       for
-        _   <- LabIo.writeAtomic(root.resolve(".lab/incident.json"), state.asJson.spaces2 + "\n")
+        _   <- LabIo.writeAtomic(root.resolve(".lab/incident.json"), json.spaces2 + "\n")
         now <- IO.realTimeInstant
         _   <- LabIo.append(
                root.resolve(".lab/incident-history.jsonl"),
-               state.asJson
+               json
                  .deepMerge(
                    io.circe.Json.obj("recorded_at" -> io.circe.Json.fromString(now.toString)),
                  )

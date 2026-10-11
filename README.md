@@ -75,7 +75,7 @@ for continuous traffic, configuration, and accounting semantics.
 
 ## Run a lab incident
 
-Use the incident ID provided by the facilitator (`1`, `3`, `4`, or `5`):
+Use the incident ID provided by the facilitator (`1`, `2`, `3`, or `4`):
 
 ```bash
 ./scripts/lab.sh incident start ID

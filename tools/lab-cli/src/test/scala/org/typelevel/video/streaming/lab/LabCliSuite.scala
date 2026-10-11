@@ -48,11 +48,11 @@ object LabCliSuite extends SimpleIOSuite {
   }
 
   test("preparation accepts implemented rounds and rejects unsupported ones") {
-    IO.pure(expect(List(1, 3, 4, 5).forall { round =>
+    IO.pure(expect(List(1, 2, 3, 4).forall { round =>
       LabCliParser.command
         .parse(List("prepare", round.toString))
         .exists(_.action == LabAction.Prepare(round))
-    }) && expect(List("0", "2", "6", "unknown").forall { round =>
+    }) && expect(List("0", "5", "6", "unknown").forall { round =>
       LabCliParser.command.parse(List("prepare", round)).isLeft
     }))
   }
@@ -130,9 +130,9 @@ object LabCliSuite extends SimpleIOSuite {
         List("proxy", "latency", "--milliseconds", "750"),
         List("proxy", "reset"),
         List("incident", "start", "1"),
-        List("incident", "start", "3"),
-        List("incident", "start", "4", "--build"),
-        List("incident", "restart", "5"),
+        List("incident", "start", "2"),
+        List("incident", "start", "3", "--build"),
+        List("incident", "restart", "4"),
         List("incident", "rebuild"),
         List("incident", "status"),
         List("scenario3", "baseline"),
@@ -140,7 +140,7 @@ object LabCliSuite extends SimpleIOSuite {
         List("scenario5", "prepare"),
         List("scenario5", "baseline"),
         List("scenario5", "rebuild"),
-        List("incident", "start", "5"),
+        List("incident", "start", "4"),
         List("verify", "scenario1"),
         List("verify", "scenario3"),
         List("verify", "scenario5"),
@@ -216,7 +216,7 @@ object LabCliSuite extends SimpleIOSuite {
             .parse(List("incident", "activate", "1", "--verbose"))
             .exists(_.action == LabAction.IncidentActivate("1", 750, true)),
         ) &&
-        expect(LabCliParser.command.parse(List("incident", "start", "3", "--verbose")).isLeft),
+        expect(LabCliParser.command.parse(List("incident", "start", "2", "--verbose")).isLeft),
     )
   }
 

@@ -3,7 +3,11 @@
 This is the operating guide for a facilitator running **A Distributed System On
 Fire: Diagnosing Failures with otel4s**. It contains the hidden setup and
 diagnosis. Share only the **participant brief** in the round section with
-attendees. [lab-scenarios.md](lab-scenarios.md) is the scenario specification;
+attendees. Workshop incident IDs are **1–4**: network delay, Identity starvation,
+Playback rejection, and Catalog session depletion. The legacy scenario controls
+and specification retain their original IDs (1, 3, 4, 5).
+
+[lab-scenarios.md](lab-scenarios.md) is the scenario specification;
 this file is the sequence of actions to run the workshop.
 
 Workshop-wide ideas from live testing are collected in
@@ -107,20 +111,20 @@ If a hint is needed, record it separately from concept teaching during rehearsal
 
 Introduce later concepts only when they become useful:
 
-- **Round 3 — runtime signals:** request duration shows the symptom; CPU,
+- **Round 2 — runtime signals:** request duration shows the symptom; CPU,
   scheduling, and unrelated lightweight requests help test whether execution
   capacity is constrained. Correlation is a lead to investigate, not proof.
-- **Round 4 — diagnostic coverage:** a trace can contain a successful early
+- **Round 3 — diagnostic coverage:** a trace can contain a successful early
   check and a failed later stage. An uninstrumented stage leaves a gap in our
   explanation. Teach this when participants inspect the authorization evidence;
   leave the missing stage for them to identify and instrument.
-- **Round 5 — gauges and completed observations:** a gauge describes current
+- **Round 4 — gauges and completed observations:** a gauge describes current
   state, such as queued requests. A duration histogram in this lab records waits
   after they end, so it cannot by itself show how long still-queued requests have
   been waiting. Introduce this when comparing queue depth, oldest-wait age, and
   acquisition duration, without naming the leaking branch.
 
-During round 4, explain logs when opening the participant-added decoding entry:
+During round 3, explain logs when opening the participant-added decoding entry:
 “A log records a discrete event and its context; a trace ID connects this entry
 to the rejected request.”
 Keep API details, histogram mathematics, sampling configuration, and telemetry
@@ -154,7 +158,7 @@ The traffic generator bounds actor preparation with `--setup-timeout` (default
 starts. Setup time is excluded from the traffic measurement window. Existing
 `--request-timeout` and `--drain-timeout` govern measured requests and shutdown.
 Keep the generator deadline longer than Gateway's when recording Gateway's
-failure status. Round 5 uses `15s` against Gateway's `10s`.
+failure status. Round 4 uses `15s` against Gateway's `10s`.
 
 ## Before the session
 
@@ -256,7 +260,7 @@ manual service changes or rehearsal scripts before returning to participant flow
 ### Source repair and facilitator fallback
 
 Participants edit source, review their diff, rebuild the affected service, and
-prove recovery under the same workload. The source fixes in rounds 3–5 are part
+prove recovery under the same workload. The source fixes in rounds 2–4 are part
 of completing the exercise. Facilitators may use these fallback patches if a
 group gets stuck, after reviewing any participant edits:
 
@@ -267,7 +271,7 @@ group gets stuck, after reviewing any participant edits:
 - `infrastructure/lab/solutions/scenario5.patch`: scope Catalog session ownership.
 
 Run `git apply --check PATCH` before `git apply PATCH`, substituting the chosen
-path. Do not force a patch over participant changes. Apply round 4 diagnostics
+path. Do not force a patch over participant changes. Apply round 3 diagnostics
 first, then the logs patch before running `incident rebuild`. Review the span and
 log evidence before applying the decoder correction. When resetting, reverse the decoder
 patch, logs patch, then diagnostic patch.
@@ -433,7 +437,7 @@ the local change ledger also records the repair. Let a new healthy telemetry
 window accumulate before repeating the round. Do not clear Grafana history to
 make the next run look clean.
 
-## Round 3: Identity compute starvation
+## Round 2: Identity compute starvation
 
 ### Participant brief — share this paragraph only
 
@@ -448,7 +452,7 @@ Identity exercise source is in the image. It runs synchronous password
 verification in `IO.delay` from startup. Build the generator and start baseline:
 
 ```bash
-./scripts/lab.sh incident start 3
+./scripts/lab.sh incident start 2
 ./scripts/lab.sh traffic status
 ```
 
@@ -466,14 +470,14 @@ exercise. Calibrate on the actual laptop before presenting it.
 Before activation, confirm Grafana loads and the telemetry container is
 healthy. Keep `docker compose ps` and a brief `docker stats --no-stream` sample
 for Identity and LGTM with the generator report. If the dashboard or exporter
-becomes unresponsive, stop the round-3 generator with
+becomes unresponsive, stop the round-2 generator with
 `./scripts/lab.sh traffic stop`; do not treat missing telemetry as a
 healthy result.
 
 Activate the login-heavy mix with the neutral command:
 
 ```bash
-./scripts/lab.sh incident activate 3
+./scripts/lab.sh incident activate 2
 ```
 
 This stops the baseline generator and starts a new one at the **same total rate**,
@@ -532,19 +536,19 @@ universal thresholds.
 The facilitator can run `./scripts/lab.sh verify scenario3` before the session. It
 runs light and heavy samples against the prebuilt exercise image and checks that
 the lightweight operation slows under valid load. It does not edit source. Run
-`incident restart 3` afterward to establish the participant baseline.
+`incident restart 2` afterward to establish the participant baseline.
 
 ### Reset for the next group
 
 ```bash
-./scripts/lab.sh incident restart 3
+./scripts/lab.sh incident restart 2
 ```
 
 This restores the saved exercise deployment and waits for a healthy baseline.
 Source edits and telemetry history are preserved; review the edits before
 repeating the lesson.
 
-## Round 4: stable minority-user Playback 401
+## Round 3: stable minority-user Playback 401
 
 ### Participant brief — share this paragraph only
 
@@ -561,7 +565,7 @@ legitimate actors and seeds their Playback user rows directly. It assumes the
 default local Gateway port `8085`.
 
 ```bash
-./scripts/lab.sh incident start 4
+./scripts/lab.sh incident start 3
 ./scripts/lab.sh traffic status
 ```
 
@@ -581,7 +585,7 @@ log if you need the original preparation record.
 Start the mixed workload with the neutral participant command:
 
 ```bash
-./scripts/lab.sh incident activate 4
+./scripts/lab.sh incident activate 3
 ```
 
 The same ten requests per second now use the two newer-format actors for 20%
@@ -699,11 +703,11 @@ sbt --batch 'runtime/testOnly *AccessTokenVerifierSuite'
 Restore the original Playback verifier wiring and remove the exercise-added
 diagnostics before repeating the instrumentation lesson. If using fallback
 patches, reverse the decoder patch first, then the logs patch, then the
-diagnostic patch. Run `./scripts/lab.sh incident restart 4` to restore the
+diagnostic patch. Run `./scripts/lab.sh incident restart 3` to restore the
 saved exercise deployment and establish a new baseline. Leave the seeded accounts and projection rows in
 place; preparation is idempotent.
 
-## Round 5: Catalog PostgreSQL session depletion
+## Round 4: Catalog PostgreSQL session depletion
 
 ### Participant brief — share this paragraph only
 
@@ -730,12 +734,12 @@ pool depletion in Grafana and unrelated read slowdown, then restores the
 normal pool size. It needs a running stack and Grafana at `localhost:3000`;
 pass `--grafana URL` for a forwarded endpoint. A failed rehearsal needs
 investigation before presenting the round. After verification, run
-`incident restart 5` to restore the six-session participant baseline.
+`incident restart 4` to restore the six-session participant baseline.
 
 Build the current exercise image and start a healthy window:
 
 ```bash
-./scripts/lab.sh incident start 5
+./scripts/lab.sh incident start 4
 ./scripts/lab.sh traffic status
 ```
 
@@ -753,7 +757,7 @@ Canceling the oldest waiter can lower the age to that of the next waiter.
 Activate the mixed search workload with the neutral command:
 
 ```bash
-./scripts/lab.sh incident activate 5
+./scripts/lab.sh incident activate 4
 ```
 
 The generator switches profiles with a short gap. An empty search appears every
@@ -829,7 +833,7 @@ portable thresholds.
 ### Reset for the next group
 
 ```bash
-./scripts/lab.sh incident restart 5
+./scripts/lab.sh incident restart 4
 ```
 
 This restores the saved exercise deployment with six sessions and waits for a
@@ -856,10 +860,9 @@ containers, so it is not a between-round reset.
 
 ### Live calibration protocol
 
-For a workshop simulation, follow presentation order: rounds 1, 3, 4, then 5
-among the currently runnable rounds. Round 2 still needs implementation; record
-that omission when timing the workshop. Round 5 is the final live incident.
-The detailed round-5 procedure below can also be used independently to check
+For a workshop simulation, follow presentation order: rounds 1, 2, 3, then 4.
+Round 4 is the final live incident.
+The detailed round-4 procedure below can also be used independently to check
 session metrics and timeout behavior. For each runnable round, do a technical
 pass with facilitator notes, followed by a timed participant pass using only
 the brief and investigation prompts. Record every hint needed and every step
@@ -873,20 +876,20 @@ UTC and use absolute Grafana time ranges so screenshots and traces align.
 Capture evidence before profile switches, preparation, restore, or rebuild:
 the generator container can be replaced, and service instance IDs change.
 
-For round 5, use this sequence alongside the commands above:
+For round 4, use this sequence alongside the commands above:
 
 | Phase | Action and evidence |
 | --- | --- |
-| Prepare | Run `incident start 5` and wait for baseline readiness. Confirm fresh telemetry and capacity six. Keep arbitrary browser searches out of the rehearsal. |
+| Prepare | Run `incident start 4` and wait for baseline readiness. Confirm fresh telemetry and capacity six. Keep arbitrary browser searches out of the rehearsal. |
 | Baseline | Inspect the baseline left running by setup. Save generator logs, a Catalog Pool Investigation screenshot, and a healthy course trace. Record successes, drops, acquisition wait, and occupancy. |
-| Activate | Record the exact UTC time of `incident activate 5`. Keep 5 requests/s. Record first persistent occupancy increase, capacity exhaustion, first queued request, and first HTTP 504. About one minute to depletion is a hypothesis to measure. |
+| Activate | Record the exact UTC time of `incident activate 4`. Keep 5 requests/s. Record first persistent occupancy increase, capacity exhaustion, first queued request, and first HTTP 504. About one minute to depletion is a hypothesis to measure. |
 | Diagnose | Capture occupancy rising toward six and waiting requests appearing. Save a triggering empty-result request/response and a slow unrelated LearningPath trace. Identify acquisition waiting versus SQL execution; note any evidence unavailable until a span finishes. |
 | Check deadlines | Distinguish Gateway HTTP 504 near 10 seconds from generator timeout near 15 seconds using status/outcome counts and request evidence. Record whether downstream waits actually finish after the response deadline. |
 | Check cleanup | Save fault evidence, stop traffic, and wait through request/drain deadlines plus telemetry export delay. Record whether waiting and oldest-wait age return to zero. Leaked active sessions may remain at six. If waits persist, record duration and traces before resetting. |
-| Resume fault | Restart the mixed workload with `incident activate 5` without preparing/restarting Catalog. Record this intentional interruption. Confirm the depleted state before the repair. |
+| Resume fault | Restart the mixed workload with `incident activate 4` without preparing/restarting Catalog. Record this intentional interruption. Confirm the depleted state before the repair. |
 | Repair | Edit source, save the diff, and run `incident rebuild`. Record rebuild duration and the new Catalog instance ID. Exclude the deployment interruption from recovery assessment. |
 | Recovery | Observe at least 120 seconds of the same mixed workload after readiness. Save two generator reports bracketing this window, pool graphs, and fresh course and LearningPath traces. Require no new failures/drops, bounded waits, and sessions returning after requests. |
-| Reset | Save evidence before `incident restart 5`. Review source edits separately before repeating the editing lesson. Record reset time and any manual steps. |
+| Reset | Save evidence before `incident restart 4`. Review source edits separately before repeating the editing lesson. Record reset time and any manual steps. |
 
 The cleanup pause is a calibration check; omit it from the timed participant
 pass, where mixed traffic should continue through diagnosis and repair.
@@ -922,7 +925,7 @@ Keep a small annotated set per round:
 2. **Fault overview:** same panels and scale, activation marked.
 3. **Decisive trace:** service/operation names and timing visible, with a caption
    explaining which observation supports the diagnosis and which layer it rules out.
-4. **Scenario-specific evidence:** for round 5, capacity/active/waiting/oldest
+4. **Scenario-specific evidence:** for round 4, capacity/active/waiting/oldest
    age together, plus the empty successful response associated with a capacity step.
 5. **Recovery overview:** sustained healthy window, new instance selected, same
    offered workload, plus a fresh recovery trace.
