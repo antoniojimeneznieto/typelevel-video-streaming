@@ -338,11 +338,8 @@ services:
     restart: "no"
 
   debezium-connect:
-    image: ${IMAGE_PREFIX:-ghcr.io/antoniojimeneznieto/typelevel-video-streaming}/debezium-connect:${IMAGE_TAG:-main}
+    image: quay.io/debezium/connect:3.4.3.Final
     pull_policy: missing
-    build:
-      context: ./infrastructure/debezium
-      dockerfile: Dockerfile.connect
     environment:
       BOOTSTRAP_SERVERS: kafka:9092
       GROUP_ID: identity-outbox-connect-v1

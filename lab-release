@@ -1,0 +1,3 @@
+# Default lab build for branch checkouts. Replace this with a published tag,
+# for example v0.2.0, after the release workflow completes.
+sha-dfdafdab6701d36f5da2033ba178285d324056d0

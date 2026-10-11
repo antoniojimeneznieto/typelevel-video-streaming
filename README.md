@@ -42,7 +42,7 @@ From the repository root:
 ./scripts/lab.sh start
 ```
 
-The script builds the images, initializes the databases, uploads the bundled demo videos to SeaweedFS,
+The script pulls the published images, initializes the databases, uploads the bundled demo videos to SeaweedFS,
 and starts the frontend, backend services, and infrastructure. The first run can take several minutes.
 
 Open [http://localhost:8000](http://localhost:8000).
@@ -124,9 +124,34 @@ recovery checks, and rehearsal commands. Low-level preparation and traffic
 commands remain available for facilitator diagnostics.
 
 The scenario controller is a packaged JVM command. Build its ZIP with
-`sbt --batch 'labCli/Universal/packageBin'`; CI uploads the same ZIP as the
-`lab-cli-jvm` artifact. After unpacking, run
+`sbt --batch 'labCli/Universal/packageBin'`. The publishing workflow provides a
+CLI ZIP and checksum as a workflow artifact for every run and as release assets
+for `v*` tags. After unpacking, run
 `bin/lab-cli --root /path/to/typelevel-video-streaming platform changes`.
 The command needs Java 17+ and a checkout containing the lab scripts and Compose
-configuration. In a checkout, `./scripts/lab.sh` stages the Scala CLI on first use
-and runs all lab commands.
+configuration. In a checkout, `bash scripts/install-cli.sh` downloads the CLI
+for the selected lab version after its publishing run completes. `./scripts/lab.sh`
+uses that copy and builds the CLI from source when needed.
+
+To test publishing from a private repository, push the branch and run
+`./scripts/publish.sh branch-name`. The workflow publishes versioned images to
+GHCR and uploads the CLI ZIP as a workflow artifact. New GHCR packages are
+private by default; grant Codespaces access to private packages or change each
+package's visibility to public for anonymous pulls. A `v*` tag also publishes
+the CLI ZIP and checksum as GitHub Release assets. Release assets in a private
+repository require repository access. PostgreSQL, Kafka, and Debezium are pulled
+from their upstream registries.
+
+For a release, tag the tested commit with a new version such as `v0.2.0` and
+push the tag. The publishing workflow attaches `v0.2.0` to every lab image and
+creates a GitHub Release with `lab-cli-v0.2.0.zip` and its checksum. Check out
+that tag to run the matching images and CLI. To make `main` use the same release,
+replace the current SHA in [`lab-release`](lab-release) with the published tag
+and commit that change to `main`. Both the images and CLI then use the
+configured release. The initial SHA in that file points to a tested private
+publishing run. Set the file to `auto` for commit SHA selection during
+development; the publishing workflow must finish for that commit before its
+artifacts are available. `LAB_VERSION` overrides the shared choice; `IMAGE_TAG` overrides
+images alone. `LAB_REPOSITORY` overrides the CLI download repository. Use a
+fresh checkout when switching lab versions because local exercise state records
+image IDs.
