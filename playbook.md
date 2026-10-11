@@ -58,7 +58,7 @@ history are available when the evidence points there.
 Give a short tool tour before announcing any incident:
 
 - **Workshop Overview:** find affected services and routes, then follow dashboard links.
-- **Gateway and Catalog Boundary:** compare caller/server timings and request rates.
+- **Gateway–Catalog: Request Path:** compare caller/server timings and request rates.
 - **Tempo:** follow an exemplar to a trace; inspect child spans and SQL timings.
 - **Platform CLI:** review recent changes, inspect a candidate, and roll back a
   change when the evidence supports it. These commands are available in every round;
@@ -191,7 +191,7 @@ checkout, with Java 17+ installed.
 Open the application at `http://localhost:8000` and Grafana at
 `http://localhost:3000` (`admin` / `admin` in the local stack). In Codespaces,
 use the forwarded URLs printed by startup. Open the **Workshop Overview**,
-**Workshop Traffic**, and **Gateway and Catalog Boundary** dashboards. Confirm
+**Workshop Traffic**, and **Gateway–Catalog: Request Path** dashboards. Confirm
 they load. The Scenario 1 dashboard is linked from Workshop Overview.
 
 Before admitting participants, run the automated rehearsal on the same image
@@ -337,7 +337,7 @@ Ask these in order, without naming the fault:
    spans also slow?
 5. Which recent platform change could explain that boundary evidence?
 
-Use the **Gateway and Catalog Boundary** dashboard for aligned rates and p95
+Use the **Gateway–Catalog: Request Path** dashboard for aligned rates and p95
 latencies. Click a latency exemplar to open a Tempo trace; select a trace from
 the incident period. The **Workshop Traffic** dashboard and generator JSON
 reports provide independent offered-load and drop accounting. An aggregate
@@ -590,7 +590,7 @@ of slots. Actor identities and routing remain stable. Observe roughly 20%
 there are no dropped arrivals. Do not publish token contents, subjects, user
 IDs, or actor labels as telemetry attributes.
 
-From **Workshop Overview**, open **Playback Investigation**. Its stacked
+From **Workshop Overview**, open **Playback: Favorites Authentication**. Its stacked
 Playback response rates show the 200/401 split, and the two recent-trace tables
 provide a successful control and a rejected request from the same time range.
 Click a representative exemplar on the duration panel or open a trace-table
@@ -655,7 +655,7 @@ it would reveal the branch before participants add telemetry.
 The log is deployed with the diagnostic attributes in the same rebuild. The
 fallback patch logs the exact *synthetic* rejected subject, such as
 `user:<uuid>`, inside `auth.subject.decode`. Select a fresh 401 trace
-from Playback Investigation, copy its trace ID, then find the correlated
+from Playback: Favorites Authentication, copy its trace ID, then find the correlated
 entry in **Explore → Loki** with this query, replacing the trace ID:
 
 ```logql
@@ -742,7 +742,7 @@ Build the current exercise image and start a healthy window:
 `incident start` sets Catalog's pool to six sessions and waits for a healthy
 60-second baseline. Confirm a recent `window.load_valid=true`, successful requests,
 near-zero acquisition time, and pool occupancy that returns to zero. Open the
-**Catalog Pool Investigation** dashboard from Workshop Overview. Record the baseline and
+**Catalog: Session Pool** dashboard from Workshop Overview. Record the baseline and
 the activation time; keep the same 5 requests per second through the round.
 The dashboard legend includes the Catalog instance ID. After a rebuild, use
 the new instance's series for recovery; old series remain in telemetry history.

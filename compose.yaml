@@ -493,6 +493,7 @@ services:
   lgtm:
     image: grafana/otel-lgtm:0.32.1
     volumes:
+      - ./infrastructure/observability/grafana/provisioning/datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/grafana-datasources.yaml:ro
       - ./infrastructure/observability/grafana/provisioning/dashboards/workshop.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/workshop.yaml:ro
       - ./infrastructure/observability/grafana/provisioning/dashboards/workshop:/otel-lgtm/grafana/conf/provisioning/dashboards/workshop:ro
     ports:
