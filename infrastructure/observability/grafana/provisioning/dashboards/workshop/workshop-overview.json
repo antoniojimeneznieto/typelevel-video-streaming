@@ -162,7 +162,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Overall request rate",
+      "title": "HTTP server completed response rates",
       "description": "Completed response rate. No series means no telemetry; a visible zero means measured traffic with no requests in the rate window.",
       "id": 2,
       "datasource": {
@@ -185,20 +185,20 @@
         {
           "refId": "Success",
           "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"2..|3..\"}[$metric_window]))",
-          "legendFormat": "successful",
+          "legendFormat": "HTTP 2xx/3xx responses",
           "exemplar": true
         },
         {
           "refId": "Failure",
           "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"4..|5..\"}[$metric_window]))",
-          "legendFormat": "failed",
+          "legendFormat": "HTTP 4xx/5xx responses",
           "exemplar": true
         }
       ]
     },
     {
       "type": "stat",
-      "title": "Overall server error percentage",
+      "title": "HTTP server 5xx percentage",
       "description": "5xx responses divided by all completed responses. 4xx responses are visible separately and do not count as server errors.",
       "id": 3,
       "datasource": {
@@ -228,7 +228,8 @@
     },
     {
       "type": "stat",
-      "title": "Platform p95 duration",
+      "title": "HTTP server p95 across selected services",
+      "description": "Response-body duration aggregated across selected server hops, routes, and methods. A request can contribute at Gateway and a downstream server. This is not end-to-end client latency.",
       "id": 4,
       "datasource": {
         "type": "prometheus",
@@ -257,7 +258,8 @@
     },
     {
       "type": "stat",
-      "title": "Platform p99 duration",
+      "title": "HTTP server p99 across selected services",
+      "description": "Response-body duration aggregated across selected server hops, routes, and methods. A request can contribute at Gateway and a downstream server. This is not end-to-end client latency.",
       "id": 5,
       "datasource": {
         "type": "prometheus",
@@ -286,7 +288,8 @@
     },
     {
       "type": "stat",
-      "title": "Active requests",
+      "title": "HTTP server requests in flight",
+      "description": "Requests in flight across all routes of the selected services; route and method filters do not apply to this panel.",
       "id": 6,
       "datasource": {
         "type": "prometheus",
@@ -357,7 +360,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Request rate by service",
+      "title": "HTTP server completed response rate by service",
       "description": "Rates use the selected Metric window. Try 15s, 30s, and 60s while traffic changes: shorter windows react sooner but fluctuate more. This selector changes the query lookback, not the five-second metric export interval.",
       "id": 9,
       "datasource": {
@@ -431,7 +434,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Duration by service",
+      "title": "HTTP server response-body duration by service",
       "description": "Histogram p50, p95, and p99 over the selected Metric window. Compare 15s, 30s, and 60s around a fault and its recovery; old observations stay in longer windows longer. Sparse traffic can make short-window percentiles jump.",
       "id": 11,
       "datasource": {
@@ -490,7 +493,7 @@
     },
     {
       "type": "table",
-      "title": "Slowest HTTP operations (p99)",
+      "title": "Slowest HTTP server endpoints (p99)",
       "description": "Bounded, metric-derived p99 by stable server classifier. Use the trace link below for representative traces.",
       "id": 13,
       "datasource": {
@@ -523,7 +526,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Route request rate",
+      "title": "HTTP server completed response rates by endpoint",
       "id": 14,
       "datasource": {
         "type": "prometheus",
@@ -544,15 +547,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window]))",
-          "legendFormat": "{{classifier}}",
+          "expr": "sum by (service_name, http_request_method, classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window]))",
+          "legendFormat": "{{service_name}} {{http_request_method}} {{classifier}}",
           "exemplar": true
         }
       ]
     },
     {
       "type": "timeseries",
-      "title": "Route 4xx/5xx percentage",
+      "title": "HTTP server 4xx/5xx percentages by endpoint",
       "description": "Per-route 4xx and 5xx responses; split by exact status code. Select one service to avoid merging identically named routes across services.",
       "id": 15,
       "datasource": {
@@ -575,15 +578,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 * sum by (classifier, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"[45]..\"}[$metric_window])) / ignoring(http_response_status_code) group_left sum by (classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window]))",
-          "legendFormat": "{{classifier}} HTTP {{http_response_status_code}}",
+          "expr": "100 * sum by (service_name, http_request_method, classifier, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\",http_response_status_code=~\"[45]..\"}[$metric_window])) / ignoring(http_response_status_code) group_left sum by (service_name, http_request_method, classifier) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\",classifier=~\"$route\",http_request_method=~\"$method\",http_phase=\"body\"}[$metric_window]))",
+          "legendFormat": "{{service_name}} {{http_request_method}} {{classifier}} HTTP {{http_response_status_code}}",
           "exemplar": true
         }
       ]
     },
     {
       "type": "heatmap",
-      "title": "Route latency heatmap",
+      "title": "HTTP server response-body latency distribution",
       "id": 16,
       "datasource": {
         "type": "prometheus",
@@ -629,7 +632,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "Use **Explore → Tempo** to search `service.name` and the stable `http.route` selected above, and **Explore → Loki** with the same service and time range for application errors.\n\nError policy: 5xx is a server error; 4xx is displayed in request-rate panels but excluded from server-error percentage. Transport failures and cancellation need the pending bounded outcome metric before they can contribute to the rate."
+        "content": "Use **Explore → Tempo** to search `resource.service.name` and `span.http.route` for the service and stable route selected above. Use **Explore → Loki** with the same service and time range for application errors. The incident dashboards also provide recent-trace tables.\n\nThe server-error percentage counts HTTP 5xx responses; HTTP 4xx responses appear in request-rate and HTTP-error panels. Transport failures and cancellations without an HTTP response are not included in that percentage. Check the Workshop Traffic dashboard and generator reports for client-side failures and dropped arrivals."
       }
     }
   ]

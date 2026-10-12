@@ -331,9 +331,9 @@ private[lab] object LabVerify:
                     "--profile",
                     "identity",
                     "--rate",
-                    "30",
+                    "10",
                     "--duration",
-                    "25s",
+                    "45s",
                     "--login-percent",
                     loginPercent.toString,
                   ),
@@ -343,7 +343,7 @@ private[lab] object LabVerify:
       failed    <- IO.fromEither(report.hcursor.get[Long]("failed"))
       succeeded <- IO.fromEither(report.hcursor.get[Long]("succeeded"))
       accepted  <-
-        if valid && failed == 0 && succeeded >= 700 then IO.pure(report)
+        if valid && failed == 0 && succeeded >= 400 then IO.pure(report)
         else if attempts > 1 then
           IO.println(s"Retrying $loginPercent% mix after invalid load") *> sample(
             root,
@@ -354,7 +354,7 @@ private[lab] object LabVerify:
           IO.raiseError(new IllegalStateException(s"Traffic remained invalid: ${report.noSpaces}"))
     yield accepted
 
-  def scenario3(root: Path): IO[Unit] =
+  def scenario3(root: Path, repaired: Boolean): IO[Unit] =
     for
       _          <- LabCommands.requireIdle(root)
       deployment <- LabCommands.deployment(root, "identity-service")
@@ -366,10 +366,12 @@ private[lab] object LabVerify:
       _          <-
         IO.println(f"Current-user mean latency: $before%.1f ms baseline, $after%.1f ms heavy mix")
       _ <- requireThat(
-             after >= before * 2,
-             "The unrelated Identity slowdown was too small on this machine",
+             if repaired then after < before * 2 else after >= before * 2,
+             if repaired then "The repaired Identity still slows the unrelated route"
+             else "The unrelated Identity slowdown was too small on this machine",
            )
-      _ <- IO.println("Scenario 3 workload check passed")
+      _ <- IO.println(if repaired then "Scenario 3 repair check passed"
+           else "Scenario 3 fault check passed")
     yield ()
 
   private def catalogSample(root: Path, profile: String, duration: String): IO[Json] =

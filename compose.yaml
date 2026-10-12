@@ -148,6 +148,7 @@ services:
       JWT_PUBLIC_KEY_PATH: /run/secrets/identity-public-key.pem
       JWT_ACCESS_TOKEN_EXPIRES_IN_SECONDS: "7200"
       WORKSHOP_SUBJECT_MIGRATION: "true"
+      WORKSHOP_LEGACY_AUTH_WAIT_MILLIS: "${WORKSHOP_LEGACY_AUTH_WAIT_MILLIS:-0}"
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081"]
       start_period: 5s

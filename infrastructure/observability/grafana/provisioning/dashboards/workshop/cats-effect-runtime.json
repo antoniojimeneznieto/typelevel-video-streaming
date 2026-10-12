@@ -91,7 +91,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "The [starvation checker](https://typelevel.org/cats-effect/docs/core/starvation-and-tuning) is a runtime assertion that any latency higher than the threshold (by default, 100 milliseconds) is bad and deserves a warning. The common causes:\n- Blocking tasks\n- Compute-bound work\n- Not enough CPUs\n- Too many threads\n- Burst credit contention\n- Process contention\n\n",
+        "content": "The [starvation checker](https://typelevel.org/cats-effect/docs/core/starvation-and-tuning) measures how late a scheduled fiber resumes. A warning means scheduling delay exceeded the configured threshold; it is not a threshold for total HTTP request duration. Compare drift and starvation events with route latency, CPU, and thread activity for the same service and instance. Blocking on compute threads, long computations, CPU limits, and competing processes can cause delay. The checker does not identify the cause, and it can itself be delayed during severe starvation.",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",
@@ -174,7 +174,7 @@
           "refId": "A"
         }
       ],
-      "title": "Clock drift [current]",
+      "title": "Scheduler clock drift — current",
       "transformations": [
         {
           "id": "configFromData",
@@ -286,7 +286,7 @@
           "refId": "A"
         }
       ],
-      "title": "Starvations [$range]",
+      "title": "Detected scheduler starvation events [$range]",
       "type": "timeseries"
     },
     {
@@ -403,7 +403,7 @@
           "refId": "B"
         }
       ],
-      "title": "Clock drift",
+      "title": "Scheduler clock drift — current and lifetime maximum",
       "type": "timeseries"
     },
     {
@@ -507,7 +507,7 @@
           "refId": "A"
         }
       ],
-      "title": "Worker threads",
+      "title": "Compute worker threads",
       "type": "stat"
     },
     {
@@ -575,7 +575,7 @@
           "refId": "A"
         }
       ],
-      "title": "Active threads",
+      "title": "Active compute worker threads",
       "transformations": [
         {
           "id": "configFromData",
@@ -657,7 +657,7 @@
           "refId": "A"
         }
       ],
-      "title": "Blocking threads",
+      "title": "Worker threads in blocking state",
       "transformations": [
         {
           "id": "configFromData",
@@ -772,7 +772,7 @@
           "refId": "A"
         }
       ],
-      "title": "Active",
+      "title": "Active compute workers",
       "type": "timeseries"
     },
     {
@@ -876,7 +876,7 @@
           "refId": "A"
         }
       ],
-      "title": "Blocking",
+      "title": "Workers in blocking state",
       "type": "timeseries"
     },
     {
@@ -977,7 +977,7 @@
           "refId": "A"
         }
       ],
-      "title": "Searching",
+      "title": "Compute workers searching for fibers",
       "type": "timeseries"
     },
     {
@@ -1295,7 +1295,7 @@
           "refId": "A"
         }
       ],
-      "title": "Events per state [$range]",
+      "title": "Worker thread events by state [$range]",
       "type": "timeseries"
     },
     {
@@ -1397,7 +1397,7 @@
           "refId": "A"
         }
       ],
-      "title": "Idle (parked) duration [$range]",
+      "title": "Worker thread parked duration [$range]",
       "type": "timeseries"
     },
     {
@@ -1513,7 +1513,7 @@
           "refId": "A"
         }
       ],
-      "title": "Enqueued fibers",
+      "title": "Fibers currently queued per worker",
       "type": "timeseries"
     },
     {
@@ -1616,7 +1616,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total fibers [$range]",
+      "title": "Local queue fiber arrivals [$range]",
       "type": "timeseries"
     },
     {
@@ -1719,7 +1719,7 @@
           "refId": "A"
         }
       ],
-      "title": "Stolen fibers [$range]",
+      "title": "Fibers stolen from local queues [$range]",
       "type": "timeseries"
     },
     {
@@ -1823,7 +1823,7 @@
           "refId": "A"
         }
       ],
-      "title": "Successful steal attempts [$range]",
+      "title": "Successful local queue steal attempts [$range]",
       "type": "timeseries"
     },
     {
@@ -1926,7 +1926,7 @@
           "refId": "A"
         }
       ],
-      "title": "Spilled over fibers [$range]",
+      "title": "Fibers spilled to the external queue [$range]",
       "type": "timeseries"
     },
     {
@@ -2040,7 +2040,7 @@
           "refId": "A"
         }
       ],
-      "title": "Next due",
+      "title": "Time until next worker timer fires",
       "type": "timeseries"
     },
     {
@@ -2140,7 +2140,7 @@
           "refId": "A"
         }
       ],
-      "title": "Outstanding timers",
+      "title": "Outstanding worker timers",
       "type": "timeseries"
     },
     {
@@ -2245,7 +2245,7 @@
           "refId": "A"
         }
       ],
-      "title": "Timers [$range]",
+      "title": "Worker timer events by state [$range]",
       "type": "timeseries"
     },
     {
@@ -2345,7 +2345,7 @@
           "refId": "A"
         }
       ],
-      "title": "Packed [$range]",
+      "title": "Timer heap compactions [$range]",
       "type": "timeseries"
     },
     {
@@ -2461,7 +2461,7 @@
           "refId": "A"
         }
       ],
-      "title": "Outstanding operations",
+      "title": "Outstanding I/O poller operations",
       "type": "timeseries"
     },
     {
@@ -2562,7 +2562,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total operations [$range]",
+      "title": "I/O poller operations by outcome [$range]",
       "type": "timeseries"
     }
   ],

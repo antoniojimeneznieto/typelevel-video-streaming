@@ -264,11 +264,11 @@ prove recovery under the same workload. The source fixes in rounds 2–4 are par
 of completing the exercise. Facilitators may use these fallback patches if a
 group gets stuck, after reviewing any participant edits:
 
-- `infrastructure/lab/solutions/scenario3.patch`: move verification to `IO.blocking`.
-- `infrastructure/lab/solutions/scenario4-diagnostics.patch`: add bounded result and subject-shape attributes to the prepared subject-decoding span, retaining the faulty decoder.
-- `infrastructure/lab/solutions/scenario4-logs.patch`: add the decoding log to the diagnostic edit before rebuilding; log the exact synthetic subject in the active trace.
-- `infrastructure/lab/solutions/scenario4.patch`: wire the compatible subject decoder **after** the diagnostic patch.
-- `infrastructure/lab/solutions/scenario5.patch`: scope Catalog session ownership.
+- `infrastructure/lab/solutions/incident-2-repair.patch`: move the simulated authentication check to `IO.blocking`.
+- `infrastructure/lab/solutions/incident-3-diagnostics.patch`: add bounded result and subject-shape attributes to the prepared subject-decoding span, retaining the faulty decoder.
+- `infrastructure/lab/solutions/incident-3-logs.patch`: add the decoding log to the diagnostic edit before rebuilding; log the exact synthetic subject in the active trace.
+- `infrastructure/lab/solutions/incident-3-repair.patch`: wire the compatible subject decoder **after** the diagnostic patch.
+- `infrastructure/lab/solutions/incident-4-repair.patch`: scope Catalog session ownership.
 
 Run `git apply --check PATCH` before `git apply PATCH`, substituting the chosen
 path. Do not force a patch over participant changes. Apply round 3 diagnostics
@@ -448,29 +448,41 @@ make the next run look clean.
 ### Facilitator preparation
 
 Build the full stack from this checkout before the workshop so the checked-in
-Identity exercise source is in the image. It runs synchronous password
-verification in `IO.delay` from startup. Build the generator and start baseline:
+Identity exercise source is in the image. Password hashing already runs in
+`IO.blocking`. During round 2, after successful credential verification, a
+simulated synchronous authentication SDK waits 250 ms inside `IO.delay`. Its
+four permits remain the same before and after repair. Other rounds configure
+the check to zero wait. The adapter yields before the simulated call so it
+runs on compute workers even when the preceding password verification leaves
+its continuation on a blocking worker. Build the generator and start baseline:
 
 ```bash
-./scripts/lab.sh incident start 2
+./scripts/lab.sh incident restart 2 --build
 ./scripts/lab.sh traffic status
 ```
 
-The baseline sends 30 requests per second through Gateway, with 5% logins and
+Use `incident start 2 --build` when no incident is recorded yet. This checkout
+may have an existing `.lab/exercise-images.json` pin for the same revision.
+The explicit build updates its Identity image and the traffic generator tag with the current
+Incident 2 code. Later plain restarts reuse those images.
+
+The baseline sends 10 requests per second through Gateway, with 5% logins and
 95% authenticated `GET /users/me` requests from one synthetic actor. The
 generator registers that actor once, then obtains a token. Keep its JSON
 reports; the `operations` field separates login and current-user duration.
 Allow at least 30 seconds for warmup. `load_valid` covers the entire generator
 run; `window.load_valid` covers the latest reporting interval. Record any
 earlier dropped arrivals, then use clean recent windows to assess ongoing load.
-The Compose Identity service is limited
-to four CPUs and configured with two Cats Effect compute workers for this
-exercise. Calibrate on the actual laptop before presenting it.
+The generator interleaves login and current-user arrivals within each
+100-request cycle. Compose allows Identity four CPUs and configures two Cats
+Effect compute workers. The simulated wait is configurable through
+`WORKSHOP_LEGACY_AUTH_WAIT_MILLIS`. Rehearse the exact rate and wait on the
+workshop laptop before presenting it.
 
 Before activation, confirm Grafana loads and the telemetry container is
 healthy. Keep `docker compose ps` and a brief `docker stats --no-stream` sample
 for Identity and LGTM with the generator report. If the dashboard or exporter
-becomes unresponsive, stop the round-2 generator with
+becomes unresponsive, stop the round-3 generator with
 `./scripts/lab.sh traffic stop`; do not treat missing telemetry as a
 healthy result.
 
@@ -481,8 +493,9 @@ Activate the login-heavy mix with the neutral command:
 ```
 
 This stops the baseline generator and starts a new one at the **same total rate**,
-now 70% logins. Record the workload change time. Wait at least 25 seconds and
-inspect `./scripts/lab.sh traffic status`. Require clean recent windows with
+now 70% logins. Record the workload change time. Allow 30–60 seconds for a fresh
+metric window; then inspect
+`./scripts/lab.sh traffic status`. Require clean recent windows with
 `window.load_valid=true`, no failures, and no new dropped arrivals before
 interpreting latency. This is a
 workload activation, so a brief gap between the two generator containers is
@@ -490,53 +503,79 @@ expected.
 
 ### Investigation prompts
 
-1. From Workshop Overview, open **Identity Investigation**. Compare Identity
-   `POST /auth/login` and `GET /users/me` p95 in the same 60-second window.
-   Does the lightweight route slow even though it has no password verification
-   span?
-2. Open a fresh login exemplar from that graph. Compare the Gateway and Identity
-   server spans with the SQL, password permit-wait, and password verification
-   work spans. Open a current-user exemplar as a control. The password spans
-   identify the expensive operation; short SQL children alone cannot prove
-   where the rest of a request waited.
-3. Compare password verification duration, permit wait, and active verifications
-   on the Identity dashboard. Follow its links to the Identity Cats Effect and
-   JVM views. Check the selected service and current instance, then compare
-   scheduler drift/starvation, CPU, and thread signals with the route delay.
-4. Only after recording the telemetry diagnosis, inspect `PasswordHasher.scala`:
-   on which Cats Effect executor does synchronous Argon2 verification run?
+1. From Workshop Overview, open **Identity: Login Latency**. Compare Identity
+   `POST /auth/login` and `GET /users/me` p95 in the same metric window. Does
+   the lightweight route slow while logins perform the synchronous check?
+2. Open recent login traces from the dashboard tables and compare the Identity server span
+   with SQL, password verification, and `identity.login.legacy_check`. Compare
+   a current-user trace from the same period. Successful response-body metrics
+   may have no exemplar; use trace search when no diamond appears.
+3. Compare the check-duration panel with password timing. Follow the Identity
+   dashboard link to Cats Effect Runtime Metrics. Check the selected instance,
+   scheduler drift, starvation events, and compute-worker activity. A slow check span identifies where login
+   waits; scheduler delay and the control route show its effect on other work.
+4. After recording the telemetry diagnosis, inspect `LegacyLoginCheck.scala`.
+   Which Cats Effect workers execute the synchronous SDK call?
 
 The generator summary gives independent offered, completed, dropped, and
-per-operation latency evidence. The new password spans and metrics contain
-fixed operation names and durations only; they do not export the lab actor,
-token, password, or hash. Spans can lag or disappear under saturation, so use
+per-operation latency evidence. The check and password telemetry use fixed
+operation names and durations; they do not export the lab actor, token,
+password, or hash. Spans can lag or disappear under saturation, so use
 the generator report, runtime metrics, and container health together.
 
 ### Participant remediation and proof
 
 Participants identify the `IO.delay` boundary, explain the unrelated request
 slowdown with telemetry and source evidence, then implement and verify the repair.
-Change verification to `IO.blocking`
-in `backend/services/identity-service/src/main/scala/org/typelevel/video/streaming/backend/identity/PasswordHasher.scala`. Keep the existing
-permit ownership around both hash and verify. The semaphore limits
-concurrent Argon2 operations to four. Review the source diff, then deploy it:
+Change the simulated SDK boundary from `IO.delay` to `IO.blocking` in
+`backend/services/identity-service/src/main/scala/org/typelevel/video/streaming/backend/identity/LegacyLoginCheck.scala`.
+Keep its four-permit boundary in place. The check's own wait remains about
+250 ms; the expected gain is scheduling room for unrelated requests.
+Review the source diff, then deploy it:
 
 ```bash
 ./scripts/lab.sh incident rebuild
 ```
 
-Keep the 30 requests per second, 70% login workload running across the rebuild.
+Keep the 10 requests per second, 70% login workload running across the rebuild.
 After warmup, require a fresh sustained window with `load_valid=true`, no
-drops, and a lower `identity-current-user` latency. Check fresh traces and SQL
-timing. In one local rehearsal of the checked-in exercise image, current-user
-mean latency moved from 9.6 ms in the light mix to 61.5 ms in the heavy mix;
-both samples used valid load. These are local calibration examples, not
-universal thresholds.
+drops or failures, and lower `identity-current-user` latency and scheduler
+delay. Check fresh traces, password timing, memory stability, and Grafana
+responsiveness. Compare clean windows outside the deployment interval.
+After rollout settles, stop the long-running generator and run
+`./scripts/lab.sh verify scenario3 --repaired` for a finite light/heavy
+comparison against the repaired image.
 
 The facilitator can run `./scripts/lab.sh verify scenario3` before the session. It
 runs light and heavy samples against the prebuilt exercise image and checks that
-the lightweight operation slows under valid load. It does not edit source. Run
+the lightweight operation slows under valid load. With `--repaired`, it checks
+that the heavy mix keeps that operation within twice its light-mix mean. It
+does not edit source. Run
 `incident restart 2` afterward to establish the participant baseline.
+
+### Optional CPU capacity follow-up
+
+Open the linked JVM Runtime Metrics dashboard and select Identity for this
+optional discussion. CPU utilization is intentionally absent from the main
+Identity investigation dashboard and its recovery criteria.
+
+CPU need not fall after the blocking-boundary repair. More work may execute
+concurrently, and a backlog may drain faster, but verify completed request
+rates before attributing higher CPU to increased throughput. One observed
+run sustained about 10 requests/s in both deployments while CPU rose.
+For a sustained increase at unchanged throughput, compare password cost and
+concurrency, JVM GC, and CPU time per completed request outside startup and
+rollout windows. The recovery criteria remain responsive `GET /users/me`,
+lower scheduler delay, valid load, and bounded resource use.
+
+Use the recorded Argon2 investigation, when available, after the hands-on
+repair. Ask whether the same one-line change would solve a CPU-intensive
+password verifier. The 10 October repair allowed four concurrent
+verifications, raised CPU and memory use, and later saturated the service.
+`IO.blocking` frees compute workers but does not make hashing cheaper. Discuss
+an explicit password concurrency budget, bounded admission, a rate below
+sustainable throughput, and prompt overload responses. Treat rollout errors,
+running-service saturation, and post-termination errors as separate intervals.
 
 ### Reset for the next group
 
@@ -803,7 +842,7 @@ acquisition must have one release. Review the diff, then rebuild with the same
 six-session pool while mixed traffic continues:
 
 The facilitator's reviewed minimal correction is in
-`infrastructure/lab/solutions/scenario5.patch`. Keep it out of the attendee
+`infrastructure/lab/solutions/incident-4-repair.patch`. Keep it out of the attendee
 brief; it also switches the existing Catalog service tests back to a pooled
 session fixture so Skunk's leak detector checks empty-result finalization.
 

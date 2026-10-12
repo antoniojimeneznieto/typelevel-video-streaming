@@ -59,7 +59,7 @@ object LabIncidentSuite extends SimpleIOSuite:
           "--profile",
           "identity",
           "--rate",
-          "30",
+          "10",
           "--login-percent",
           "5",
         ),
@@ -67,7 +67,7 @@ object LabIncidentSuite extends SimpleIOSuite:
           "--profile",
           "identity",
           "--rate",
-          "30",
+          "10",
           "--login-percent",
           "70",
         ),
@@ -149,6 +149,9 @@ object LabIncidentSuite extends SimpleIOSuite:
                 def snapshot               = world.get.map(w => Map("service" -> w.deployed))
                 def observe(code: String, since: Long, healthy: Boolean) = world.get.flatMap(w =>
                   IO.raiseUnless(w.ready)(new IllegalStateException("telemetry unavailable")),
+                )
+                def baselineCurrent(code: String) = world.get.flatMap(w =>
+                  IO.raiseUnless(w.ready)(new IllegalStateException("baseline unavailable")),
                 )
                 def activate(code: String, milliseconds: Int, verbose: Boolean) =
                   world.get.flatMap { w =>
@@ -350,6 +353,10 @@ object LabIncidentSuite extends SimpleIOSuite:
         !ready(invalid),
         !ready(reports, code = "2"),
         ready(failing, healthy = false),
+        IncidentRuntime
+          .reportsReady(reports.takeRight(1), now, now - 15000, "3", true, fullWindow = false),
+        !IncidentRuntime
+          .reportsReady(failing.takeRight(1), now, now - 15000, "3", true, fullWindow = false),
         !ready(invalid, healthy = false),
       ),
     )

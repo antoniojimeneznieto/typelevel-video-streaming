@@ -41,5 +41,5 @@ private[lab] enum LabAction:
   case Scenario4(action: Scenario4Action)
   case Scenario5(action: Scenario5Action)
   case VerifyScenario1(grafana: String, rate: Int, window: Int)
-  case VerifyScenario3
+  case VerifyScenario3(repaired: Boolean)
   case VerifyScenario5(grafana: String)

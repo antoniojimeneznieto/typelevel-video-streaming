@@ -212,9 +212,18 @@ private[lab] object LabCliParser {
       Opts.subcommand(
         Command(
           "restart",
-          "Start a fresh baseline using the saved exercise images; preserve source edits",
+          "Start a fresh baseline using saved or newly built scenario images; preserve source edits",
         ) {
-          incidentId.map(code => IncidentStart(code, false, true))
+          (
+            incidentId,
+            Opts
+              .flag(
+                "build",
+                help = "Build and save scenario and traffic images from current source",
+              )
+              .orFalse,
+          )
+            .mapN((code, build) => IncidentStart(code, build, true))
         },
       ) orElse
       Opts.subcommand(
@@ -287,7 +296,10 @@ private[lab] object LabCliParser {
       ).mapN(VerifyScenario1.apply)
     }) orElse
       Opts.subcommand(Command("scenario3", "Check light and heavy Identity mixes") {
-        Opts(VerifyScenario3)
+        Opts
+          .flag("repaired", help = "Check that the heavy mix leaves current-user responsive")
+          .orFalse
+          .map(VerifyScenario3.apply)
       }) orElse
       Opts.subcommand(Command("scenario5", "Check Catalog pool depletion") {
         Opts

@@ -3,7 +3,7 @@ marp: true
 theme: default
 size: 16:9
 paginate: true
-header: A distributed system on fire · otel4s lab
+header: A distributed system on fire · diagnosing failures with otel4s
 style: |
   section {
     background: #f7f8fa;
@@ -227,7 +227,7 @@ Use the same service, time window, and request context to connect them.
 
 # Metrics
 
-![bg right:60% contain](docs/scenario1-gateway-catalog-boundary.png)
+![bg right:60% contain](docs/slides/metrics.jpg)
 
 Summarize many requests over time.
 
@@ -235,21 +235,21 @@ Compare **rate, errors, and duration** with a healthy window.
 
 Check the route, service, and time range before interpreting a change.
 
-<!-- Presenter: Rehearsal screenshot from docs/scenario1-gateway-catalog-boundary.png. Point out the time axis, units, series labels, latency percentiles, and request rates. Explain p95 briefly: a duration percentile summarizes a population, not one request. Do not diagnose the caller/server difference yet. The screenshot illustrates reading a dashboard, not the current lab state. -->
+<!-- Presenter: Screenshot from docs/slides/metrics.jpg. Point out the time axis, units, and Gateway and Identity p95 series for login requests. Explain p95 briefly: a duration percentile summarizes a population, not one request. Do not diagnose the caller/server difference yet. The screenshot illustrates reading a dashboard, not the current lab state. -->
 
 ---
 
 # Traces
 
-![bg right:50% contain](docs/scenario3-trace.png)
+![bg right:50% contain](docs/slides/traces.jpg)
 
 Show one request's lifecycle.
 
-This successful login crosses **Gateway, Identity, and SQL**.
+This successful user lookup crosses **Gateway, Identity, and SQL**.
 
 Spans identify operations, parent relationships, and elapsed time.
 
-<!-- Presenter: Healthy rehearsal trace from docs/scenario3-trace.png. Point to the trace ID, POST /api/identity/auth/login, status 200, child Identity span, and SQL children. Nested durations overlap and cannot simply be added. This request is an example, not proof that all requests are healthy. -->
+<!-- Presenter: Successful trace from docs/slides/traces.jpg. Point to the trace ID, GET /api/identity/users/me, status 200, child Identity span, and SQL children. Nested durations overlap and cannot simply be added. This request is an example, not proof that all requests are healthy. -->
 
 ---
 
@@ -278,10 +278,18 @@ Gateway server span
 
 **Propagation** carries trace context across the HTTP call.
 
+Gateway → Catalog HTTP header:
+
+```http
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+```
+
+`version-trace ID-parent span ID-flags` · `01` means sampled.
+
 An **exemplar** links a metric observation to a recorded trace.
 The trace ID connects that request to its logs.
 
-<!-- Presenter: Follow one exemplar in Grafana, then show a trace-to-log link. The outgoing instrumentation injects context and incoming instrumentation extracts it. Parent and child spans form one trace. An exemplar is a sampled observation, not necessarily the request at p95. The lab's datasource configuration supplies the navigation links. Trace/log correlation requires logging within the active context. -->
+<!-- Presenter: The example uses the W3C traceparent format. The parent span ID is the Gateway's outgoing Catalog client span; Catalog extracts it to create its server span in the same trace. The 01 flags value marks the context as sampled. Follow one exemplar in Grafana, then show a trace-to-log link. The outgoing instrumentation injects context and incoming instrumentation extracts it. Parent and child spans form one trace. An exemplar is a sampled observation, not necessarily the request at p95. The lab's datasource configuration supplies the navigation links. Trace/log correlation requires logging within the active context. Reference: https://www.w3.org/TR/trace-context/ . -->
 
 ---
 
@@ -333,22 +341,6 @@ Open the dashboard URL printed by the baseline command.
 
 ---
 
-# Participant instructions and tools
-
-Keep the [setup instructions](https://github.com/antoniojimeneznieto/typelevel-video-streaming#requirements)
-and [incident command guide](https://github.com/antoniojimeneznieto/typelevel-video-streaming#run-a-lab-incident) open.
-
-- **Grafana:** http://localhost:3000 · login `admin` / `admin`.
-- **Workshop Overview:** choose the service, route, and time window.
-- **Tempo and Loki:** inspect traces and related logs.
-- **CLI help:** `./scripts/lab.sh help`.
-
-Follow each round's briefing. Hints appear one at a time.
-
-<!-- Presenter: The README supplies the current participant setup and command instructions. Do not direct participants to the facilitator playbook, which contains solutions. Give a short Grafana tour: time picker, service and route selection, dashboard navigation, exemplar, trace, and correlated log link. Show platform --help and platform changes as available tools without demonstrating a rollback. Participants record symptom, hypothesis, supporting evidence, change, and recovery evidence. -->
-
----
-
 # Workshop agenda
 
 | Part | Activity |
@@ -357,7 +349,7 @@ Follow each round's briefing. Hints appear one at a time.
 | Incident 1 | Catalog slowdown |
 | Incident 2 | Identity slowdown |
 | Incident 3 | Playback authentication failures |
-| Incident 4 | Catalog depletion |
+| Incident 4 | Catalog gradually slows |
 | Closing | Lessons, application to your services, and questions |
 
 Each round starts with healthy traffic, then symptoms, hints, and a takeaway.
@@ -505,7 +497,7 @@ Open the printed dashboard URL: **Identity: Login Latency**.
 
 Observe both routes while the baseline settles.
 
-<!-- Presenter: Allow 2–5 minutes for preparation and healthy observation. Baseline is 30 requests/s with 5% login in this checkout. Check valid recent generator windows. The exercise defect already exists; the next phase changes the workload. -->
+<!-- Presenter: Allow 2–5 minutes for preparation and healthy observation. Baseline is 10 requests/s with 5% login in this checkout. Check valid recent generator windows. The simulated 250 ms check runs on compute workers; password verification already uses IO.blocking. The exercise defect already exists; the next phase changes the workload. -->
 
 ---
 
@@ -520,7 +512,7 @@ Activate the incident:
 > More users are logging in. Logins and lightweight account requests
 > both become slow.
 
-Explain why work without password verification also slows down.
+Explain why lightweight account requests also slow down.
 
 <!-- Presenter: Activation switches to 70% login at the same total rate, with a brief generator transition. Record the time and allow 2–5 minutes to observe the degradation and gather hypotheses. Reveal hints one at a time. -->
 
@@ -544,13 +536,13 @@ Compare their SQL spans and the time spent outside SQL.
 
 **Which work appears only in the login request?**
 
-<!-- Presenter: Look for password permit-wait and verification spans. Short SQL spans help exclude slow queries but cannot explain all time outside SQL. Avoid showing PasswordHasher.scala yet. -->
+<!-- Presenter: Compare `identity.login.legacy_check`, password permit-wait, and verification spans. Use the dashboard trace tables. Short SQL spans help exclude slow queries but cannot explain all time outside SQL. Avoid showing LegacyLoginCheck.scala yet. -->
 
 ---
 
-# Incident 2 · Hint 3: password work
+# Incident 2 · Hint 3: authentication work
 
-Compare password verification duration, permit wait, and active verifications.
+Compare synchronous check duration with password verification and permit wait.
 
 **Do those signals explain the delay in the lightweight route?**
 
@@ -560,10 +552,11 @@ Compare password verification duration, permit wait, and active verifications.
 
 # Incident 2 · Hint 4: runtime pressure
 
-Follow the dashboard links to **Cats Effect Runtime Metrics** and
-**JVM Runtime Metrics**. Select Identity and its current instance.
+Use the **Identity Cats Effect scheduler signals** panel, then follow the
+**Cats Effect Runtime Metrics** link for a detailed view. Select Identity and
+its current instance.
 
-Compare scheduler drift and starvation with CPU activity.
+Compare scheduler drift and starvation events with `GET /users/me` latency.
 
 **Can compute workers keep up with unrelated requests?**
 
@@ -573,7 +566,7 @@ Compare scheduler drift and starvation with CPU activity.
 
 # Incident 2 · Hint 5: executor and repair
 
-Inspect password verification in `PasswordHasher.scala`.
+Inspect the synchronous authentication check in `LegacyLoginCheck.scala`.
 
 **Which Cats Effect executor runs the synchronous operation?**
 
@@ -585,21 +578,23 @@ After your correction, deploy it:
 
 Keep the login-heavy workload and check fresh current-user latency.
 
-<!-- Presenter: Expected repair: IO.blocking instead of IO.delay, preserving the existing semaphore around Argon2 work. Moving work off compute does not add CPU capacity. Require a fresh valid sustained window and responsive lightweight requests after warmup. -->
+<!-- Presenter: Expected repair: IO.blocking instead of IO.delay, preserving the four permits around the simulated 250 ms check. Require a fresh valid sustained window and responsive lightweight requests after warmup. -->
 
 ---
 
 # Incident 2 · Takeaway
 
-**Runtime telemetry explained why expensive work delayed unrelated requests.**
+**A simulated synchronous SDK call occupied compute workers and delayed unrelated requests.**
 
-- Request traces identified the password operation.
+- Request traces identified the synchronous authentication check.
 - A lightweight route provided a control for the slowdown.
-- Cats Effect scheduling metrics exposed compute pressure.
+- Cats Effect scheduling metrics exposed delayed scheduling.
 
 The repair restored lightweight requests under the same login-heavy workload.
 
-<!-- Presenter: Connect the request-level evidence with the runtime evidence. Remind participants that runtime instrumentation and its dashboard are available for their own Cats Effect services. -->
+**Moving the call to `IO.blocking` restored scheduling and `GET /users/me` responsiveness, while the SDK still waited about 250 ms.**
+
+<!-- Presenter: Compare fresh route latency and Cats Effect scheduler signals under the same offered mix. The SDK check keeps its own wait; the repair creates scheduling room for unrelated requests. Keep the permit boundary in place, require valid load, and exclude startup/rebuild intervals. -->
 
 ---
 
@@ -688,11 +683,17 @@ Both successful and rejected requests have this span.
 
 Open `PlaybackAuthTelemetry.decodeSubject`.
 
-Add span attributes that describe the decoding **result** and subject **shape**.
+Enrich the span with context that helps explain the outcome.
 
 **Which bounded values would distinguish successful and rejected requests?**
 
 Keep the decoder behavior during this diagnostic step.
+
+Deploy the diagnostics:
+
+```bash
+./scripts/lab.sh incident rebuild
+```
 
 <!-- Presenter: A contextual Tracer[IO] and prepared logger already exist. Expected attributes: auth.result=accepted|rejected and auth.subject.shape=bare_uuid|namespaced_uuid|other. Offer the API scaffolding or fallback patch only if needed. Do not change the decoder yet. -->
 
@@ -871,7 +872,7 @@ Keep the same mixed workload. Watch at least two minutes of fresh requests.
 - Traces show requests waiting before they can execute SQL.
 - An unrelated route exposes the effect of a shared depleted pool.
 
-Sustained recovery under the same workload proves the resource repair.
+Sustained recovery under the same workload provides evidence that the resource leak is fixed.
 
 <!-- Presenter: Ask participants to connect resource-state changes to the triggering request pattern. Contrast fresh recovery evidence with old instance series when needed. Keep the takeaway focused on resource state over time and request lifecycle. -->
 
@@ -886,7 +887,7 @@ Sustained recovery under the same workload proves the resource repair.
 | Playback rejection | Subject-shape attributes and correlated logs explain the affected requests |
 | Database session leak | Occupancy and waiting requests grow while traces stop before SQL |
 
-<!-- Presenter: Ask participants which observation changed their hypothesis in each round. Boundary telemetry located the network delay. Runtime metrics explained why password verification affected unrelated requests. Playback needed observations inside subject decoding. Pool metrics showed resource loss accumulating over time. Each repair required fresh recovery evidence under the triggering workload. -->
+<!-- Presenter: Ask participants which observation changed their hypothesis in each round. Boundary telemetry located the network delay. Runtime metrics explained why the simulated synchronous authentication check delayed unrelated requests. Playback needed observations inside subject decoding. Pool metrics showed resource loss accumulating over time. Each repair required fresh recovery evidence under the triggering workload. -->
 
 ---
 
@@ -897,7 +898,6 @@ Sustained recovery under the same workload proves the resource repair.
 - Boundary instrumentation can locate many failures across services.
 - Typelevel integrations provide boundary telemetry and Cats Effect runtime metrics.
 - Domain observations explain decisions and resource state inside the application.
-- Correlated telemetry supports the same investigation loop with an AI assistant.
 
 <!-- Presenter: Familiarity with the code was not a prerequisite for locating the failures. Source inspection became useful after the evidence narrowed the search, especially for the Identity, Playback, and Catalog repairs. otel4s and the Typelevel integrations shown earlier reduce the setup work for boundary and runtime telemetry. Propagation and log correlation connect observations across components. Domain instrumentation answers questions those integrations cannot infer automatically. -->
 

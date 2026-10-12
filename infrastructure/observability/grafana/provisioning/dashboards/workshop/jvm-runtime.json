@@ -161,24 +161,12 @@
           },
           "editorMode": "code",
           "expr": "jvm_cpu_recent_utilization_ratio{job=~\"$job\",instance=~\"$instance\"}",
-          "legendFormat": "CPU utilization (whole system)",
+          "legendFormat": "JVM process CPU utilization",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "jvm_cpu_recent_utilization_ratio{job=~\"$job\",instance=~\"$instance\"}",
-          "hide": false,
-          "legendFormat": "JVM CPU utilization",
-          "range": true,
-          "refId": "B"
         }
       ],
-      "title": "CPU utilization",
+      "title": "JVM process CPU utilization",
       "type": "timeseries"
     },
     {
@@ -271,7 +259,7 @@
           "refId": "A"
         }
       ],
-      "title": "CPU time rate",
+      "title": "JVM process CPU consumption (cores)",
       "type": "timeseries"
     },
     {
@@ -401,7 +389,7 @@
           "refId": "B"
         }
       ],
-      "title": "Heap memory used / commited / max",
+      "title": "JVM heap memory used / committed / maximum",
       "type": "timeseries"
     },
     {
@@ -494,7 +482,7 @@
           "refId": "A"
         }
       ],
-      "title": "Memory used",
+      "title": "JVM memory used by pool",
       "type": "timeseries"
     },
     {
@@ -587,7 +575,7 @@
           "refId": "A"
         }
       ],
-      "title": "Memory committed",
+      "title": "JVM memory committed by pool",
       "type": "timeseries"
     },
     {
@@ -680,7 +668,7 @@
           "refId": "A"
         }
       ],
-      "title": "Max obtainable memory",
+      "title": "JVM memory limit by pool",
       "type": "timeseries"
     },
     {
@@ -785,7 +773,8 @@
           "refId": "A"
         }
       ],
-      "title": "Number of executing threads",
+      "title": "Live JVM threads by state",
+      "description": "Live JVM threads, including runnable, waiting, and blocked threads. Grouped by state and daemon status; these are not only threads currently executing.",
       "type": "timeseries"
     },
     {
@@ -881,7 +870,7 @@
           "refId": "A"
         }
       ],
-      "title": "GC pause duration distribution",
+      "title": "JVM GC pause duration distribution",
       "type": "heatmap"
     },
     {
@@ -977,7 +966,7 @@
           "refId": "A"
         }
       ],
-      "title": "GC collections per second",
+      "title": "JVM GC collections per second",
       "type": "timeseries"
     },
     {
@@ -1107,7 +1096,7 @@
           "refId": "C"
         }
       ],
-      "title": "Number of classes",
+      "title": "JVM loaded and unloaded class counts",
       "type": "timeseries"
     }
   ],

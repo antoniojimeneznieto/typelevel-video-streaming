@@ -13,6 +13,7 @@ import org.typelevel.video.streaming.backend.identity.repository.IdentityReposit
 import org.typelevel.video.streaming.backend.identity.service.{
   AccessTokenIssuerImpl,
   IdentityServiceImpl,
+  LegacyLoginCheck,
   PasswordHasherImpl,
 }
 import org.typelevel.video.streaming.backend.runtime.auth.{
@@ -36,12 +37,13 @@ object Main extends IOApp.Simple:
       AppConfig.load[IO].flatMap { config =>
         Postgres.sessionPool[IO](config.postgres).use { sessions =>
           for
-            privateKey     <- RsaKeyLoader.privateKey(config.jwt.privateKeyPath)
-            publicKey      <- RsaKeyLoader.publicKey(config.jwt.publicKeyPath)
-            requestContext <- IOLocalRequestContext.create[UUID]
-            repository      = new IdentityRepositoryImpl(sessions)
-            passwordHasher <- PasswordHasherImpl.create()
-            tokenIssuer     = AccessTokenIssuerImpl(
+            privateKey       <- RsaKeyLoader.privateKey(config.jwt.privateKeyPath)
+            publicKey        <- RsaKeyLoader.publicKey(config.jwt.publicKeyPath)
+            requestContext   <- IOLocalRequestContext.create[UUID]
+            repository        = new IdentityRepositoryImpl(sessions)
+            passwordHasher   <- PasswordHasherImpl.create()
+            legacyLoginCheck <- LegacyLoginCheck.create(config.workshopLegacyAuthWaitMillis)
+            tokenIssuer       = AccessTokenIssuerImpl(
                             privateKey,
                             config.jwt.accessTokenExpiresIn,
                             config.workshopSubjectMigration,
@@ -54,6 +56,7 @@ object Main extends IOApp.Simple:
             service = new IdentityServiceImpl(
                         repository,
                         passwordHasher,
+                        legacyLoginCheck,
                         tokenIssuer,
                         requestContext,
                       )

@@ -1,0 +1,11 @@
+--- a/backend/services/identity-service/src/main/scala/org/typelevel/video/streaming/backend/identity/LegacyLoginCheck.scala
++++ b/backend/services/identity-service/src/main/scala/org/typelevel/video/streaming/backend/identity/LegacyLoginCheck.scala
+@@ -48,7 +48,7 @@
+               _       <- permits.permit.use { _ =>
+                      // Password verification may leave this continuation on a blocking worker.
+                      // Yield to compute before calling the synchronous SDK exercise boundary.
+-                     IO.cede *> IO.delay(Thread.sleep(waitMillis.toLong))
++                     IO.cede *> IO.blocking(Thread.sleep(waitMillis.toLong))
+                    }
+               finished <- IO.monotonic
+               _        <- duration.record((finished - started).toUnit(TimeUnit.SECONDS))
