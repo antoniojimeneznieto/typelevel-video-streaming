@@ -27,6 +27,11 @@ find_launcher() {
   return 1
 }
 
+cli_jar_valid() {
+  [[ -n "$1" && -f "$1" ]] &&
+    jar tf "$1" | grep -Fx 'org/typelevel/video/streaming/lab/LabCli.class' >/dev/null
+}
+
 if [[ -n "${LAB_CLI_EXEC:-}" ]]; then
   launcher="$LAB_CLI_EXEC"
 else
@@ -46,17 +51,31 @@ else
   fi
   if [[ -z "$launcher" || ! -x "$launcher" ]] ||
     { [[ "$launcher" != "$project_directory"/.lab/cli/"$LAB_VERSION"/* ]] &&
-      { [[ -z "$staged_jar" ]] ||
+      { ! cli_jar_valid "$staged_jar" ||
         [[ -n "$(find "$project_directory/tools/lab-cli/src" "$project_directory/build.sbt" -type f -newer "$staged_jar" -print -quit 2>/dev/null)" ]]; }; }; then
     build_log="$(mktemp)"
     printf 'Preparing the lab command (first run or CLI sources changed)...\n'
-    if ! (cd "$project_directory" && sbt --batch 'labCli/stage') >"$build_log" 2>&1; then
+    build_task='labCli/stage'
+    if [[ -n "$staged_jar" ]] && ! cli_jar_valid "$staged_jar"; then
+      build_task=';labCli/clean;labCli/stage'
+    fi
+    if ! (cd "$project_directory" && sbt --batch "$build_task") >"$build_log" 2>&1; then
       cat "$build_log" >&2
       rm -f "$build_log"
       exit 1
     fi
     rm -f "$build_log"
     launcher="$(find_launcher)"
+    if [[ "$launcher" != "$project_directory"/.lab/cli/"$LAB_VERSION"/* ]]; then
+      staged_jar=""
+      for candidate in "$(dirname "$launcher")"/../lib/org.typelevel.video.streaming.lab-cli-*.jar; do
+        if [[ -f "$candidate" ]]; then staged_jar="$candidate"; break; fi
+      done
+      if ! cli_jar_valid "$staged_jar"; then
+        echo 'The rebuilt lab CLI JAR is incomplete: LabCli.class is missing.' >&2
+        exit 1
+      fi
+    fi
   fi
 fi
 

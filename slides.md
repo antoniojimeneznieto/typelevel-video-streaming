@@ -594,18 +594,7 @@ The repair restored lightweight requests under the same login-heavy workload.
 
 **Moving the call to `IO.blocking` restored scheduling and `GET /users/me` responsiveness, while the SDK still waited about 250 ms.**
 
-<!-- Presenter: Compare fresh route latency and Cats Effect scheduler signals under the same offered mix. The SDK check keeps its own wait; the repair creates scheduling room for unrelated requests. Keep the permit boundary in place, require valid load, and exclude startup/rebuild intervals. The next CPU-capacity discussion is optional. -->
-
----
-
-# Incident 2 · Optional: what if the work uses CPU?
-
-Moving a synchronous wait off compute workers creates scheduling room.
-CPU-intensive password verification still needs a measured concurrency budget.
-
-**What additional limits keep lightweight requests responsive under CPU-heavy load?**
-
-<!-- Presenter: Optional follow-up. Open the linked JVM Runtime Metrics dashboard and select Identity. Discuss bounded admission, password concurrency, and sustainable offered load. IO.blocking does not add CPU capacity. Check completed request rates before attributing higher CPU to higher throughput; compare CPU outside startup and rollout intervals. Use the recorded Argon2 investigation if available. -->
+<!-- Presenter: Compare fresh route latency and Cats Effect scheduler signals under the same offered mix. The SDK check keeps its own wait; the repair creates scheduling room for unrelated requests. Keep the permit boundary in place, require valid load, and exclude startup/rebuild intervals. -->
 
 ---
 
@@ -694,11 +683,17 @@ Both successful and rejected requests have this span.
 
 Open `PlaybackAuthTelemetry.decodeSubject`.
 
-Add span attributes that describe the decoding **result** and subject **shape**.
+Enrich the span with context that helps explain the outcome.
 
 **Which bounded values would distinguish successful and rejected requests?**
 
 Keep the decoder behavior during this diagnostic step.
+
+Deploy the diagnostics:
+
+```bash
+./scripts/lab.sh incident rebuild
+```
 
 <!-- Presenter: A contextual Tracer[IO] and prepared logger already exist. Expected attributes: auth.result=accepted|rejected and auth.subject.shape=bare_uuid|namespaced_uuid|other. Offer the API scaffolding or fallback patch only if needed. Do not change the decoder yet. -->
 
