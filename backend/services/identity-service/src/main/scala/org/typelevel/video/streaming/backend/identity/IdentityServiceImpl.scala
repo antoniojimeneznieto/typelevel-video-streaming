@@ -13,6 +13,7 @@ import smithy4s.time.Timestamp
 final class IdentityServiceImpl(
     repository: IdentityRepository,
     passwordHasher: PasswordHasher,
+    legacyLoginCheck: LegacyLoginCheck,
     accessTokenIssuer: AccessTokenIssuer,
     requestContext: RequestContext[IO, UUID],
 ) extends IdentityService[IO]:
@@ -55,6 +56,7 @@ final class IdentityServiceImpl(
       _               <- IO.raiseUnless(passwordMatches && user.status == UserStatus.ACTIVE)(
              invalidCredentials,
            )
+      _      <- legacyLoginCheck.check
       issued <- accessTokenIssuer.issue(user.id, user.role, user.email)
     yield LoginResponse(
       accessToken = issued.accessToken,

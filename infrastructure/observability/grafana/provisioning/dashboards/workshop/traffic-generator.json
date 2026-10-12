@@ -28,7 +28,7 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "Offered and sent load by selected profile",
+      "title": "Generator offered arrivals and sent requests",
       "description": "Offered includes arrivals dropped by the generator. Gateway client attempts can exceed logical requests when retries are enabled.",
       "datasource": {
         "type": "prometheus",
@@ -50,19 +50,19 @@
         {
           "refId": "A",
           "expr": "sum(rate(lab_traffic_arrivals_total{profile=~\"$profile\"}[$metric_window]))",
-          "legendFormat": "generator offered"
+          "legendFormat": "Offered arrivals"
         },
         {
           "refId": "B",
           "expr": "sum(rate(lab_traffic_arrivals_total{profile=~\"$profile\",result=\"sent\"}[$metric_window]))",
-          "legendFormat": "generator sent"
+          "legendFormat": "Sent requests"
         }
       ]
     },
     {
       "id": 2,
       "type": "timeseries",
-      "title": "Generator outcomes and dropped arrivals",
+      "title": "Client request outcomes and generator drops",
       "description": "Dropped capacity or late arrivals invalidate the offered-load comparison. A blank series means no observed event of that kind; inspect the JSON summary for exact run totals.",
       "datasource": {
         "type": "prometheus",
@@ -78,7 +78,68 @@
         "defaults": {
           "unit": "reqps"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^identity\\-current\\-user .+$"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "GET /users/me ${__field.labels.outcome}"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^identity\\-login .+$"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "POST /auth/login ${__field.labels.outcome}"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^catalog\\-courses .+$"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "GET /courses ${__field.labels.outcome}"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^catalog\\-learning\\-paths .+$"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "GET /learning-paths ${__field.labels.outcome}"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^playback\\-favorites .+$"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "GET /favorites ${__field.labels.outcome}"
+              }
+            ]
+          }
+        ]
       },
       "targets": [
         {
@@ -101,7 +162,8 @@
     {
       "id": 3,
       "type": "timeseries",
-      "title": "Generator end-to-end p95",
+      "title": "HTTP request p95 measured from client",
+      "description": "Traffic-generator duration through Gateway until the response body is consumed or the request fails/times out. Endpoint names identify the downstream service route; Gateway adds /api/identity, /api/catalog, or /api/playback. Setup and token renewal are excluded; dropped arrivals are not timed.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -116,7 +178,68 @@
         "defaults": {
           "unit": "s"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "identity-current-user p95"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "GET /users/me p95 from client"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "identity-login p95"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "POST /auth/login p95 from client"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "catalog-courses p95"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "GET /courses p95 from client"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "catalog-learning-paths p95"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "GET /learning-paths p95 from client"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "playback-favorites p95"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "GET /favorites p95 from client"
+              }
+            ]
+          }
+        ]
       },
       "targets": [
         {
@@ -129,7 +252,7 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Generator requests in flight",
+      "title": "Client HTTP requests in flight",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -150,7 +273,7 @@
         {
           "refId": "A",
           "expr": "sum(lab_traffic_requests_active{profile=~\"$profile\"})",
-          "legendFormat": "in flight"
+          "legendFormat": "Client requests in flight"
         }
       ]
     }

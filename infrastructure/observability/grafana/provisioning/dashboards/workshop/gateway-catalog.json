@@ -19,37 +19,72 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Catalog read p95 across the boundary",
-      "description": "Compare gateway server, Gateway Catalog client, and Catalog server p95 over the selected metric window. Their difference suggests where to investigate; it is not an exact per-request decomposition. Short windows can jump when traffic is sparse. Click an exemplar for a representative trace.",
+      "title": "GET /courses p95 at each HTTP boundary",
+      "description": "Server response-body duration at Gateway and Catalog, plus Gateway outbound client duration. These are separate request populations; open a trace to compare one request across boundaries.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "x": 0, "y": 0, "w": 24, "h": 9 },
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
       "targets": [
-        { "refId": "A", "expr": "histogram_quantile(0.95,sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"gateway-service\",classifier=\"/api/catalog/courses\",http_phase=\"body\"}[$metric_window])))", "legendFormat": "gateway server p95", "exemplar": true },
-        { "refId": "B", "expr": "histogram_quantile(0.95,sum by (le) (rate(http_client_request_duration_seconds_bucket{service_name=\"gateway-service\",classifier=\"catalog:/courses\",http_phase=\"body\"}[$metric_window])))", "legendFormat": "gateway Catalog client p95", "exemplar": true },
-        { "refId": "C", "expr": "histogram_quantile(0.95,sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"catalog-service\",classifier=\"/courses\",http_phase=\"body\"}[$metric_window])))", "legendFormat": "Catalog server p95", "exemplar": true }
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95,sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"gateway-service\",classifier=\"/api/catalog/courses\",http_phase=\"body\"}[$metric_window])))",
+          "legendFormat": "Gateway server GET /api/catalog/courses p95",
+          "exemplar": true
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95,sum by (le) (rate(http_client_request_duration_seconds_bucket{service_name=\"gateway-service\",classifier=\"catalog:/courses\",http_phase=\"body\"}[$metric_window])))",
+          "legendFormat": "Gateway client GET /courses p95",
+          "exemplar": true
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.95,sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"catalog-service\",classifier=\"/courses\",http_phase=\"body\"}[$metric_window])))",
+          "legendFormat": "Catalog server GET /courses p95",
+          "exemplar": true
+        }
       ]
     },
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Offered load and request rates",
-      "description": "One Catalog read currently makes one outbound attempt. Compare offered arrivals, sent requests, Gateway inbound, Gateway client attempts, and Catalog server requests over the selected metric window. Missing series are unknown, not zero.",
+      "title": "GET /courses offered arrivals and HTTP request rates",
+      "description": "The generator measures offered and sent arrivals. Gateway inbound, Gateway outbound attempts, and Catalog responses are measured at their respective HTTP boundaries. Completion can lag admission; compare the same time window.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "x": 0, "y": 9, "w": 24, "h": 8 },
       "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
       "targets": [
-        { "refId": "A", "expr": "sum(rate(lab_traffic_arrivals_total{profile=\"catalog-courses\"}[$metric_window]))", "legendFormat": "offered" },
-        { "refId": "B", "expr": "sum(rate(lab_traffic_arrivals_total{profile=\"catalog-courses\",result=\"sent\"}[$metric_window]))", "legendFormat": "sent" },
-        { "refId": "C", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"gateway-service\",classifier=\"/api/catalog/courses\",http_phase=\"body\"}[$metric_window]))", "legendFormat": "gateway inbound" },
-        { "refId": "D", "expr": "sum(rate(http_client_request_duration_seconds_count{service_name=\"gateway-service\",classifier=\"catalog:/courses\",http_phase=\"body\"}[$metric_window]))", "legendFormat": "gateway Catalog attempts" },
-        { "refId": "E", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"catalog-service\",classifier=\"/courses\",http_phase=\"body\"}[$metric_window]))", "legendFormat": "Catalog server" }
+        {
+          "refId": "A",
+          "expr": "sum(rate(lab_traffic_arrivals_total{profile=\"catalog-courses\"}[$metric_window]))",
+          "legendFormat": "Generator offered arrivals"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(lab_traffic_arrivals_total{profile=\"catalog-courses\",result=\"sent\"}[$metric_window]))",
+          "legendFormat": "Generator sent requests"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"gateway-service\",classifier=\"/api/catalog/courses\",http_phase=\"body\"}[$metric_window]))",
+          "legendFormat": "Gateway server GET /api/catalog/courses"
+        },
+        {
+          "refId": "D",
+          "expr": "sum(rate(http_client_request_duration_seconds_count{service_name=\"gateway-service\",classifier=\"catalog:/courses\",http_phase=\"body\"}[$metric_window]))",
+          "legendFormat": "Gateway client GET /courses attempts"
+        },
+        {
+          "refId": "E",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"catalog-service\",classifier=\"/courses\",http_phase=\"body\"}[$metric_window]))",
+          "legendFormat": "Catalog server GET /courses"
+        }
       ]
     },
     {
       "id": 3,
       "type": "table",
-      "title": "Recent Gateway to Catalog traces",
+      "title": "Recent Gateway GET /api/catalog/courses traces",
       "description": "Recent course-read traces from Gateway. Open one from the period under investigation and compare the Gateway Catalog client span, Catalog server child, and SQL spans. The most recent trace is not necessarily the p95 request.",
       "datasource": { "type": "tempo", "uid": "tempo" },
       "gridPos": { "x": 0, "y": 17, "w": 24, "h": 10 },

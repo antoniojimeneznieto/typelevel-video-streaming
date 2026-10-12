@@ -52,7 +52,7 @@ object LabCli
             case LabAction.Scenario5(action) => LabScenarios.scenario5(root, action)
             case LabAction.VerifyScenario1(grafana, rate, window) =>
               LabVerify.scenario1(root, grafana, rate, window)
-            case LabAction.VerifyScenario3 => LabVerify.scenario3(root)
+            case LabAction.VerifyScenario3(repaired) => LabVerify.scenario3(root, repaired)
             case LabAction.VerifyScenario5(grafana) => LabVerify.scenario5(root, grafana)
           }
         }

@@ -21,6 +21,7 @@ final case class AppConfig(
     postgres: PostgresConfig,
     jwt: JwtConfig,
     workshopSubjectMigration: Boolean,
+    workshopLegacyAuthWaitMillis: Int,
 )
 
 object AppConfig:
@@ -58,6 +59,7 @@ object AppConfig:
       ),
       jwtConfig,
       env("WORKSHOP_SUBJECT_MIGRATION").as[Boolean].default(false),
+      env("WORKSHOP_LEGACY_AUTH_WAIT_MILLIS").as[Int].default(0),
     ).parMapN(AppConfig.apply)
 
   def load[F[_]: Async]: F[AppConfig] =

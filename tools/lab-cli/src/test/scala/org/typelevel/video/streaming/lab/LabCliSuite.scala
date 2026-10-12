@@ -149,6 +149,24 @@ object LabCliSuite extends SimpleIOSuite {
     }
   }
 
+  test("rebuilt incident restart, repaired verifier, and Identity setting are supported") {
+    IO.pure(
+      expect.all(
+        LabCliParser.command
+          .parse(List("incident", "restart", "2", "--build"))
+          .exists(_.action == LabAction.IncidentStart("2", true, true)),
+        LabCliParser.command
+          .parse(List("verify", "scenario3", "--repaired"))
+          .exists(_.action == LabAction.VerifyScenario3(true)),
+        LabCommands.preservedSetting("identity-service", "250\n") ==
+          Right(Map("WORKSHOP_LEGACY_AUTH_WAIT_MILLIS" -> "250")),
+        List("", "-1", "10001", "bad").forall(value =>
+          LabCommands.preservedSetting("identity-service", value).isLeft,
+        ),
+      ),
+    )
+  }
+
   test("traffic options preserve explicit values for the generator") {
     IO.pure {
       val parsed = LabCliParser.command.parse(

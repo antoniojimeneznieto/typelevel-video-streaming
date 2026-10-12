@@ -2,7 +2,7 @@ package org.typelevel.video.streaming.backend.identity.service
 
 import java.util.UUID
 
-import cats.effect.{IO, Resource}
+import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.TracerProvider
@@ -32,7 +32,9 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
     override def issue(userId: UserId, role: Role, email: Email): IO[IssuedAccessToken] =
       IO.pure(IssuedAccessToken(loginResponse.accessToken, loginResponse.expiresIn))
 
-  private def serviceWithDatabase: Resource[
+  private def serviceWithDatabase(
+      legacyLoginCheck: LegacyLoginCheck = LegacyLoginCheck.noop,
+  ): Resource[
     IO,
     (IdentityService[IO], IdentityRepository, Session[IO], IOLocalRequestContext[UUID]),
   ] =
@@ -46,7 +48,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
                   PasswordHasherImpl.create()
                 }
       repository = new IdentityRepositoryImpl(sessions)
-      service    = new IdentityServiceImpl(repository, hasher, tokenIssuer, context)
+      service = new IdentityServiceImpl(repository, hasher, legacyLoginCheck, tokenIssuer, context)
     yield (service, repository, session, context)
 
   ///////////////////////////////////////////////////////////////////////////////
@@ -54,7 +56,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
   ///////////////////////////////////////////////////////////////////////////////
 
   test("registration stores an active student with an email and one UserCreated event") {
-    serviceWithDatabase.use { (service, repository, session, _) =>
+    serviceWithDatabase().use { (service, repository, session, _) =>
       val input = registerInput.copy(email = valid(Email("Alice@Example.com")))
 
       for
@@ -92,7 +94,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
   }
 
   test("duplicate emails return a conflict without inserting users or outbox events") {
-    serviceWithDatabase.use { (service, repository, session, _) =>
+    serviceWithDatabase().use { (service, repository, session, _) =>
       for
         original <- service.register(
                       registerInput.email,
@@ -130,7 +132,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
   }
 
   test("concurrent registrations commit exactly one user and one matching event") {
-    serviceWithDatabase.use { (service, repository, session, _) =>
+    serviceWithDatabase().use { (service, repository, session, _) =>
       for
         results <- (1 to 8).toList.parTraverse { index =>
                      val email =
@@ -162,7 +164,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
   }
 
   test("an outbox write failure rolls back registration and allows a retry") {
-    serviceWithDatabase.use { (service, repository, session, _) =>
+    serviceWithDatabase().use { (service, repository, session, _) =>
       for
         _ <- session.execute(
                sql"ALTER TABLE outbox ADD CONSTRAINT reject_test_outbox CHECK (false)".command,
@@ -201,7 +203,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
   }
 
   test("login finds a registered user case-insensitively and returns a token without new events") {
-    serviceWithDatabase.use { (service, _, session, _) =>
+    serviceWithDatabase().use { (service, _, session, _) =>
       for
         _ <- service.register(
                registerInput.email,
@@ -219,8 +221,28 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
     }
   }
 
+  test("the synchronous check runs only after a valid login") {
+    Ref.of[IO, Int](0).flatMap { calls =>
+      val check = new LegacyLoginCheck:
+        def check: IO[Unit] = calls.update(_ + 1)
+
+      serviceWithDatabase(check).use { (service, _, _, _) =>
+        for
+          _ <- service.register(
+                 registerInput.email,
+                 registerInput.password,
+                 registerInput.displayName,
+               )
+          _     <- service.login(loginInput.email, valid(Password("wrong-password"))).attempt
+          _     <- service.login(loginInput.email, loginInput.password)
+          count <- calls.get
+        yield expect(count == 1)
+      }
+    }
+  }
+
   test("login returns the same error for missing users, wrong passwords, and disabled users") {
-    serviceWithDatabase.use { (service, _, session, _) =>
+    serviceWithDatabase().use { (service, _, session, _) =>
       for
         missing <- service.login(loginInput.email, loginInput.password).attempt
         created <- service.register(
@@ -250,7 +272,7 @@ object IdentityServiceImplSuite extends SimpleIOSuite with IdentityFixture:
   test(
     "current user uses the authenticated ID and database reads preserve data without new events",
   ) {
-    serviceWithDatabase.use { (service, repository, session, context) =>
+    serviceWithDatabase().use { (service, repository, session, context) =>
       val bob = user(2L, "Bob@Example.com").copy(role = Role.ADMIN, status = UserStatus.DISABLED)
 
       for

@@ -9,6 +9,11 @@ object IdentityTraffic:
   private val email    = "lab-identity-actor-v3@example.invalid"
   private val password = "lab-identity-password-2026"
 
+  // 37 is coprime with 100: every hundred slots retain the exact requested mix,
+  // while login and current-user requests occur throughout the same interval.
+  private[traffic] def isLoginSlot(slot: Long, loginPercent: Int): Boolean =
+    ((slot % 100) * 37) % 100 < loginPercent
+
   def prepare(client: Client[IO], gateway: Uri, loginPercent: Int): IO[Workload] =
     val base     = gateway / "api" / "identity"
     val register = ActorSession.jsonRequest(
@@ -32,7 +37,7 @@ object IdentityTraffic:
       session <- ActorSession.prepare(client, login)
     yield Workload(
       slot =>
-        if slot % 100 < loginPercent then
+        if isLoginSlot(slot, loginPercent) then
           PreparedRequest(
             Operation.Login,
             ActorSession.execute(client, IO.pure(login), Operation.Login),

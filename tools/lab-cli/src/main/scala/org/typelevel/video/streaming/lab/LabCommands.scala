@@ -85,6 +85,8 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
   private[lab] def scenarioSetting(service: String): Option[(String, String)] = service match {
     case "catalog-service" => Some("POSTGRES_MAX_CONNECTIONS" -> "CATALOG_POSTGRES_MAX_CONNECTIONS")
     case "playback-service" => Some("WORKSHOP_READ_MODE" -> "PLAYBACK_WORKSHOP_READ_MODE")
+    case "identity-service" =>
+      Some("WORKSHOP_LEGACY_AUTH_WAIT_MILLIS" -> "WORKSHOP_LEGACY_AUTH_WAIT_MILLIS")
     case _ => None
   }
 
@@ -98,6 +100,8 @@ printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\nLOCAL_UID=%s\nLOCAL_GID=%s\nS3_PUBLIC_END
         val valid   = service match {
           case "catalog-service" => setting.toIntOption.exists(_ > 0)
           case "playback-service" => Set("true", "false")(setting)
+          case "identity-service" =>
+            setting.toIntOption.exists(value => value >= 0 && value <= 10000)
           case _ => false
         }
         Either.cond(

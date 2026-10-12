@@ -43,7 +43,7 @@ final class PasswordHasherImpl private (
 
   override def verify(password: Password, hash: PasswordHash): IO[Boolean] =
     val work =
-      IO.delay {
+      IO.blocking {
         val encodedHash = PasswordHash.value(hash)
 
         Argon2Function

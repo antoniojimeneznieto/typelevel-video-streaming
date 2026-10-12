@@ -6,7 +6,11 @@ project_directory="$(cd -- "$script_directory/.." && pwd)"
 source "$script_directory/version.sh"
 
 local_cli_changes=false
-if ! git -C "$project_directory" diff --quiet HEAD -- tools/lab-cli/src build.sbt; then
+# Compare against the selected release, including committed branch changes.
+# A clean working tree can still contain a newer CLI than the cached release.
+cli_release_revision="${LAB_VERSION#sha-}"
+if ! git -C "$project_directory" rev-parse --verify "$cli_release_revision^{commit}" >/dev/null 2>&1 ||
+   ! git -C "$project_directory" diff --quiet "$cli_release_revision" -- tools/lab-cli/src build.sbt; then
   local_cli_changes=true
 fi
 

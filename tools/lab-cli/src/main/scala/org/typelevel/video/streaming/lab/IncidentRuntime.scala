@@ -30,7 +30,7 @@ private[lab] object IncidentRuntime:
     case _ => "catalog-courses"
 
   def rate(code: String): Int = code match
-    case "2" => 30
+    case "2" => 10
     case "3" => 10
     case _ => 5
 
@@ -51,6 +51,7 @@ private[lab] object IncidentRuntime:
       since: Long,
       code: String,
       healthy: Boolean,
+      fullWindow: Boolean = true,
   ): Boolean =
     val recent = reports.filter(
       _.hcursor.get[Long]("timestamp_epoch_ms").exists(_ >= math.max(since, now - 70000)),
@@ -59,10 +60,12 @@ private[lab] object IncidentRuntime:
     val fresh   = ordered.lastOption.exists(
       _.hcursor.get[Long]("timestamp_epoch_ms").exists(t => t <= now && now - t <= 15000),
     )
-    val window  = ordered.takeRight(if healthy then 13 else 1)
-    val covered = !healthy || (window.size >= 13 &&
+    val required = if healthy && fullWindow then 13 else 1
+    val window   = ordered.takeRight(required)
+    val covered  = !healthy || !fullWindow || (window.size >= required &&
       window.last.hcursor.get[Long]("timestamp_epoch_ms").getOrElse(0L) -
-      window.head.hcursor.get[Long]("timestamp_epoch_ms").getOrElse(0L) >= 59000)
+      window.head.hcursor.get[Long]("timestamp_epoch_ms").getOrElse(0L) >=
+      59000)
     fresh && covered && window.nonEmpty && window.forall { report =>
       val c = report.hcursor
       val w = c.downField("window")
@@ -77,6 +80,8 @@ private[lab] object IncidentRuntime:
 
 final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operations:
   import IncidentRuntime.*
+
+  private class StoppedWorkload(message: String) extends IllegalStateException(message)
 
   private def inspect(id: String, template: String): IO[String] =
     LabIo.output(root, Seq("docker", "inspect", "--format", template, id)).map(_.trim)
@@ -130,13 +135,20 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
           yield Some(images)
         else IO.pure(None)
       // Resolve artifacts and compilation prerequisites before interrupting an existing scenario.
-      _ <-
-        if build && !pinned then
-          LabIo.logged(root, Seq("bash", "scripts/build-images.sh"), env).timeout(20.minutes)
-        else IO.unit
       _ <- retryDownload(
              LabIo.logged(root, Seq("bash", "scripts/pull-images.sh"), env).timeout(10.minutes),
            )
+      _ <-
+        if build then
+          LabIo
+            .logged(
+              root,
+              Seq("bash", "scripts/build-images.sh") ++
+                (if pinned then Seq(service(code), "traffic-generator") else Seq.empty),
+              env,
+            )
+            .timeout(20.minutes)
+        else IO.unit
       warmed <- LabIo.exists(root.resolve(".lab/compiler-ready"))
       _      <-
         if warmed then IO.unit
@@ -155,31 +167,33 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
               root.resolve(".lab/compiler-ready"),
               revision.trim,
             )
-      images <- saved.fold(
-                  services
-                    .traverse { name =>
-                      LabIo
-                        .output(
-                          root,
-                          Seq(
-                            "docker",
-                            "image",
-                            "inspect",
-                            "--format",
-                            "{{.Id}}",
-                            s"${env("IMAGE_PREFIX")}/$name:${env("IMAGE_TAG")}",
-                          ),
-                        )
-                        .map(image => name -> image.trim)
-                    }
-                    .map(_.toMap),
-                )(IO.pure)
+      images <- saved
+                  .filter(_ => !build)
+                  .fold(
+                    (if pinned then List(service(code)) else services)
+                      .traverse { name =>
+                        LabIo
+                          .output(
+                            root,
+                            Seq(
+                              "docker",
+                              "image",
+                              "inspect",
+                              "--format",
+                              "{{.Id}}",
+                              s"${env("IMAGE_PREFIX")}/$name:${env("IMAGE_TAG")}",
+                            ),
+                          )
+                          .map(image => name -> image.trim)
+                      }
+                      .map(built => saved.getOrElse(Map.empty) ++ built.toMap),
+                  )(IO.pure)
       _ <-
         images.values.toList.traverse_(image =>
           LabIo.output(root, Seq("docker", "image", "inspect", "--format", "{{.Id}}", image)).void,
         )
       _ <-
-        if pinned then IO.unit
+        if pinned && !build then IO.unit
         else
           LabIo.writeAtomic(
             pinFile,
@@ -209,6 +223,7 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
              Map(
                "PLAYBACK_WORKSHOP_READ_MODE" -> (code == "3").toString,
                "CATALOG_POSTGRES_MAX_CONNECTIONS" -> (if code == "4" then "6" else "10"),
+               "WORKSHOP_LEGACY_AUTH_WAIT_MILLIS" -> (if code == "2" then "250" else "0"),
              ),
            )
       _ <- LabScenarios.resetPlatform(root)
@@ -229,8 +244,43 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
           yield arguments(code, active).grouped(2).forall(pair => args.sliding(2).exists(_ == pair))
     yield matches
 
+  private def requireTargetRunning(code: String): IO[Unit] =
+    for
+      target <- LabCommands.containerId(root, service(code))
+      state  <- inspect(target, "{{.State.Status}} (exit code {{.State.ExitCode}})")
+      _      <-
+        IO.raiseUnless(state.startsWith("running "))(
+          new StoppedWorkload(
+            s"${service(code)} is $state. Run incident restart $code to restore the scenario before starting traffic.",
+          ),
+        )
+    yield ()
+
+  private def requireGeneratorRunning: IO[Unit] =
+    LabIo
+      .probe(
+        root,
+        Seq(
+          "docker",
+          "inspect",
+          "--format",
+          "{{.State.Status}} (exit code {{.State.ExitCode}})",
+          generator,
+        ),
+      )
+      .flatMap {
+        case Some(state) if state.trim.startsWith("exited ") =>
+          LabIo.output(root, Seq("docker", "logs", "--tail", "8", generator)).flatMap { logs =>
+            IO.raiseError(
+              new StoppedWorkload(s"Traffic generator ${state.trim}. Recent output:\n${logs.trim}"),
+            )
+          }
+        case _ => IO.unit
+      }
+
   private def ensureTraffic(code: String, active: Boolean): IO[Unit] =
     for
+      _       <- requireTargetRunning(code)
       matches <- trafficMatches(code, active)
       _       <-
         if matches then IO.unit
@@ -251,7 +301,8 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
 
   private def awaitCheck(label: String, check: IO[Unit], attempts: Int = 36): IO[Unit] =
     check.handleErrorWith { error =>
-      if attempts <= 1 then
+      if error.isInstanceOf[StoppedWorkload] then IO.raiseError(error)
+      else if attempts <= 1 then
         IO.raiseError(
           new IllegalStateException(
             s"$label did not become ready: ${error.getMessage}. Check incident status and .lab/commands.log; retry the same command after correcting the problem.",
@@ -269,7 +320,9 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
       awaitCheck(
         "traffic reports",
         for
+          _       <- requireTargetRunning(code)
           matched <- trafficMatches(code, active = true)
+          _       <- if matched then IO.unit else requireGeneratorRunning
           _       <- requireThat(
                  matched,
                  "The incident workload is not running. Use incident activate to resume an interrupted activation, or incident restart for a fresh baseline",
@@ -282,6 +335,23 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
                )
         yield (),
       )
+
+  def baselineCurrent(code: String): IO[Unit] =
+    awaitCheck(
+      "baseline traffic",
+      for
+        _       <- requireTargetRunning(code)
+        matched <- trafficMatches(code, active = false)
+        _       <- if matched then IO.unit else requireGeneratorRunning
+        _       <- requireThat(matched, "The baseline workload is not running")
+        values  <- reports
+        now     <- IO.realTime.map(_.toMillis)
+        _       <- requireThat(
+               reportsReady(values, now, now - 15000, code, healthy = true, fullWindow = false),
+               "Waiting for a fresh valid baseline interval",
+             )
+      yield (),
+    )
 
   private def grafana: IO[String] =
     LabIo.output(root, Seq("docker", "compose", "port", "lgtm", "3000")).flatMap { address =>
@@ -301,7 +371,9 @@ final private[lab] class IncidentRuntime(root: Path) extends LabIncident.Operati
         awaitCheck(
           "scenario telemetry",
           for
+            _       <- requireTargetRunning(code)
             matched <- trafficMatches(code, active = !healthy)
+            _       <- if matched then IO.unit else requireGeneratorRunning
             _       <- requireThat(matched, "Expected workload is not running")
             values  <- reports
             now     <- IO.realTime.map(_.toMillis)

@@ -3,9 +3,6 @@
 A demo video streaming platform for the Scala Days 2026 interactive lab:
 **A Distributed System On Fire: Diagnosing Failures with otel4s**.
 
-Facilitators: use the [lab playbook](playbook.md) for setup, delivery, and reset.
-It contains the hidden incident diagnosis; share only its participant brief.
-
 ## Stack
 
 - Backend: [Cats Effect](https://typelevel.org/cats-effect/), [FS2](https://fs2.io/),
@@ -45,6 +42,12 @@ From the repository root:
 The script pulls the published images, initializes the databases, uploads the bundled demo videos to SeaweedFS,
 and starts the frontend, backend services, and infrastructure. The first run can take several minutes.
 
+To build images from your local checkout instead of pulling published images:
+
+```bash
+./scripts/lab.sh start --build
+```
+
 Open [http://localhost:8000](http://localhost:8000).
 
 Grafana is available at [http://localhost:3000](http://localhost:3000) (login: `admin` / `admin`).
@@ -70,8 +73,7 @@ With the application running:
 
 The FS2 generator calls the gateway using shared Smithy4s contracts and reports
 offered load, completions, failures, missed arrivals, and latency independently of
-application telemetry. See [traffic generator usage](docs/observability/traffic-generator.md)
-for continuous traffic, configuration, and accounting semantics.
+application telemetry. Use `./scripts/lab.sh traffic --help` for available commands.
 
 ## Run a lab incident
 
@@ -84,8 +86,13 @@ Use the incident ID provided by the facilitator (`1`, `2`, `3`, or `4`):
 This prepares the services and scenario data, starts healthy traffic, and waits
 for a valid 60-second baseline with fresh metrics and traces. It prints the
 Grafana URL. The first run downloads the release images and warms the Scala
-compiler for later source edits; run it before the session. For an unpublished
-checkout, use `incident start ID --build` on the first run.
+compiler for later source edits. Complete setup before the workshop when possible.
+
+For an unpublished checkout or local image build, use:
+
+```bash
+./scripts/lab.sh incident start ID --build
+```
 
 Inspect the baseline, then activate when instructed:
 
@@ -100,7 +107,8 @@ For source-editing rounds, deploy your diagnostics or repair with:
 ```
 
 Rebuild preserves the workload and scenario settings. Readiness confirms the
-new deployment emits telemetry; participants must still verify the repair.
+new deployment emits telemetry; verify the repair with fresh evidence under
+the same workload.
 Repeated setup or activation commands preserve an already-running scenario.
 Use `incident status` to inspect its phase and `incident restart ID` for a
 fresh baseline using the saved exercise images. Restart preserves local source
@@ -119,39 +127,14 @@ Platform changes remain available for investigation:
 ./scripts/lab.sh platform rollback CHANGE_ID
 ```
 
-See [the facilitator playbook](playbook.md) for scenario evidence, source edits,
-recovery checks, and rehearsal commands. Low-level preparation and traffic
-commands remain available for facilitator diagnostics.
+## Help and troubleshooting
 
-The scenario controller is a packaged JVM command. Build its ZIP with
-`sbt --batch 'labCli/Universal/packageBin'`. The publishing workflow provides a
-CLI ZIP and checksum as a workflow artifact for every run and as release assets
-for `v*` tags. After unpacking, run
-`bin/lab-cli --root /path/to/typelevel-video-streaming platform changes`.
-The command needs Java 17+ and a checkout containing the lab scripts and Compose
-configuration. In a checkout, `bash scripts/install-cli.sh` downloads the CLI
-for the selected lab version after its publishing run completes. `./scripts/lab.sh`
-uses that copy and builds the CLI from source when needed.
+```bash
+./scripts/lab.sh help
+./scripts/lab.sh incident status
+./scripts/lab.sh traffic status
+```
 
-To test publishing from a private repository, push the branch and run
-`./scripts/publish.sh branch-name`. The workflow publishes versioned images to
-GHCR and uploads the CLI ZIP as a workflow artifact. New GHCR packages are
-private by default; grant Codespaces access to private packages or change each
-package's visibility to public for anonymous pulls. A `v*` tag also publishes
-the CLI ZIP and checksum as GitHub Release assets. Release assets in a private
-repository require repository access. PostgreSQL, Kafka, and Debezium are pulled
-from their upstream registries.
-
-For a release, tag the tested commit with a new version such as `v0.2.0` and
-push the tag. The publishing workflow attaches `v0.2.0` to every lab image and
-creates a GitHub Release with `lab-cli-v0.2.0.zip` and its checksum. Check out
-that tag to run the matching images and CLI. To make `main` use the same release,
-replace the current SHA in [`lab-release`](lab-release) with the published tag
-and commit that change to `main`. Both the images and CLI then use the
-configured release. The initial SHA in that file points to a tested private
-publishing run. Set the file to `auto` for commit SHA selection during
-development; the publishing workflow must finish for that commit before its
-artifacts are available. `LAB_VERSION` overrides the shared choice; `IMAGE_TAG` overrides
-images alone. `LAB_REPOSITORY` overrides the CLI download repository. Use a
-fresh checkout when switching lab versions because local exercise state records
-image IDs.
+Keep Grafana on the same service, route, and time window when comparing
+metrics, traces, and logs. After a change, check fresh requests and sustained
+recovery; a ready deployment alone does not confirm a repair.

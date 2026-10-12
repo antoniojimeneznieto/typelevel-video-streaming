@@ -36,6 +36,7 @@ private[lab] object LabIncident:
     def baseline(code: String): IO[Unit]
     def snapshot: IO[Map[String, String]]
     def observe(code: String, since: Long, healthy: Boolean): IO[Unit]
+    def baselineCurrent(code: String): IO[Unit]
     def activate(code: String, milliseconds: Int, verbose: Boolean): IO[Unit]
     def traffic(code: String): IO[Unit]
     def rebuild(code: String): IO[Unit]
@@ -169,8 +170,7 @@ private[lab] object LabIncident:
                case Phase.Ready | Phase.Activating =>
                  for
                    _ <-
-                     if state.phase == Phase.Ready then
-                       operations.observe(code, state.since, healthy = true)
+                     if state.phase == Phase.Ready then operations.baselineCurrent(code)
                      else
                        IO.raiseUnless(state.milliseconds == milliseconds)(
                          new IllegalArgumentException("Retry with the original activation options."),

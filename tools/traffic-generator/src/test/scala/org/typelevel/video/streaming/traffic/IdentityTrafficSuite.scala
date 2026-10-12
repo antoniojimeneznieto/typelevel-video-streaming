@@ -28,7 +28,7 @@ object IdentityTrafficSuite extends SimpleIOSuite:
                )
       request <- IdentityTraffic.prepare(client, uri"http://gateway.test", 70)
       login   <- request(0)
-      current <- request(70)
+      current <- request(2)
       calls   <- seen.get
     yield expect.all(
       login == RequestResult(Some(200), Outcome.Success, Operation.Login),
@@ -38,6 +38,19 @@ object IdentityTrafficSuite extends SimpleIOSuite:
         "/api/identity/auth/login",
         "/api/identity/auth/login",
         "/api/identity/users/me",
+      ),
+    )
+  }
+
+  test("interleave the exact login share in each hundred arrivals") {
+    val slots    = (0L until 100L).map(IdentityTraffic.isLoginSlot(_, 70))
+    val firstTen = slots.take(10)
+    IO.pure(
+      expect.all(
+        slots.count(identity) == 70,
+        firstTen.exists(identity),
+        firstTen.exists(value => !value),
+        (0L until 100L).count(IdentityTraffic.isLoginSlot(_, 5)) == 5,
       ),
     )
   }

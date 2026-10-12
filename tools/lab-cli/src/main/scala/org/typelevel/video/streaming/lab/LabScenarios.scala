@@ -224,13 +224,13 @@ private[lab] object LabScenarios {
     case Scenario3Action.Baseline =>
       LabCommands.trafficStart(
         root,
-        Seq("--profile", "identity", "--rate", "30", "--login-percent", "5"),
+        Seq("--profile", "identity", "--rate", "10", "--login-percent", "5"),
       )
     case Scenario3Action.Activate =>
       LabCommands.stopTraffic(root) *>
         LabCommands.trafficStart(
           root,
-          Seq("--profile", "identity", "--rate", "30", "--login-percent", "70"),
+          Seq("--profile", "identity", "--rate", "10", "--login-percent", "70"),
         ) *> IO.println("Workload rollout applied")
     case Scenario3Action.Restore =>
       LabCommands.stopTraffic(root) *> IO.println("Scenario 3 traffic stopped")
