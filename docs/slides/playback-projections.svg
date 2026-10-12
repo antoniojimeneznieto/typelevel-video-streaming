@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="340" viewBox="0 0 1100 340" role="img" aria-labelledby="projections-title projections-description">
+  <title id="projections-title">Outbox events populate Playback's local projections</title>
+  <desc id="projections-description">Identity stores users and outbox events in the identity database. Catalog's lessons and LessonPublished outbox events are seeded during setup; Catalog currently exposes GET endpoints, with no publish endpoint. Debezium reads committed changes to the two outboxes and sends UserCreated and LessonPublished events to Kafka. Playback's consumer updates local users and lessons in the playback database. The flow represents asynchronous projection updates, not a live HTTP lookup by Playback.</desc>
+  <defs>
+    <marker id="projection-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#176b83"/>
+    </marker>
+    <style>
+      text { font-family: Inter, Avenir, Helvetica, Arial, sans-serif; text-anchor: middle; fill: #18243a; }
+      .node { fill: #ffffff; stroke: #176b83; stroke-width: 2; }
+      .name { font-size: 26px; font-weight: 600; }
+      .detail { font-size: 22px; }
+      .edge { fill: none; stroke: #176b83; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+    </style>
+  </defs>
+
+  <rect width="1100" height="340" fill="#f7f8fa"/>
+  <rect x="838" y="58" width="250" height="275" rx="16" fill="#e7edf2" stroke="#738093" stroke-width="2"/>
+
+  <g class="edge">
+    <path d="M 237 104 H 270 V 276 H 237"/>
+    <path d="M 270 152 H 303" marker-end="url(#projection-arrow)"/>
+    <path d="M 533 152 H 587" marker-end="url(#projection-arrow)"/>
+    <path d="M 789 152 H 851" marker-end="url(#projection-arrow)"/>
+    <path d="M 963 192 V 263" marker-end="url(#projection-arrow)"/>
+  </g>
+
+  <rect x="12" y="58" width="225" height="92" rx="12" class="node"/>
+  <text x="124.5" y="96" class="name">Identity DB</text>
+  <text x="124.5" y="128" class="detail">users + outbox</text>
+  <rect x="12" y="225" width="225" height="103" rx="12" class="node"/>
+  <text x="124.5" y="256" class="name">Catalog DB</text>
+  <text x="124.5" y="286" class="detail">seeded lessons</text>
+  <text x="124.5" y="314" class="detail">+ outbox</text>
+
+  <rect x="303" y="84" width="230" height="136" rx="12" class="node"/>
+  <text x="418" y="122" class="name">Debezium</text>
+  <text x="418" y="158" class="detail">reads committed</text>
+  <text x="418" y="189" class="detail">outbox changes</text>
+
+  <rect x="587" y="84" width="202" height="136" rx="12" class="node"/>
+  <text x="688" y="122" class="name">Kafka</text>
+  <text x="688" y="158" class="detail">UserCreated</text>
+  <text x="688" y="189" class="detail">LessonPublished</text>
+
+  <rect x="851" y="112" width="224" height="80" rx="12" fill="#12233e"/>
+  <text x="963" y="143" class="name" style="fill: #f8fafc">Playback</text>
+  <text x="963" y="173" class="detail" style="fill: #f8fafc">consumer</text>
+  <text x="977" y="235" class="detail" style="fill: #176b83; text-anchor: start">updates</text>
+  <rect x="851" y="263" width="224" height="60" rx="10" class="node"/>
+  <text x="963" y="287" class="detail" font-weight="600">Playback DB</text>
+  <text x="963" y="313" class="detail">local users + lessons</text>
+</svg>

@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="340" viewBox="0 0 1100 340" role="img" aria-labelledby="architecture-title architecture-description">
+  <title id="architecture-title">Backend API requests and service databases</title>
+  <desc id="architecture-description">API scope only. Browser requests pass through the frontend's Nginx server to Gateway. The FS2 traffic generator calls Gateway directly. Gateway calls Identity, Catalog, and Playback over HTTP; the Catalog connection passes through a transparent network proxy. Each service uses SQL to access its own database, named identity, catalog, or playback, inside one PostgreSQL instance. These are separate databases, not schemas. Media delivery and event flows are outside this diagram.</desc>
+  <defs>
+    <marker id="api-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#176b83"/>
+    </marker>
+    <style>
+      text { font-family: Inter, Avenir, Helvetica, Arial, sans-serif; text-anchor: middle; fill: #18243a; }
+      .node { fill: #ffffff; stroke: #176b83; stroke-width: 2; }
+      .name { font-size: 26px; font-weight: 600; }
+      .detail { font-size: 22px; }
+      .edge { fill: none; stroke: #176b83; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+      .edge-label { fill: #176b83; font-size: 22px; }
+    </style>
+  </defs>
+
+  <rect width="1100" height="340" fill="#f7f8fa"/>
+  <rect x="12" y="14" width="86" height="36" rx="10" fill="#deedf1"/>
+  <text x="55" y="40" class="detail" font-weight="600">APIs</text>
+
+  <rect x="933" y="14" width="160" height="320" rx="16" fill="#e7edf2" stroke="#738093" stroke-width="2"/>
+  <text x="1013" y="43" font-size="24" font-weight="600">PostgreSQL</text>
+  <text x="1013" y="69" class="detail">one instance</text>
+
+  <g class="edge">
+    <path d="M 152 118 H 191" marker-end="url(#api-arrow)"/>
+    <path d="M 376 118 H 407 V 181 H 437" marker-end="url(#api-arrow)"/>
+    <path d="M 392 290 H 407 V 223 H 437" marker-end="url(#api-arrow)"/>
+    <path d="M 577 202 H 619"/>
+    <path d="M 619 112 V 292"/>
+    <path d="M 619 112 H 707" marker-end="url(#api-arrow)"/>
+    <path d="M 619 202 H 707" marker-end="url(#api-arrow)"/>
+    <path d="M 619 292 H 707" marker-end="url(#api-arrow)"/>
+    <path d="M 857 112 H 943" marker-end="url(#api-arrow)"/>
+    <path d="M 857 202 H 943" marker-end="url(#api-arrow)"/>
+    <path d="M 857 292 H 943" marker-end="url(#api-arrow)"/>
+  </g>
+  <text x="655" y="76" class="edge-label">HTTP</text>
+  <text x="675" y="165" class="edge-label">via proxy</text>
+  <text x="895" y="98" class="edge-label">SQL</text>
+  <text x="895" y="188" class="edge-label">SQL</text>
+  <text x="895" y="278" class="edge-label">SQL</text>
+
+  <rect x="12" y="85" width="140" height="66" rx="12" class="node"/>
+  <text x="82" y="127" class="name">Browser</text>
+  <rect x="191" y="75" width="185" height="86" rx="12" class="node"/>
+  <text x="283.5" y="112" class="name">Frontend</text>
+  <text x="283.5" y="142" class="detail">Nginx</text>
+  <rect x="162" y="257" width="230" height="66" rx="12" class="node"/>
+  <text x="277" y="284" class="name">FS2 traffic</text>
+  <text x="277" y="311" class="detail">generator</text>
+  <rect x="437" y="166" width="140" height="72" rx="12" fill="#12233e"/>
+  <text x="507" y="211" class="name" style="fill: #f8fafc">Gateway</text>
+
+  <rect x="707" y="82" width="150" height="60" rx="12" class="node"/>
+  <text x="782" y="121" class="name">Identity</text>
+  <rect x="707" y="172" width="150" height="60" rx="12" class="node"/>
+  <text x="782" y="211" class="name">Catalog</text>
+  <rect x="707" y="262" width="150" height="60" rx="12" class="node"/>
+  <text x="782" y="301" class="name">Playback</text>
+
+  <rect x="943" y="82" width="140" height="60" rx="10" class="node"/>
+  <text x="1013" y="107" class="detail">identity</text>
+  <text x="1013" y="132" class="detail">DB</text>
+  <rect x="943" y="172" width="140" height="60" rx="10" class="node"/>
+  <text x="1013" y="197" class="detail">catalog</text>
+  <text x="1013" y="222" class="detail">DB</text>
+  <rect x="943" y="262" width="140" height="60" rx="10" class="node"/>
+  <text x="1013" y="287" class="detail">playback</text>
+  <text x="1013" y="312" class="detail">DB</text>
+</svg>
