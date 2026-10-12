@@ -36,17 +36,11 @@ inside the development shell. The sbt version is selected by
 From the repository root:
 
 ```bash
-./scripts/lab.sh start
+./scripts/lab.sh start --build
 ```
 
 The script pulls the published images, initializes the databases, uploads the bundled demo videos to SeaweedFS,
 and starts the frontend, backend services, and infrastructure. The first run can take several minutes.
-
-To build images from your local checkout instead of pulling published images:
-
-```bash
-./scripts/lab.sh start --build
-```
 
 Open [http://localhost:8000](http://localhost:8000).
 

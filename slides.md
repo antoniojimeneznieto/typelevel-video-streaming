@@ -48,10 +48,8 @@ style: |
 Clone the repository, then run from its root:
 
 ```bash
-./scripts/lab.sh start
+./scripts/lab.sh start --build
 ```
-
-[Setup instructions and prerequisites](https://github.com/antoniojimeneznieto/typelevel-video-streaming#requirements)
 
 **Leave this running while we introduce the system.**
 
@@ -133,81 +131,23 @@ Playback maintains local users and lessons **asynchronously**.
 
 ---
 
-# Gateway · the application API entry point
+# Request paths used in the lab
 
-| Incoming prefix | Destination |
+Gateway routes `/api/identity/*`, `/api/catalog/*`, and `/api/playback/*`
+to the corresponding services.
+
+| Request through Gateway | What it does |
 | --- | --- |
-| `/api/identity/*` | Identity |
-| `/api/catalog/*` | Catalog, through the network proxy |
-| `/api/playback/*` | Playback |
+| `GET /api/catalog/courses` | Browse and search courses |
+| `GET /api/catalog/learning-paths` | Read curated paths |
+| `POST /api/identity/auth/login` | Obtain an access token |
+| `GET /api/identity/users/me` | Read the current user |
+| `GET /api/playback/favorites` | Read the current user's favorites |
 
-```text
-GET /api/catalog/courses?q=fs2
-                 ↓
-Catalog: GET /courses?q=fs2
-```
+Gateway forwards the bearer token; **Identity and Playback validate it**
+for protected requests.
 
-Gateway forwards the bearer token. **The destination service authenticates it.**
-
-<!-- Presenter: Gateway removes the service prefix and preserves the remaining path and query. It wraps inbound and outbound HTTP with telemetry, so one API call has a Gateway server span and an outgoing client span before the downstream server span. The default local browser origin is port 8000 through Nginx; Gateway itself is exposed on host port 8085. Prefixes shown here apply to all service-local paths in the following tables. Source: GatewayRoutes.scala; GatewayClient.scala; Identity and Playback Main.scala and BearerAuthenticationMiddleware. -->
-
----
-
-# Identity · accounts and access tokens
-
-Gateway prefix: `/api/identity`
-
-| Service API | Purpose | Authentication |
-| --- | --- | --- |
-| `POST /users` | Register an account | Public |
-| `POST /auth/login` | Obtain an access token | Public |
-| `GET /users/me` | Read the current user | Bearer JWT |
-
-Login returns `accessToken`, `tokenType`, and `expiresIn`.
-
-Send the token as **`Authorization: Bearer <token>`** on protected requests.
-
-<!-- Presenter: Registration accepts email, password, and displayName; it returns the new user with HTTP 201. Login accepts email and password. Identity signs the JWT, and Identity/Playback validate protected requests with the public key in their authentication middleware. Playback does not call Identity to validate each token. Identity stores account data in its own database and produces UserCreated through the outbox shown earlier. Keep incident-specific behavior for the investigation rounds. Source: shared/api-contracts/src/main/smithy/identity-api.smithy; IdentityServiceImpl.scala; Main.scala. -->
-
----
-
-# Catalog · discover the content
-
-Gateway prefix: `/api/catalog` · **Public read APIs**
-
-| Service API | Returns |
-| --- | --- |
-| `GET /courses` | Course metadata, instructors, levels, and technologies |
-| `GET /learning-paths` | Curated paths containing course IDs |
-
-```http
-GET /api/catalog/courses?q=fs2&level=intermediate&limit=10
-```
-
-Both collections support **search, filters, and `limit` / `offset` pagination**.
-
-<!-- Presenter: The frontend fetches these collections from Catalog. Courses include descriptions, duration, and lesson count; the video objects live in storage. Course filters also include kind, topic, and technology. Learning paths support level and tone. Both endpoints default to limit=20 and offset=0. The app reads seeded catalog data; there is no course-write or lesson-publish HTTP API in this version. Source: catalog-api.smithy and catalog-domain.smithy. -->
-
----
-
-<!-- _class: small -->
-
-# Playback · watching and personal learning data
-
-Gateway prefix: `/api/playback` · **All APIs require a bearer JWT**
-
-| Service API | Purpose |
-| --- | --- |
-| `GET /courses/{courseId}/lessons/{lessonId}/playback` | Return a signed video URL and expiry |
-| `PUT /courses/{courseId}/lessons/{lessonId}/progress` | Save `positionSeconds` |
-| `GET /progress` | List the current user's progress |
-| `GET /favorites` | List the current user's favorites |
-| `PUT /favorites/{courseId}` | Add a favorite |
-| `DELETE /favorites/{courseId}` | Remove a favorite |
-
-**Video bytes:** Browser → frontend/Nginx → SeaweedFS (S3-compatible storage).
-
-<!-- Presenter: Playback uses its local projections to find the user and lesson. For a playback URL it checks the S3 object with HEAD, then returns JSON containing an expiring signed URL and expiresIn. The browser follows this URL through the frontend's media proxy to SeaweedFS for the MP4, including Range requests; the bytes do not pass through Gateway or Playback. Favorites and progress belong to the authenticated user and are stored in Playback's database. GET /progress can filter by courseId and completed; progress and favorites lists are paginated. Sources: playback-api.smithy; PlaybackServiceImpl.scala; S3VideoStorage.scala; frontend/nginx.conf. -->
+<!-- Presenter: The request paths on this slide are the ones participants will compare in the incidents. Gateway removes the service prefix and preserves the remaining path and query. Catalog reads are public; Identity login is public. GET /users/me and Playback favorites require a bearer JWT. Identity signs access tokens; Identity and Playback validate protected requests using the public key. Gateway wraps inbound and outbound HTTP with telemetry, so a service call has Gateway server and client spans followed by the destination server span. Catalog traffic passes through the lab network proxy. Registration, playback URL, progress, and favorite-write endpoints exist but are not needed for the four investigations; introduce them only if asked. Sources: GatewayRoutes.scala; GatewayClient.scala; shared/api-contracts/src/main/smithy/{catalog,identity,playback}-api.smithy; Identity and Playback authentication middleware. -->
 
 ---
 
@@ -284,8 +224,6 @@ Gateway → Catalog HTTP header:
 traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 ```
 
-`version-trace ID-parent span ID-flags` · `01` means sampled.
-
 An **exemplar** links a metric observation to a recorded trace.
 The trace ID connects that request to its logs.
 
@@ -302,8 +240,6 @@ The trace ID connects that request to its logs.
 | gRPC | fs2-grpc client and server tracing |
 | Messaging | fs2-kafka-otel4s producer and consumer tracing |
 | Cats Effect runtime | otel4s runtime metrics |
-
-Add spans, metrics, and contextual logs for application questions.
 
 <!-- Presenter: This lab uses HTTP and Skunk boundary instrumentation and Cats Effect runtime metrics. Integrations reduce the work needed to establish request context and boundary observations. Configure propagation, exporters, and dashboard links, then add domain instrumentation where a question remains unanswered. Integration APIs and platform support vary. References: https://typelevel.org/otel4s/ecosystem.html ; https://typelevel.org/otel4s/how-to-metrics/register-cats-effect-runtime-metrics.html . Skunk use is evidenced by this repository's runtime and repository modules. -->
 
@@ -325,7 +261,7 @@ Use runtime metrics, logs, or source when a request trace leaves a question open
 
 # CLI and incident phases
 
-The stack startup is already running: `./scripts/lab.sh start`.
+The stack startup is already running: `./scripts/lab.sh start --build`.
 
 | Command | What it does |
 | --- | --- |
@@ -338,23 +274,6 @@ Prefix each command with `./scripts/lab.sh`.
 Open the dashboard URL printed by the baseline command.
 
 <!-- Presenter: Explain the distinction between stack start and incident start. Use the ID shown on the incident slide. Wait for baseline readiness, then observe the healthy window before activation. Allow 2–5 minutes for setup and baseline orientation, and 2–5 minutes to see degradation after activation. Rebuild applies to source-editing rounds, not the platform rollback round. Status reports phase, not workload validity or recovery. -->
-
----
-
-# Workshop agenda
-
-| Part | Activity |
-| --- | --- |
-| Introduction | Application and stack, then telemetry, investigation loop, and tools |
-| Incident 1 | Catalog slowdown |
-| Incident 2 | Identity slowdown |
-| Incident 3 | Playback authentication failures |
-| Incident 4 | Catalog gradually slows |
-| Closing | Lessons, application to your services, and questions |
-
-Each round starts with healthy traffic, then symptoms, hints, and a takeaway.
-
-<!-- Presenter: The session targets two hours. Pace the introduction while initial downloads run, and preserve time for baseline observation, source rebuilds, and sustained recovery. Incident IDs 1–4 follow presentation order. Use a rehearsal to calibrate timing instead of committing participants to exact minute allocations. -->
 
 ---
 
