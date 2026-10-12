@@ -349,7 +349,7 @@ Open the dashboard URL printed by the baseline command.
 | Incident 1 | Catalog slowdown |
 | Incident 2 | Identity slowdown |
 | Incident 3 | Playback authentication failures |
-| Incident 4 | Catalog depletion |
+| Incident 4 | Catalog gradually slows |
 | Closing | Lessons, application to your services, and questions |
 
 Each round starts with healthy traffic, then symptoms, hints, and a takeaway.
@@ -512,7 +512,7 @@ Activate the incident:
 > More users are logging in. Logins and lightweight account requests
 > both become slow.
 
-Explain why work without the synchronous authentication check also slows down.
+Explain why lightweight account requests also slow down.
 
 <!-- Presenter: Activation switches to 70% login at the same total rate, with a brief generator transition. Record the time and allow 2–5 minutes to observe the degradation and gather hypotheses. Reveal hints one at a time. -->
 
@@ -584,7 +584,7 @@ Keep the login-heavy workload and check fresh current-user latency.
 
 # Incident 2 · Takeaway
 
-**A synchronous SDK call occupied compute workers and delayed unrelated requests.**
+**A simulated synchronous SDK call occupied compute workers and delayed unrelated requests.**
 
 - Request traces identified the synchronous authentication check.
 - A lightweight route provided a control for the slowdown.
@@ -872,7 +872,7 @@ Keep the same mixed workload. Watch at least two minutes of fresh requests.
 - Traces show requests waiting before they can execute SQL.
 - An unrelated route exposes the effect of a shared depleted pool.
 
-Sustained recovery under the same workload proves the resource repair.
+Sustained recovery under the same workload provides evidence that the resource leak is fixed.
 
 <!-- Presenter: Ask participants to connect resource-state changes to the triggering request pattern. Contrast fresh recovery evidence with old instance series when needed. Keep the takeaway focused on resource state over time and request lifecycle. -->
 
@@ -887,7 +887,7 @@ Sustained recovery under the same workload proves the resource repair.
 | Playback rejection | Subject-shape attributes and correlated logs explain the affected requests |
 | Database session leak | Occupancy and waiting requests grow while traces stop before SQL |
 
-<!-- Presenter: Ask participants which observation changed their hypothesis in each round. Boundary telemetry located the network delay. Runtime metrics explained why password verification affected unrelated requests. Playback needed observations inside subject decoding. Pool metrics showed resource loss accumulating over time. Each repair required fresh recovery evidence under the triggering workload. -->
+<!-- Presenter: Ask participants which observation changed their hypothesis in each round. Boundary telemetry located the network delay. Runtime metrics explained why the simulated synchronous authentication check delayed unrelated requests. Playback needed observations inside subject decoding. Pool metrics showed resource loss accumulating over time. Each repair required fresh recovery evidence under the triggering workload. -->
 
 ---
 
@@ -898,7 +898,6 @@ Sustained recovery under the same workload proves the resource repair.
 - Boundary instrumentation can locate many failures across services.
 - Typelevel integrations provide boundary telemetry and Cats Effect runtime metrics.
 - Domain observations explain decisions and resource state inside the application.
-- Correlated telemetry supports the same investigation loop with an AI assistant.
 
 <!-- Presenter: Familiarity with the code was not a prerequisite for locating the failures. Source inspection became useful after the evidence narrowed the search, especially for the Identity, Playback, and Catalog repairs. otel4s and the Typelevel integrations shown earlier reduce the setup work for boundary and runtime telemetry. Propagation and log correlation connect observations across components. Domain instrumentation answers questions those integrations cannot infer automatically. -->
 
