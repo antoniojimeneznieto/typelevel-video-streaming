@@ -6,7 +6,7 @@ import org.scalajs.linker.interface.{ModuleKind, ModuleSplitStyle}
 
 val ScalaLtsVersion            = "3.9.0"
 val CatsEffectVersion          = "3.7.1"
-val Fs2Version                 = "3.14.0"
+val Fs2Version                 = "3.16.0"
 val Http4sStableVersion        = "0.23.37"
 val Http4sOtel4sVersion        = "0.19.0"
 val Ip4sVersion                = "3.8.0"
